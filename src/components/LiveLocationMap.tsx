@@ -6,7 +6,7 @@ import { GeoLocation, getCurrentLocation } from '../types';
 import { Loader2, MapPin } from 'lucide-react';
 
 // Fix for default Leaflet marker icon in React
-delete (L.Icon.Default.prototype as any)._getIconUrl;
+delete (L.Icon.Default.prototype as L.Icon.Default & { _getIconUrl?: unknown })._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
   iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
@@ -32,8 +32,8 @@ export default function LiveLocationMap({ onLocationFound }: { onLocationFound?:
         const loc = await getCurrentLocation();
         setLocation(loc);
         if (onLocationFound) onLocationFound(loc);
-      } catch (err: any) {
-        setError(err.message || 'Locatie niet beschikbaar');
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Locatie niet beschikbaar');
       } finally {
         setLoading(false);
       }

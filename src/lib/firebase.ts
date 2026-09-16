@@ -1,24 +1,49 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
-import firebaseConfig from '../../firebase-applet-config.json';
+import { getAuth, signOut, signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
+import { connectAuthEmulator } from 'firebase/auth';
+import { getFirestore, doc, getDocFromServer, connectFirestoreEmulator } from 'firebase/firestore';
+import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
+import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
+
+const required = (name: string, value: string | undefined) => {
+  if (!value) throw new Error(`Ontbrekende configuratie: ${name}`);
+  return value;
+};
+
+const firebaseConfig = {
+  apiKey: required('VITE_FIREBASE_API_KEY', import.meta.env.VITE_FIREBASE_API_KEY),
+  authDomain: required('VITE_FIREBASE_AUTH_DOMAIN', import.meta.env.VITE_FIREBASE_AUTH_DOMAIN),
+  projectId: required('VITE_FIREBASE_PROJECT_ID', import.meta.env.VITE_FIREBASE_PROJECT_ID),
+  storageBucket: required('VITE_FIREBASE_STORAGE_BUCKET', import.meta.env.VITE_FIREBASE_STORAGE_BUCKET),
+  messagingSenderId: required('VITE_FIREBASE_MESSAGING_SENDER_ID', import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID),
+  appId: required('VITE_FIREBASE_APP_ID', import.meta.env.VITE_FIREBASE_APP_ID),
+};
 
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+const databaseId = import.meta.env.VITE_FIRESTORE_DATABASE_ID || '(default)';
+export const db = getFirestore(app, databaseId);
 export const auth = getAuth(app);
+export const functions = getFunctions(app, 'europe-west1');
 
-export const loginWithGoogle = () => {
-  const provider = new GoogleAuthProvider();
-  return signInWithPopup(auth, provider);
-};
+if (import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true') {
+  connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
+  connectFirestoreEmulator(db, '127.0.0.1', 8080);
+  connectFunctionsEmulator(functions, '127.0.0.1', 5001);
+}
+
+const recaptchaSiteKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
+if (recaptchaSiteKey) {
+  initializeAppCheck(app, {
+    provider: new ReCaptchaV3Provider(recaptchaSiteKey),
+    isTokenAutoRefreshEnabled: true,
+  });
+}
 
 export const loginWithEmail = (email: string, pass: string) => {
   return signInWithEmailAndPassword(auth, email, pass);
 };
 
-export const registerWithEmail = (email: string, pass: string) => {
-  return createUserWithEmailAndPassword(auth, email, pass);
-};
+export const resetPassword = (email: string) => sendPasswordResetEmail(auth, email);
 
 export const logout = () => signOut(auth);
 

@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { User, Assignment, Shift, Customer, formatDate, formatTime } from './types';
+import { User, Assignment, Shift, Customer, formatDate, formatTime, localDateKey, normalizeAssignment, normalizeShift, timestampToMillis } from './types';
 import { Calendar, Clock, MapPin, Plus, User as UserIcon, ListTodo, Loader2, Users, CheckSquare, Square, Download, BarChart2 } from 'lucide-react';
 import { db, handleFirestoreError, OperationType } from './lib/firebase';
-import { collection, query, onSnapshot, doc, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, onSnapshot } from 'firebase/firestore';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { secureApi } from './lib/secureApi';
 
 export default function AdminView() {
   const [activeTab, setActiveTab] = useState<'planning' | 'timesheets' | 'customers' | 'team'>('planning');
@@ -16,15 +17,18 @@ export default function AdminView() {
 
   useEffect(() => {
     const unSubUsers = onSnapshot(collection(db, 'users'), (snap) => {
-      setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() } as User)));
+      setUsers(snap.docs.map(d => {
+        const data = d.data();
+        return { id: d.id, ...data, createdAt: timestampToMillis(data.createdAt) } as User;
+      }));
     }, err => handleFirestoreError(err, OperationType.LIST, 'users'));
 
     const unSubShifts = onSnapshot(collection(db, 'shifts'), (snap) => {
-      setShifts(snap.docs.map(d => ({ id: d.id, ...d.data() } as Shift)));
+      setShifts(snap.docs.map(d => normalizeShift(d.id, d.data())));
     }, err => handleFirestoreError(err, OperationType.LIST, 'shifts'));
 
     const unSubAssignments = onSnapshot(collection(db, 'assignments'), (snap) => {
-      setAssignments(snap.docs.map(d => ({ id: d.id, ...d.data() } as Assignment)));
+      setAssignments(snap.docs.map(d => normalizeAssignment(d.id, d.data())));
     }, err => handleFirestoreError(err, OperationType.LIST, 'assignments'));
     
     const unSubCustomers = onSnapshot(collection(db, 'customers'), (snap) => {
@@ -68,6 +72,13 @@ export default function AdminView() {
           <Users className="w-4 h-4" />
           <span>Klantenbeheer</span>
         </button>
+        <button
+          onClick={() => setActiveTab('team')}
+          className={`flex-1 py-3 px-4 rounded-[12px] font-bold text-sm flex items-center justify-center space-x-2 transition-all ${activeTab === 'team' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600 hover:bg-zinc-100/50'}`}
+        >
+          <UserIcon className="w-4 h-4" />
+          <span>Team</span>
+        </button>
       </div>
 
       {activeTab === 'planning' && <PlanningTab users={users} assignments={assignments} customers={customers} />}
@@ -92,15 +103,8 @@ function CustomersTab({ customers }: { customers: Customer[] }) {
     if (!name || !address) return;
     
     setIsSubmitting(true);
-    const id = doc(collection(db, "assignments")).id;
     try {
-      await setDoc(doc(db, 'customers', id), {
-        name,
-        address,
-        phone,
-        email,
-        createdAt: Date.now()
-      });
+      await secureApi.saveCustomer({ name, address, phone, email });
       setName('');
       setAddress('');
       setPhone('');
@@ -208,7 +212,7 @@ function PlanningTab({ users, assignments, customers }: { users: User[], assignm
   
   // Form State
   const [userId, setUserId] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(localDateKey());
   const [startTime, setStartTime] = useState('09:00');
   const [customerId, setCustomerId] = useState('');
   const [description, setDescription] = useState('');
@@ -223,19 +227,8 @@ function PlanningTab({ users, assignments, customers }: { users: User[], assignm
     if (!selectedCustomer) return;
 
     setIsSubmitting(true);
-    const id = doc(collection(db, "assignments")).id;
     try {
-      await setDoc(doc(db, 'assignments', id), {
-        userId,
-        date,
-        startTime,
-        customerId,
-        customerName: selectedCustomer.name,
-        description,
-        status: 'pending',
-        acknowledged: false,
-        createdAt: Date.now()
-      });
+      await secureApi.saveAssignment({ userId, date, startTime, customerId, description });
       setCustomerId('');
       setDescription('');
       setIsAdding(false);
@@ -373,13 +366,12 @@ function AdminAssignmentCard({ assignment, users, customers }: { assignment: Ass
 
     setIsSaving(true);
     try {
-      const { updateDoc, doc } = await import('firebase/firestore');
-      await updateDoc(doc(db, 'assignments', assignment.id), {
+      await secureApi.saveAssignment({
+        id: assignment.id,
         userId: editUserId,
         date: editDate,
         startTime: editStartTime,
         customerId: editCustomerId,
-        customerName: selectedCustomer.name,
         description: editDescription
       });
       setIsEditing(false);
@@ -392,11 +384,9 @@ function AdminAssignmentCard({ assignment, users, customers }: { assignment: Ass
 
   const handleDelete = () => {
     if (confirm('Zeker dat je deze opdracht wilt verwijderen?')) {
-      import('firebase/firestore').then(({ deleteDoc, doc }) => {
-        deleteDoc(doc(db, 'assignments', assignment.id)).catch(err => 
-          handleFirestoreError(err, OperationType.DELETE, `assignments/${assignment.id}`)
-        );
-      });
+      secureApi.deleteAssignment(assignment.id).catch(err =>
+        handleFirestoreError(err, OperationType.DELETE, `assignments/${assignment.id}`)
+      );
     }
   };
 
@@ -590,7 +580,15 @@ function TimesheetsTab({ users, shifts, assignments = [] }: { users: User[], shi
     };
 
     // Aggregate data
-    const reports: Record<string, any> = {};
+    type WeeklyReport = {
+      Naam: string;
+      Email: string;
+      Week: string;
+      Uren_Gewerkt: number;
+      Opdrachten_Voltooid: number;
+      Taken_Afgevinkt: number;
+    };
+    const reports: Record<string, WeeklyReport> = {};
 
     // Group shifts by User and Week
     shifts.forEach(shift => {
@@ -816,19 +814,48 @@ function TimesheetsTab({ users, shifts, assignments = [] }: { users: User[], shi
     </div>
   );
 }
-// To insert into AdminView.tsx
 function TeamTab({ users }: { users: User[] }) {
   const [errorMsg, setErrorMsg] = useState('');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [inviteLink, setInviteLink] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const message = (error: unknown) => error instanceof Error ? error.message : 'De bewerking is mislukt.';
+
+  const invite = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setErrorMsg('');
+    setInviteLink('');
+    setIsSubmitting(true);
+    try {
+      const result = await secureApi.inviteEmployee({ name, email, phone });
+      setInviteLink(result.data.resetLink);
+      setName('');
+      setEmail('');
+      setPhone('');
+    } catch (error: unknown) {
+      setErrorMsg(message(error));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const toggleRole = async (user: User) => {
     try {
       const newRole = user.role === 'admin' ? 'employee' : 'admin';
-      await updateDoc(doc(db, 'users', user.id), {
-        role: newRole
-      });
-    } catch (err: any) {
-      handleFirestoreError(err, OperationType.UPDATE, `users/${user.id}`);
-      setErrorMsg('Kan rol niet updaten. Alleen beheerders kunnen dit.');
+      await secureApi.setEmployeeAccess({ uid: user.id, role: newRole, active: user.active !== false });
+    } catch (error: unknown) {
+      setErrorMsg(message(error));
+    }
+  };
+
+  const toggleActive = async (user: User) => {
+    try {
+      await secureApi.setEmployeeAccess({ uid: user.id, role: user.role, active: user.active === false });
+    } catch (error: unknown) {
+      setErrorMsg(message(error));
     }
   };
 
@@ -837,6 +864,19 @@ function TeamTab({ users }: { users: User[] }) {
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-bold text-zinc-900">Team Beheer</h2>
       </div>
+      <form onSubmit={invite} className="bg-white p-6 rounded-[24px] border border-zinc-200 grid grid-cols-1 md:grid-cols-4 gap-3">
+        <input value={name} onChange={event => setName(event.target.value)} required placeholder="Volledige naam" className="border border-zinc-200 rounded-[12px] p-3" />
+        <input value={email} onChange={event => setEmail(event.target.value)} required type="email" placeholder="E-mailadres" className="border border-zinc-200 rounded-[12px] p-3" />
+        <input value={phone} onChange={event => setPhone(event.target.value)} type="tel" placeholder="Telefoon (optioneel)" className="border border-zinc-200 rounded-[12px] p-3" />
+        <button disabled={isSubmitting} className="bg-zinc-900 text-white font-bold rounded-[12px] p-3 disabled:opacity-50">
+          {isSubmitting ? 'Bezig…' : 'Medewerker uitnodigen'}
+        </button>
+      </form>
+      {inviteLink && (
+        <div className="p-4 bg-green-50 text-green-800 rounded-[12px] border border-green-200 text-sm break-all">
+          Deel deze eenmalige activatielink veilig met de medewerker: <a className="font-bold underline" href={inviteLink}>{inviteLink}</a>
+        </div>
+      )}
       {errorMsg && (
         <div className="p-4 bg-red-50 text-red-700 rounded-[12px] border border-red-200 text-sm font-medium">
           {errorMsg}
@@ -844,7 +884,7 @@ function TeamTab({ users }: { users: User[] }) {
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {users.map(u => (
-          <div key={u.id} className="bg-white p-5 rounded-[24px] border border-zinc-200 shadow-[0_4px_14px_0_rgb(0,0,0,0.03)] space-y-4">
+          <div key={u.id} className={`bg-white p-5 rounded-[24px] border shadow-[0_4px_14px_0_rgb(0,0,0,0.03)] space-y-4 ${u.active === false ? 'border-red-200 opacity-70' : 'border-zinc-200'}`}>
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 bg-zinc-100 rounded-full flex items-center justify-center text-zinc-500 font-bold">
                 {u.name.charAt(0).toUpperCase()}
@@ -854,7 +894,7 @@ function TeamTab({ users }: { users: User[] }) {
                 <p className="text-sm text-zinc-500 truncate">{u.email}</p>
               </div>
             </div>
-            <div className="pt-4 border-t border-zinc-100 flex items-center justify-between">
+            <div className="pt-4 border-t border-zinc-100 flex flex-wrap items-center justify-between gap-2">
               <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${u.role === 'admin' ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-700'}`}>
                 {u.role === 'admin' ? 'Beheerder' : 'Medewerker'}
               </span>
@@ -863,6 +903,12 @@ function TeamTab({ users }: { users: User[] }) {
                 className="text-sm text-zinc-500 hover:text-zinc-900 font-medium transition-colors"
               >
                 {u.role === 'admin' ? 'Maak Medewerker' : 'Maak Beheerder'}
+              </button>
+              <button
+                onClick={() => toggleActive(u)}
+                className={`text-sm font-medium transition-colors ${u.active === false ? 'text-green-700' : 'text-red-600'}`}
+              >
+                {u.active === false ? 'Activeren' : 'Deactiveren'}
               </button>
             </div>
           </div>

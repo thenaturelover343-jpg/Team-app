@@ -1,47 +1,47 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User } from '../types';
 import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc, onSnapshot } from 'firebase/firestore';
+import { getIdTokenResult, onIdTokenChanged, signOut, User as FirebaseUser } from 'firebase/auth';
+import { doc, onSnapshot, Timestamp } from 'firebase/firestore';
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
+  accessError: string;
 }
 
-export const AuthContext = createContext<AuthContextType>({ user: null, loading: true });
+export const AuthContext = createContext<AuthContextType>({ user: null, loading: true, accessError: '' });
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [accessError, setAccessError] = useState('');
 
   useEffect(() => {
     let unsubscribeSnapshot: (() => void) | undefined;
 
-    const unsubscribeAuth = onAuthStateChanged(auth, async (fbUser: FirebaseUser | null) => {
+    const unsubscribeAuth = onIdTokenChanged(auth, async (fbUser: FirebaseUser | null) => {
       if (fbUser) {
         try {
-          const userRef = doc(db, 'users', fbUser.uid);
-          const isAdminEmail = fbUser.email === 'thenaturelover343@gmail.com';
-          
-          const userSnap = await getDoc(userRef);
-          
-          if (!userSnap.exists()) {
-            const newUser: Omit<User, 'id'> = {
-              name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Onbekend',
-              email: fbUser.email || '',
-              role: isAdminEmail ? 'admin' : 'employee',
-              createdAt: Date.now()
-            };
-            await setDoc(userRef, newUser);
-          } else if (isAdminEmail && userSnap.data().role !== 'admin') {
-            await updateDoc(userRef, { role: 'admin' });
+          setAccessError('');
+          const token = await getIdTokenResult(fbUser);
+          const role = token.claims.role;
+          const active = token.claims.active;
+          if ((role !== 'admin' && role !== 'employee') || active !== true) {
+            setAccessError('Dit account is nog niet geactiveerd door een beheerder.');
+            await signOut(auth);
+            setLoading(false);
+            return;
           }
-
-          // Real-time listener for profile updates
+          const userRef = doc(db, 'users', fbUser.uid);
           unsubscribeSnapshot = onSnapshot(userRef, (docSnap) => {
             if (docSnap.exists()) {
-              setUser({ id: docSnap.id, ...docSnap.data() } as User);
+              const data = docSnap.data();
+              const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toMillis() : Number(data.createdAt || 0);
+              setUser({ id: docSnap.id, ...data, role, active: true, createdAt } as User);
+            } else {
+              setUser(null);
+              setAccessError('Uw gebruikersprofiel ontbreekt. Neem contact op met een beheerder.');
             }
             setLoading(false);
           });
@@ -64,7 +64,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading }}>
+    <AuthContext.Provider value={{ user, loading, accessError }}>
       {children}
     </AuthContext.Provider>
   );

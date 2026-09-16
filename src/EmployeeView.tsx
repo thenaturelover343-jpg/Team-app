@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { User, Shift, Assignment, GeoLocation, getCurrentLocation, formatTime, formatDate, AssignmentTask } from './types';
+import { User, Shift, Assignment, getCurrentLocation, formatTime, formatDate, AssignmentTask, localDateKey, normalizeAssignment, normalizeShift } from './types';
 import { MapPin, Clock, CheckCircle, Play, Square, Navigation2, FileText, Loader2, User as UserIcon, Calendar, History, Save, Plus, Trash2, CheckSquare } from 'lucide-react';
 import { useAuth } from './hooks/useAuth';
 import { db, handleFirestoreError, OperationType } from './lib/firebase';
-import { collection, query, where, onSnapshot, doc, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, updateDoc } from 'firebase/firestore';
 import LiveLocationMap from './components/LiveLocationMap';
+import { secureApi } from './lib/secureApi';
 
 export default function EmployeeView() {
   const { user } = useAuth();
@@ -52,20 +53,16 @@ export default function EmployeeView() {
   useEffect(() => {
     if (!user) return;
     
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    
     const qShifts = query(
       collection(db, 'shifts'),
-      where('userId', '==', user.id),
-      where('clockIn', '>=', todayStart.getTime())
+      where('userId', '==', user.id)
     );
 
     const unSubShifts = onSnapshot(qShifts, (snap) => {
-      setShifts(snap.docs.map(d => ({ id: d.id, ...d.data() } as Shift)));
+      setShifts(snap.docs.map(d => normalizeShift(d.id, d.data())));
     }, (err) => handleFirestoreError(err, OperationType.GET, 'shifts'));
 
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = localDateKey();
     const qAssignments = query(
       collection(db, 'assignments'),
       where('userId', '==', user.id),
@@ -73,7 +70,7 @@ export default function EmployeeView() {
     );
 
     const unSubAssignments = onSnapshot(qAssignments, (snap) => {
-      setAssignments(snap.docs.map(d => ({ id: d.id, ...d.data() } as Assignment)));
+      setAssignments(snap.docs.map(d => normalizeAssignment(d.id, d.data())));
       setLoading(false);
     }, (err) => handleFirestoreError(err, OperationType.GET, 'assignments'));
 
@@ -111,12 +108,12 @@ export default function EmployeeView() {
         </button>
       </div>
 
-      {activeTab === 'dashboard' ? <DashboardTab user={user} shifts={shifts} assignments={assignments} loading={loading} /> : <ProfileTab user={user} />}
+      {activeTab === 'dashboard' ? <DashboardTab shifts={shifts} assignments={assignments} loading={loading} /> : <ProfileTab user={user} />}
     </div>
   );
 }
 
-function DashboardTab({ user, shifts, assignments, loading }: { user: User, shifts: Shift[], assignments: Assignment[], loading: boolean }) {
+function DashboardTab({ shifts, assignments, loading }: { shifts: Shift[], assignments: Assignment[], loading: boolean }) {
   const [isLocating, setIsLocating] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [shiftNotes, setShiftNotes] = useState('');
@@ -150,19 +147,11 @@ function DashboardTab({ user, shifts, assignments, loading }: { user: User, shif
     setErrorMsg('');
     try {
       const loc = await getCurrentLocation();
-      const newShiftRef = doc(collection(db, "shifts"));
-      await setDoc(newShiftRef, {
-        userId: user.id,
-        clockIn: Date.now(),
-        clockInLoc: loc,
-      });
+      await secureApi.clockIn(loc);
       setShiftNotes('');
       setShiftStatus('Normaal');
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Kon locatie niet ophalen. Zorg dat locatievoorzieningen aan staan.');
-      if (!(err instanceof GeolocationPositionError)) {
-        handleFirestoreError(err, OperationType.CREATE, 'shifts');
-      }
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Kon locatie niet ophalen. Zorg dat locatievoorzieningen aan staan.');
     } finally {
       setIsLocating(false);
     }
@@ -174,17 +163,13 @@ function DashboardTab({ user, shifts, assignments, loading }: { user: User, shif
     setErrorMsg('');
     try {
       const loc = await getCurrentLocation();
-      await updateDoc(doc(db, 'shifts', activeShift.id), {
-        clockOut: Date.now(),
-        clockOutLoc: loc,
+      await secureApi.clockOut({
+        location: loc,
         notes: shiftNotes,
         statusTag: shiftStatus
       });
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Kon locatie niet ophalen. Zorg dat locatievoorzieningen aan staan.');
-      if (!(err instanceof GeolocationPositionError)) {
-        handleFirestoreError(err, OperationType.UPDATE, `shifts/${activeShift.id}`);
-      }
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Kon locatie niet ophalen. Zorg dat locatievoorzieningen aan staan.');
     } finally {
       setIsLocating(false);
     }
@@ -192,9 +177,7 @@ function DashboardTab({ user, shifts, assignments, loading }: { user: User, shif
 
   const handleAcknowledge = async (assignmentId: string) => {
     try {
-      await updateDoc(doc(db, 'assignments', assignmentId), {
-        acknowledged: true
-      });
+      await secureApi.acknowledgeAssignment(assignmentId);
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `assignments/${assignmentId}`);
     }
@@ -203,7 +186,7 @@ function DashboardTab({ user, shifts, assignments, loading }: { user: User, shif
   const handleAcknowledgeAll = async () => {
     try {
       const promises = unacknowledgedAssignments.map(a => 
-        updateDoc(doc(db, 'assignments', a.id), { acknowledged: true })
+        secureApi.acknowledgeAssignment(a.id)
       );
       await Promise.all(promises);
     } catch (err) {
@@ -294,7 +277,7 @@ function DashboardTab({ user, shifts, assignments, loading }: { user: User, shif
                   <label className="block text-sm font-bold text-zinc-700 mb-1.5">Dienst Status</label>
                   <select 
                     value={shiftStatus} 
-                    onChange={e => setShiftStatus(e.target.value as any)}
+                    onChange={e => setShiftStatus(e.target.value as typeof shiftStatus)}
                     className="w-full border border-zinc-200 rounded-[12px] p-3 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none bg-white transition-all font-medium text-sm"
                   >
                     <option value="Normaal">Normaal</option>
@@ -378,7 +361,7 @@ function ProfileTab({ user }: { user: User }) {
       where('status', '==', 'completed')
     );
     const unSubA = onSnapshot(qAssignments, (snap) => {
-      setHistoryAssignments(snap.docs.map(d => ({ id: d.id, ...d.data() } as Assignment)));
+      setHistoryAssignments(snap.docs.map(d => normalizeAssignment(d.id, d.data())));
     });
 
     // Fetch shifts for history
@@ -387,7 +370,7 @@ function ProfileTab({ user }: { user: User }) {
       where('userId', '==', user.id)
     );
     const unSubS = onSnapshot(qShifts, (snap) => {
-      setHistoryShifts(snap.docs.map(d => ({ id: d.id, ...d.data() } as Shift)));
+      setHistoryShifts(snap.docs.map(d => normalizeShift(d.id, d.data())));
       setLoadingHistory(false);
     });
 
@@ -603,19 +586,24 @@ function AssignmentCard({ assignment }: { assignment: Assignment; key?: string |
     await handleUpdate({ tasks: updatedTasks });
   };
 
-  const handleArrive = () => {
-    handleUpdate({ 
-      status: 'arrived', 
-      arrivalTime: Date.now() 
-    });
+  const handleArrive = async () => {
+    setIsUpdating(true);
+    try {
+      const location = await getCurrentLocation();
+      await secureApi.transitionAssignment({ assignmentId: assignment.id, status: 'arrived', location });
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
-  const handleComplete = () => {
-    handleUpdate({
-      status: 'completed',
-      departureTime: Date.now(),
-      workNotes: notes
-    });
+  const handleComplete = async () => {
+    setIsUpdating(true);
+    try {
+      const location = await getCurrentLocation();
+      await secureApi.transitionAssignment({ assignmentId: assignment.id, status: 'completed', location, notes });
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   return (

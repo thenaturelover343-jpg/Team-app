@@ -1,158 +1,115 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 1. Global Safety Net
-    match /{document=**} {
-      allow read, write: if false;
+    function signedIn() { return request.auth != null; }
+    function active() { return signedIn() && request.auth.token.active == true; }
+    function admin() { return active() && request.auth.token.role == 'admin'; }
+    function owner(userId) { return active() && request.auth.uid == userId; }
+    function validId(id) { return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function validTime(value) { return value is timestamp || value is number; }
+    function validLocation(value) {
+      return value is map
+        && value.keys().hasAll(['lat', 'lng'])
+        && value.keys().hasOnly(['lat', 'lng', 'accuracy', 'capturedAt'])
+        && value.lat is number && value.lat >= -90 && value.lat <= 90
+        && value.lng is number && value.lng >= -180 && value.lng <= 180
+        && (!('accuracy' in value) || (value.accuracy is number && value.accuracy >= 0 && value.accuracy <= 10000))
+        && (!('capturedAt' in value) || value.capturedAt is number);
     }
 
-    // Helpers
-    function isSignedIn() { return request.auth != null; }
-    function incoming() { return request.resource.data; }
-    function existing() { return resource.data; }
-    function isValidId(id) { return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
-    function isAdmin() {
-      return isSignedIn() 
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid)) 
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-    }
-
-    // Helper: Validating GeoLocation
-    function isValidGeoLoc(loc) {
-      return loc is map 
-        && loc.keys().hasAll(['lat', 'lng']) 
-        && loc.keys().size() == 2 
-        && loc.lat is number 
-        && loc.lng is number;
-    }
-
-    // Users Collection
     match /users/{userId} {
-      function isValidUser(data) {
-        return data.keys().hasAll(['name', 'email', 'role', 'createdAt'])
-          && data.keys().size() >= 4 && data.keys().size() <= 6
-          && data.name is string && data.name.size() <= 100
-          && data.email is string && data.email.size() <= 255
+      function validUser(data) {
+        return data.keys().hasAll(['name', 'email', 'role', 'active', 'createdAt'])
+          && data.keys().hasOnly(['name', 'email', 'role', 'active', 'createdAt', 'updatedAt', 'phone', 'availability'])
+          && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+          && data.email is string && data.email.size() > 3 && data.email.size() <= 255
           && data.role in ['admin', 'employee']
-          && data.createdAt is number
-          && (('phone' in data) ? (data.phone is string && data.phone.size() <= 50) : true)
-          && (('availability' in data) ? (data.availability is string && data.availability.size() <= 1000) : true);
+          && data.active is bool
+          && validTime(data.createdAt)
+          && (!('updatedAt' in data) || validTime(data.updatedAt))
+          && (!('phone' in data) || (data.phone is string && data.phone.size() <= 50))
+          && (!('availability' in data) || (data.availability is string && data.availability.size() <= 1000));
       }
 
-      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
-      allow list: if isSignedIn() && isAdmin();
-
-      allow create: if isSignedIn() 
-        && isValidId(userId)
-        && request.auth.uid == userId 
-        && isValidUser(incoming())
-        && (incoming().role == 'employee' || request.auth.token.email == 'thenaturelover343@gmail.com');
-
-      allow update: if isSignedIn() 
-        && isValidId(userId)
-        && isValidUser(incoming())
-        && incoming().createdAt == existing().createdAt
-        && (
-          isAdmin() ||
-          (request.auth.uid == userId && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'phone', 'availability']))
-        );
-      
-      allow delete: if isAdmin();
+      allow get: if owner(userId) || admin();
+      allow list: if admin();
+      allow create, delete: if false;
+      allow update: if owner(userId)
+        && validUser(request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'phone', 'availability', 'updatedAt'])
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.active == resource.data.active
+        && request.resource.data.createdAt == resource.data.createdAt;
     }
 
-    // Shifts Collection
     match /shifts/{shiftId} {
-      function isValidShift(data) {
-        return data.keys().hasAll(['userId', 'clockIn', 'clockInLoc'])
-          && data.keys().size() >= 3 && data.keys().size() <= 7
-          && data.userId is string && data.userId.size() <= 128
-          && data.clockIn is number
-          && isValidGeoLoc(data.clockInLoc)
-          && (('clockOut' in data) ? data.clockOut is number : true)
-          && (('clockOutLoc' in data) ? isValidGeoLoc(data.clockOutLoc) : true)
-          && (('statusTag' in data) ? data.statusTag in ['Normaal', 'Vertraagd', 'Gedeeltelijk afgerond', 'Probleem gemeld'] : true)
-          && (('notes' in data) ? data.notes is string && data.notes.size() <= 2000 : true);
-      }
-
-      allow read: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
-      
-      allow create: if isSignedIn()
-        && isValidId(shiftId)
-        && isValidShift(incoming())
-        && incoming().userId == request.auth.uid
-        && incoming().keys().size() == 3; // only required fields on create
-
-      allow update: if isSignedIn()
-        && isValidId(shiftId)
-        && isValidShift(incoming())
-        && incoming().userId == existing().userId
-        && incoming().clockIn == existing().clockIn
-        && (
-          isAdmin() || 
-          (existing().userId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['clockOut', 'clockOutLoc', 'statusTag', 'notes']))
-        );
-
-      allow delete: if isAdmin();
+      allow read: if owner(resource.data.userId) || admin();
+      allow create, update, delete: if false;
     }
 
-    // Assignments Collection
+    match /active_shifts/{userId} {
+      allow read: if owner(userId) || admin();
+      allow create, update, delete: if false;
+    }
+
+    match /time_events/{eventId} {
+      allow read: if owner(resource.data.userId) || admin();
+      allow create, update, delete: if false;
+    }
+
+    match /audit_events/{eventId} {
+      allow read: if admin();
+      allow create, update, delete: if false;
+    }
+
     match /assignments/{assignmentId} {
-      function isValidAssignment(data) {
-        return data.keys().hasAll(['userId', 'customerId', 'customerName', 'description', 'date', 'status', 'createdAt'])
-          && data.keys().size() >= 7 && data.keys().size() <= 13
-          && data.userId is string && data.userId.size() <= 128
-          && data.customerId is string && data.customerId.size() <= 128
+      function validAssignment(data) {
+        return validId(assignmentId)
+          && data.keys().hasAll(['userId', 'customerId', 'customerName', 'description', 'date', 'status', 'createdAt'])
+          && data.keys().hasOnly(['userId', 'customerId', 'customerName', 'description', 'date', 'startTime', 'status', 'arrivalTime', 'departureTime', 'arrivalLoc', 'departureLoc', 'workNotes', 'tasks', 'acknowledged', 'acknowledgedAt', 'createdAt'])
+          && validId(data.userId) && validId(data.customerId)
           && data.customerName is string && data.customerName.size() <= 200
           && data.description is string && data.description.size() <= 1000
           && data.date is string && data.date.matches('^\\d{4}-\\d{2}-\\d{2}$')
           && data.status in ['pending', 'arrived', 'completed']
-          && data.createdAt is number
-          && (('startTime' in data) ? data.startTime is string && data.startTime.size() <= 10 : true)
-          && (('arrivalTime' in data) ? data.arrivalTime is number : true)
-          && (('departureTime' in data) ? data.departureTime is number : true)
-          && (('workNotes' in data) ? data.workNotes is string && data.workNotes.size() <= 2000 : true)
-          && (('acknowledged' in data) ? data.acknowledged is bool : true)
-          && (('tasks' in data) ? data.tasks is list && data.tasks.size() <= 50 : true);
+          && validTime(data.createdAt)
+          && (!('startTime' in data) || (data.startTime is string && data.startTime.matches('^([01]\\d|2[0-3]):[0-5]\\d$')))
+          && (!('arrivalTime' in data) || validTime(data.arrivalTime))
+          && (!('departureTime' in data) || validTime(data.departureTime))
+          && (!('arrivalLoc' in data) || validLocation(data.arrivalLoc))
+          && (!('departureLoc' in data) || validLocation(data.departureLoc))
+          && (!('workNotes' in data) || (data.workNotes is string && data.workNotes.size() <= 2000))
+          && (!('acknowledged' in data) || data.acknowledged is bool)
+          && (!('acknowledgedAt' in data) || validTime(data.acknowledgedAt))
+          && (!('tasks' in data) || (data.tasks is list && data.tasks.size() <= 50));
       }
 
-      allow read: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
-      
-      allow create: if isAdmin() 
-        && isValidId(assignmentId)
-        && isValidAssignment(incoming());
-
-      allow update: if isSignedIn()
-        && isValidId(assignmentId)
-        && isValidAssignment(incoming())
-        && incoming().createdAt == existing().createdAt
-        && incoming().userId == existing().userId
-        && incoming().customerId == existing().customerId
-        && (
-          isAdmin() || 
-          (existing().userId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'arrivalTime', 'departureTime', 'workNotes', 'tasks', 'acknowledged']))
-        );
-
-      allow delete: if isAdmin();
+      allow read: if owner(resource.data.userId) || admin();
+      allow create: if false;
+      allow update: if owner(resource.data.userId)
+          && validAssignment(request.resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['workNotes', 'tasks']);
+      allow delete: if false;
     }
 
-    // Customers Collection
     match /customers/{customerId} {
-      function isValidCustomer(data) {
-        return data.keys().hasAll(['name', 'address', 'createdAt'])
-          && data.keys().size() >= 3 && data.keys().size() <= 5
-          && data.name is string && data.name.size() <= 200
-          && data.address is string && data.address.size() <= 500
-          && data.createdAt is number
-          && (('phone' in data) ? data.phone is string && data.phone.size() <= 50 : true)
-          && (('email' in data) ? data.email is string && data.email.size() <= 255 : true);
+      function validCustomer(data) {
+        return validId(customerId)
+          && data.keys().hasAll(['name', 'address', 'createdAt'])
+          && data.keys().hasOnly(['name', 'address', 'phone', 'email', 'createdAt'])
+          && data.name is string && data.name.size() > 0 && data.name.size() <= 200
+          && data.address is string && data.address.size() > 0 && data.address.size() <= 500
+          && validTime(data.createdAt)
+          && (!('phone' in data) || (data.phone is string && data.phone.size() <= 50))
+          && (!('email' in data) || (data.email is string && data.email.size() <= 255));
       }
+      allow read: if admin();
+      allow create, update, delete: if false;
+    }
 
-      allow get: if isSignedIn() && isAdmin();
-      allow list: if isSignedIn() && isAdmin();
-
-      allow create: if isAdmin() && isValidId(customerId) && isValidCustomer(incoming());
-      allow update: if isAdmin() && isValidId(customerId) && isValidCustomer(incoming()) && incoming().createdAt == existing().createdAt;
-      allow delete: if isAdmin();
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

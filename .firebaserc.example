@@ -1,0 +1,6 @@
+{
+  "projects": {
+    "development": "team-app-development",
+    "production": "team-app-production"
+  }
+}

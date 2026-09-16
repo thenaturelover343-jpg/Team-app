@@ -5,34 +5,30 @@ import { UserCircle, Truck, Loader2, LogOut } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { PWAInstallButton } from './components/PWAInstallButton';
 import { AuthProvider, useAuth } from './hooks/useAuth';
-import { loginWithGoogle, loginWithEmail, registerWithEmail, logout } from './lib/firebase';
+import { loginWithEmail, logout, resetPassword } from './lib/firebase';
 
 function AppContent() {
-  const { user, loading } = useAuth();
+  const { user, loading, accessError } = useAuth();
   
   // Auth Form State
-  const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [authNotice, setAuthNotice] = useState('');
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError('');
+    setAuthNotice('');
     setIsSubmitting(true);
     try {
-      if (isLogin) {
-        await loginWithEmail(email, password);
-      } else {
-        await registerWithEmail(email, password);
-      }
-    } catch (err: any) {
+      await loginWithEmail(email, password);
+    } catch (err: unknown) {
       console.error(err);
-      if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
+      const code = typeof err === 'object' && err !== null && 'code' in err ? String(err.code) : '';
+      if (code === 'auth/invalid-credential' || code === 'auth/user-not-found' || code === 'auth/wrong-password') {
         setAuthError('E-mail of wachtwoord is onjuist.');
-      } else if (err.code === 'auth/email-already-in-use') {
-        setAuthError('Dit e-mailadres is al in gebruik.');
       } else {
         setAuthError('Er is een fout opgetreden. Probeer het opnieuw.');
       }
@@ -41,18 +37,18 @@ function AppContent() {
     }
   };
 
-  const handleGoogleAuth = async () => {
+  const handlePasswordReset = async () => {
     setAuthError('');
-    setIsSubmitting(true);
+    setAuthNotice('');
+    if (!email) {
+      setAuthError('Vul eerst uw e-mailadres in.');
+      return;
+    }
     try {
-      await loginWithGoogle();
-    } catch (err: any) {
-      console.error(err);
-      if (err.code !== 'auth/popup-closed-by-user') {
-        setAuthError('Google Login mislukt. Worden pop-ups geblokkeerd? Probeer e-mail/wachtwoord.');
-      }
-    } finally {
-      setIsSubmitting(false);
+      await resetPassword(email);
+      setAuthNotice('Als dit account bestaat, is een herstelmail verzonden.');
+    } catch {
+      setAuthNotice('Als dit account bestaat, is een herstelmail verzonden.');
     }
   };
 
@@ -78,13 +74,16 @@ function AppContent() {
               <Truck className="w-8 h-8" />
             </div>
             <h1 className="text-2xl font-bold text-zinc-900 tracking-tight">Barlicious & Koelverhuur</h1>
-            <p className="text-zinc-500">{isLogin ? 'Log in op je account' : 'Maak een nieuw account aan'}</p>
+            <p className="text-zinc-500">Log in met uw uitgenodigde account</p>
           </div>
 
-          {authError && (
+          {(authError || accessError) && (
             <div className="p-3 bg-red-50 text-red-700 rounded-[12px] text-sm font-medium text-center border border-red-100">
-              {authError}
+              {authError || accessError}
             </div>
+          )}
+          {authNotice && (
+            <div className="p-3 bg-green-50 text-green-700 rounded-[12px] text-sm font-medium text-center border border-green-100">{authNotice}</div>
           )}
 
           <form onSubmit={handleEmailAuth} className="space-y-4">
@@ -109,34 +108,14 @@ function AppContent() {
               className="w-full bg-zinc-900 hover:bg-zinc-900 text-white font-bold py-4 rounded-[16px] flex items-center justify-center space-x-2 transition-all shadow-lg shadow-[0_4px_14px_0_rgb(0,0,0,0.1)] disabled:opacity-50 mt-2"
             >
               {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
-              <span>{isLogin ? 'Inloggen' : 'Account Aanmaken'}</span>
+              <span>Inloggen</span>
             </button>
           </form>
-
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-zinc-200/60"></div></div>
-            <div className="relative flex justify-center text-sm"><span className="bg-white px-4 text-zinc-500 font-medium">Of</span></div>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleGoogleAuth}
-            disabled={isSubmitting}
-            className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-semibold py-3.5 rounded-[16px] flex items-center justify-center space-x-3 transition-colors shadow-lg shadow-[0_4px_14px_0_rgb(0,0,0,0.1)] disabled:opacity-50"
-          >
-            <img src="https://www.google.com/favicon.ico" alt="Google" className="w-5 h-5 bg-white rounded-full p-0.5" />
-            <span>Verder met Google</span>
+          <button type="button" onClick={handlePasswordReset} className="w-full text-sm font-bold text-zinc-600 hover:text-zinc-900">
+            Wachtwoord vergeten?
           </button>
 
-          <div className="text-center mt-2">
-            <button 
-              type="button"
-              onClick={(e) => { e.preventDefault(); setIsLogin(!isLogin); setAuthError(''); }}
-              className="text-sm font-bold text-zinc-900 hover:text-zinc-900"
-            >
-              {isLogin ? 'Nog geen account? Registreer hier' : 'Al een account? Log in'}
-            </button>
-          </div>
+          <p className="text-center text-xs text-zinc-500">Nieuwe accounts worden uitsluitend door een beheerder aangemaakt.</p>
         </motion.div>
       </div>
     );
