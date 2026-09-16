@@ -1,0 +1,105 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with role",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "maxLength": 255 },
+        "name": { "type": "string", "maxLength": 100 },
+        "role": { "type": "string", "enum": ["admin", "employee"] },
+        "createdAt": { "type": "number" },
+        "phone": { "type": "string", "maxLength": 20 },
+        "availability": { "type": "string", "maxLength": 1000 }
+      },
+      "required": ["email", "name", "role", "createdAt"]
+    },
+    "Shift": {
+      "title": "Shift",
+      "description": "Employee time and location tracking",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "clockIn": { "type": "number" },
+        "clockOut": { "type": "number" },
+        "clockInLoc": { "$ref": "#/entities/GeoLocation" },
+        "clockOutLoc": { "$ref": "#/entities/GeoLocation" },
+        "statusTag": { "type": "string", "enum": ["Normaal", "Vertraagd", "Gedeeltelijk afgerond", "Probleem gemeld"] },
+        "notes": { "type": "string", "maxLength": 2000 }
+      },
+      "required": ["userId", "clockIn", "clockInLoc"]
+    },
+    "AssignmentTask": {
+      "title": "AssignmentTask",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "text": { "type": "string", "maxLength": 500 },
+        "completed": { "type": "boolean" }
+      },
+      "required": ["id", "text", "completed"]
+    },
+    "Assignment": {
+      "title": "Assignment",
+      "description": "Work assignment/planning",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "customerId": { "type": "string", "maxLength": 128 },
+        "customerName": { "type": "string", "maxLength": 200 },
+        "description": { "type": "string", "maxLength": 1000 },
+        "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "maxLength": 10 },
+        "startTime": { "type": "string", "maxLength": 10 },
+        "status": { "type": "string", "enum": ["pending", "arrived", "completed"] },
+        "arrivalTime": { "type": "number" },
+        "departureTime": { "type": "number" },
+        "workNotes": { "type": "string", "maxLength": 2000 },
+        "tasks": { "type": "array" },
+        "acknowledged": { "type": "boolean" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["userId", "customerId", "customerName", "description", "date", "status", "createdAt"]
+    },
+    "Customer": {
+      "title": "Customer",
+      "description": "Customer info",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "maxLength": 200 },
+        "address": { "type": "string", "maxLength": 500 },
+        "phone": { "type": "string", "maxLength": 50 },
+        "email": { "type": "string", "maxLength": 255 },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["name", "address", "createdAt"]
+    },
+    "GeoLocation": {
+      "title": "GeoLocation",
+      "description": "Latitude and longitude",
+      "type": "object",
+      "properties": {
+        "lat": { "type": "number" },
+        "lng": { "type": "number" }
+      },
+      "required": ["lat", "lng"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "shifts/{shiftId}": {
+      "schema": "Shift",
+      "description": "Time registrations"
+    },
+    "assignments/{assignmentId}": {
+      "schema": "Assignment",
+      "description": "Tasks planned for employees"
+    },
+    "customers/{customerId}": {
+      "schema": "Customer",
+      "description": "Customers list"
+    }
+  }
+}

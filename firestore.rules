@@ -1,0 +1,158 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helpers
+    function isSignedIn() { return request.auth != null; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function isAdmin() {
+      return isSignedIn() 
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid)) 
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Helper: Validating GeoLocation
+    function isValidGeoLoc(loc) {
+      return loc is map 
+        && loc.keys().hasAll(['lat', 'lng']) 
+        && loc.keys().size() == 2 
+        && loc.lat is number 
+        && loc.lng is number;
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      function isValidUser(data) {
+        return data.keys().hasAll(['name', 'email', 'role', 'createdAt'])
+          && data.keys().size() >= 4 && data.keys().size() <= 6
+          && data.name is string && data.name.size() <= 100
+          && data.email is string && data.email.size() <= 255
+          && data.role in ['admin', 'employee']
+          && data.createdAt is number
+          && (('phone' in data) ? (data.phone is string && data.phone.size() <= 50) : true)
+          && (('availability' in data) ? (data.availability is string && data.availability.size() <= 1000) : true);
+      }
+
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow list: if isSignedIn() && isAdmin();
+
+      allow create: if isSignedIn() 
+        && isValidId(userId)
+        && request.auth.uid == userId 
+        && isValidUser(incoming())
+        && (incoming().role == 'employee' || request.auth.token.email == 'thenaturelover343@gmail.com');
+
+      allow update: if isSignedIn() 
+        && isValidId(userId)
+        && isValidUser(incoming())
+        && incoming().createdAt == existing().createdAt
+        && (
+          isAdmin() ||
+          (request.auth.uid == userId && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'phone', 'availability']))
+        );
+      
+      allow delete: if isAdmin();
+    }
+
+    // Shifts Collection
+    match /shifts/{shiftId} {
+      function isValidShift(data) {
+        return data.keys().hasAll(['userId', 'clockIn', 'clockInLoc'])
+          && data.keys().size() >= 3 && data.keys().size() <= 7
+          && data.userId is string && data.userId.size() <= 128
+          && data.clockIn is number
+          && isValidGeoLoc(data.clockInLoc)
+          && (('clockOut' in data) ? data.clockOut is number : true)
+          && (('clockOutLoc' in data) ? isValidGeoLoc(data.clockOutLoc) : true)
+          && (('statusTag' in data) ? data.statusTag in ['Normaal', 'Vertraagd', 'Gedeeltelijk afgerond', 'Probleem gemeld'] : true)
+          && (('notes' in data) ? data.notes is string && data.notes.size() <= 2000 : true);
+      }
+
+      allow read: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      
+      allow create: if isSignedIn()
+        && isValidId(shiftId)
+        && isValidShift(incoming())
+        && incoming().userId == request.auth.uid
+        && incoming().keys().size() == 3; // only required fields on create
+
+      allow update: if isSignedIn()
+        && isValidId(shiftId)
+        && isValidShift(incoming())
+        && incoming().userId == existing().userId
+        && incoming().clockIn == existing().clockIn
+        && (
+          isAdmin() || 
+          (existing().userId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['clockOut', 'clockOutLoc', 'statusTag', 'notes']))
+        );
+
+      allow delete: if isAdmin();
+    }
+
+    // Assignments Collection
+    match /assignments/{assignmentId} {
+      function isValidAssignment(data) {
+        return data.keys().hasAll(['userId', 'customerId', 'customerName', 'description', 'date', 'status', 'createdAt'])
+          && data.keys().size() >= 7 && data.keys().size() <= 13
+          && data.userId is string && data.userId.size() <= 128
+          && data.customerId is string && data.customerId.size() <= 128
+          && data.customerName is string && data.customerName.size() <= 200
+          && data.description is string && data.description.size() <= 1000
+          && data.date is string && data.date.matches('^\\d{4}-\\d{2}-\\d{2}$')
+          && data.status in ['pending', 'arrived', 'completed']
+          && data.createdAt is number
+          && (('startTime' in data) ? data.startTime is string && data.startTime.size() <= 10 : true)
+          && (('arrivalTime' in data) ? data.arrivalTime is number : true)
+          && (('departureTime' in data) ? data.departureTime is number : true)
+          && (('workNotes' in data) ? data.workNotes is string && data.workNotes.size() <= 2000 : true)
+          && (('acknowledged' in data) ? data.acknowledged is bool : true)
+          && (('tasks' in data) ? data.tasks is list && data.tasks.size() <= 50 : true);
+      }
+
+      allow read: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      
+      allow create: if isAdmin() 
+        && isValidId(assignmentId)
+        && isValidAssignment(incoming());
+
+      allow update: if isSignedIn()
+        && isValidId(assignmentId)
+        && isValidAssignment(incoming())
+        && incoming().createdAt == existing().createdAt
+        && incoming().userId == existing().userId
+        && incoming().customerId == existing().customerId
+        && (
+          isAdmin() || 
+          (existing().userId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'arrivalTime', 'departureTime', 'workNotes', 'tasks', 'acknowledged']))
+        );
+
+      allow delete: if isAdmin();
+    }
+
+    // Customers Collection
+    match /customers/{customerId} {
+      function isValidCustomer(data) {
+        return data.keys().hasAll(['name', 'address', 'createdAt'])
+          && data.keys().size() >= 3 && data.keys().size() <= 5
+          && data.name is string && data.name.size() <= 200
+          && data.address is string && data.address.size() <= 500
+          && data.createdAt is number
+          && (('phone' in data) ? data.phone is string && data.phone.size() <= 50 : true)
+          && (('email' in data) ? data.email is string && data.email.size() <= 255 : true);
+      }
+
+      allow get: if isSignedIn() && isAdmin();
+      allow list: if isSignedIn() && isAdmin();
+
+      allow create: if isAdmin() && isValidId(customerId) && isValidCustomer(incoming());
+      allow update: if isAdmin() && isValidId(customerId) && isValidCustomer(incoming()) && incoming().createdAt == existing().createdAt;
+      allow delete: if isAdmin();
+    }
+  }
+}
