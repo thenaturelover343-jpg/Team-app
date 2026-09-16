@@ -5,7 +5,7 @@ import { UserCircle, Truck, Loader2, LogOut } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { PWAInstallButton } from './components/PWAInstallButton';
 import { AuthProvider, useAuth } from './hooks/useAuth';
-import { loginWithEmail, logout, resetPassword } from './lib/firebase';
+import { loginWithEmail, loginWithGoogle, logout, resetPassword } from './lib/firebase';
 
 function AppContent() {
   const { user, loading, accessError } = useAuth();
@@ -49,6 +49,25 @@ function AppContent() {
       setAuthNotice('Als dit account bestaat, is een herstelmail verzonden.');
     } catch {
       setAuthNotice('Als dit account bestaat, is een herstelmail verzonden.');
+    }
+  };
+
+  const handleGoogleAuth = async () => {
+    setAuthError('');
+    setAuthNotice('');
+    setIsSubmitting(true);
+    try {
+      await loginWithGoogle();
+    } catch (err: unknown) {
+      console.error(err);
+      const code = typeof err === 'object' && err !== null && 'code' in err ? String(err.code) : '';
+      if (code === 'auth/popup-blocked') {
+        setAuthError('Sta pop-ups toe voor deze app en probeer opnieuw.');
+      } else if (code !== 'auth/popup-closed-by-user') {
+        setAuthError('Google-inloggen is mislukt. Probeer opnieuw.');
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -113,6 +132,21 @@ function AppContent() {
           </form>
           <button type="button" onClick={handlePasswordReset} className="w-full text-sm font-bold text-zinc-600 hover:text-zinc-900">
             Wachtwoord vergeten?
+          </button>
+
+          <div className="flex items-center gap-3 text-zinc-400 text-sm">
+            <span className="h-px flex-1 bg-zinc-200" />
+            <span>of</span>
+            <span className="h-px flex-1 bg-zinc-200" />
+          </div>
+
+          <button
+            type="button"
+            onClick={handleGoogleAuth}
+            disabled={isSubmitting}
+            className="w-full border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-900 font-bold py-4 rounded-[16px] transition-all disabled:opacity-50"
+          >
+            Verder met Google
           </button>
 
           <p className="text-center text-xs text-zinc-500">Nieuwe accounts worden uitsluitend door een beheerder aangemaakt.</p>

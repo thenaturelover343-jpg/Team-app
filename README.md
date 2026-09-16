@@ -43,7 +43,7 @@ Er staat bewust geen beheerderse-mailadres in de broncode. Maak eerst het Auth-a
 
 ```bash
 gcloud auth application-default login
-npm --prefix functions run bootstrap-admin -- --email=beheerder@voorbeeld.be --project=jouw-firebase-project
+npm --prefix functions run bootstrap-admin -- --email=beheerder@voorbeeld.be --project=jouw-firebase-project --database=jouw-database-id
 ```
 
 Het script zet de beveiligde claims, maakt of actualiseert het profiel en schrijft een auditgebeurtenis. De beheerder moet na een claimwijziging opnieuw inloggen.

@@ -4,7 +4,7 @@
     "runtime": "nodejs22"
   },
   "firestore": {
-    "database": "(default)",
+    "database": "ai-studio-barliciouskoelve-8762d607-3b8e-457f-86b2-9497666366aa",
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
   },

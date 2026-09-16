@@ -4,8 +4,10 @@ import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 
 const emailArg = process.argv.find(value => value.startsWith('--email='));
 const projectArg = process.argv.find(value => value.startsWith('--project='));
+const databaseArg = process.argv.find(value => value.startsWith('--database='));
 const email = emailArg?.slice('--email='.length).trim().toLowerCase();
 const projectId = projectArg?.slice('--project='.length).trim();
+const databaseId = databaseArg?.slice('--database='.length).trim() || '(default)';
 
 if (!email || !projectId) {
   console.error('Gebruik: npm run bootstrap-admin -- --email=admin@example.com --project=firebase-project-id');
@@ -14,7 +16,7 @@ if (!email || !projectId) {
 
 initializeApp({ credential: applicationDefault(), projectId });
 const auth = getAuth();
-const db = getFirestore();
+const db = getFirestore(databaseId);
 const user = await auth.getUserByEmail(email);
 
 await auth.setCustomUserClaims(user.uid, { role: 'admin', active: true });

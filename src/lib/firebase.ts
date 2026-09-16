@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, signOut, signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signOut, signInWithEmailAndPassword, signInWithPopup, sendPasswordResetEmail } from 'firebase/auth';
 import { connectAuthEmulator } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer, connectFirestoreEmulator } from 'firebase/firestore';
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
@@ -42,6 +42,8 @@ if (recaptchaSiteKey) {
 export const loginWithEmail = (email: string, pass: string) => {
   return signInWithEmailAndPassword(auth, email, pass);
 };
+
+export const loginWithGoogle = () => signInWithPopup(auth, new GoogleAuthProvider());
 
 export const resetPassword = (email: string) => sendPasswordResetEmail(auth, email);
 

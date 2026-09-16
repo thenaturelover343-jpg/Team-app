@@ -8,9 +8,12 @@ import { setGlobalOptions } from 'firebase-functions/v2/options';
 initializeApp();
 setGlobalOptions({ region: 'europe-west1', maxInstances: 10 });
 
-const db = getFirestore();
 const enforceAppCheck = process.env.FUNCTIONS_EMULATOR !== 'true';
 const appUrl = defineString('APP_URL', { default: 'http://localhost:3000' });
+const firestoreDatabaseId = defineString('FIRESTORE_DATABASE_ID', {
+  default: 'ai-studio-barliciouskoelve-8762d607-3b8e-457f-86b2-9497666366aa',
+});
+const db = getFirestore(firestoreDatabaseId.value());
 
 type Role = 'admin' | 'employee';
 type LocationInput = { lat: number; lng: number; accuracy: number; capturedAt?: number };
