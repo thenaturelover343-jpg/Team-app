@@ -58,6 +58,12 @@ export const shifts = sqliteTable("shifts", {
   geofenceStatus: text("geofence_status"), statusTag: text("status_tag"), notes: text("notes"),
 }, table => [index("idx_shifts_user_clock").on(table.userId, table.clockIn)]);
 
+export const timesheetApprovals = sqliteTable("timesheet_approvals", {
+  shiftId: text("shift_id").primaryKey(), status: text("status").notNull().default("pending"),
+  reviewedBy: text("reviewed_by"), reviewedAt: integer("reviewed_at"), adminNote: text("admin_note"),
+  updatedAt: integer("updated_at").notNull(),
+}, table => [index("idx_timesheet_approvals_status").on(table.status, table.updatedAt)]);
+
 export const activeShifts = sqliteTable("active_shifts", {
   userId: text("user_id").primaryKey(), shiftId: text("shift_id").notNull(),
 });
@@ -90,6 +96,23 @@ export const attachments = sqliteTable("attachments", {
   entityId: text("entity_id").notNull(), objectKey: text("object_key").notNull(), filename: text("filename").notNull(),
   mimeType: text("mime_type").notNull(), size: integer("size").notNull(), createdAt: integer("created_at").notNull(),
 }, table => [index("idx_attachments_entity").on(table.entityType, table.entityId), index("idx_attachments_user").on(table.userId)]);
+
+export const notifications = sqliteTable("notifications", {
+  id: text("id").primaryKey(), userId: text("user_id").notNull(), type: text("type").notNull(),
+  title: text("title").notNull(), body: text("body").notNull(), entityType: text("entity_type"),
+  entityId: text("entity_id"), dedupeKey: text("dedupe_key").notNull(), readAt: integer("read_at"),
+  pushStatus: text("push_status").notNull().default("pending"), createdAt: integer("created_at").notNull(),
+}, table => [
+  uniqueIndex("idx_notifications_dedupe").on(table.dedupeKey),
+  index("idx_notifications_user_created").on(table.userId, table.createdAt),
+  index("idx_notifications_user_read").on(table.userId, table.readAt),
+]);
+
+export const pushSubscriptions = sqliteTable("push_subscriptions", {
+  id: text("id").primaryKey(), userId: text("user_id").notNull(), endpoint: text("endpoint").notNull(),
+  p256dh: text("p256dh").notNull(), auth: text("auth").notNull(), userAgent: text("user_agent"),
+  createdAt: integer("created_at").notNull(), updatedAt: integer("updated_at").notNull(),
+}, table => [uniqueIndex("idx_push_subscriptions_endpoint").on(table.endpoint), index("idx_push_subscriptions_user").on(table.userId)]);
 
 export const auditEvents = sqliteTable("audit_events", {
   id: text("id").primaryKey(), actorId: text("actor_id").notNull(), action: text("action").notNull(),

@@ -1,6 +1,8 @@
 import { env } from "cloudflare:workers";
+import { buildPushPayload, type PushSubscription } from "@block65/webcrypto-web-push";
 import { cleanText as clean, isAllowedTransition, normalizeEmail as email, validateGeofence, validateLocation as location } from "../../../server/policy";
 import { addWeeks, availabilityConflict, isValidDate, isValidTime, overlaps, parseAvailability, validateShiftWindow } from "../../../server/planning";
+import { attendanceEvents, csv, workedMinutes, type PlannedAttendance } from "../../../server/phase4";
 
 export const dynamic = "force-dynamic";
 
@@ -133,6 +135,63 @@ function requireAdmin(user: AppUser) {
   if (user.role !== "admin") throw new Error("Alleen een beheerder mag dit uitvoeren.");
 }
 
+async function pushToUser(db: D1Database, userId: string, message: { title: string; body: string; url?: string }) {
+  if (!env.VAPID_SUBJECT || !env.VAPID_SERVER_PUBLIC_KEY || !env.VAPID_SERVER_PRIVATE_KEY) return "unavailable";
+  const subscriptions = await db.prepare("SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id=?").bind(userId).all<Json>();
+  let delivered = 0;
+  for (const row of subscriptions.results as Json[]) {
+    const subscription: PushSubscription = {
+      endpoint: String(row.endpoint), expirationTime: null,
+      keys: { p256dh: String(row.p256dh), auth: String(row.auth) },
+    };
+    try {
+      const payload = await buildPushPayload({ data: JSON.stringify(message), options: { ttl: 60 * 60 } }, subscription, {
+        subject: env.VAPID_SUBJECT, publicKey: env.VAPID_SERVER_PUBLIC_KEY, privateKey: env.VAPID_SERVER_PRIVATE_KEY,
+      });
+      const response = await fetch(subscription.endpoint, payload);
+      if (response.ok) delivered += 1;
+      else if (response.status === 404 || response.status === 410) await db.prepare("DELETE FROM push_subscriptions WHERE id=?").bind(String(row.id)).run();
+    } catch {
+      // A notification record remains visible even if a device endpoint is temporarily unavailable.
+    }
+  }
+  return delivered > 0 ? "sent" : subscriptions.results.length ? "failed" : "no_subscription";
+}
+
+async function notify(db: D1Database, input: { userId: string; type: string; title: string; body: string; dedupeKey: string; entityType?: string; entityId?: string }) {
+  const notificationId = id();
+  const result = await db.prepare(`INSERT OR IGNORE INTO notifications
+    (id, user_id, type, title, body, entity_type, entity_id, dedupe_key, push_status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`)
+    .bind(notificationId, input.userId, input.type, input.title, input.body, input.entityType || null, input.entityId || null, input.dedupeKey, Date.now()).run();
+  if (!result.meta.changes) return false;
+  const pushStatus = await pushToUser(db, input.userId, { title: input.title, body: input.body, url: "/" });
+  await db.prepare("UPDATE notifications SET push_status=? WHERE id=?").bind(pushStatus, notificationId).run();
+  return true;
+}
+
+async function notifyAdmins(db: D1Database, input: Omit<Parameters<typeof notify>[1], "userId" | "dedupeKey"> & { dedupeKey: string }) {
+  const admins = await db.prepare("SELECT id FROM users WHERE role='admin' AND active=1").all<{ id: string }>();
+  await Promise.all(admins.results.map(admin => notify(db, { ...input, userId: admin.id, dedupeKey: `${input.dedupeKey}:${admin.id}` })));
+}
+
+async function runAttendanceSweep(db: D1Database) {
+  const result = await db.prepare(`SELECT ps.id AS shift_id, psm.user_id, u.name AS user_name, ps.date, ps.start_time, ps.title,
+      EXISTS(SELECT 1 FROM shifts s WHERE s.planned_shift_id=ps.id AND s.user_id=psm.user_id) AS has_clock_in
+    FROM planned_shifts ps JOIN planned_shift_members psm ON psm.shift_id=ps.id JOIN users u ON u.id=psm.user_id
+    WHERE ps.status='published' AND ps.date BETWEEN date('now','-1 day') AND date('now','+1 day')`).all<Json>();
+  const rows: PlannedAttendance[] = (result.results as Json[]).map(row => ({
+    shiftId: String(row.shift_id), userId: String(row.user_id), date: String(row.date), startTime: String(row.start_time),
+    title: String(row.title), userName: String(row.user_name), hasClockIn: Number(row.has_clock_in) === 1,
+  }));
+  for (const event of attendanceEvents(rows, new Date())) {
+    await notify(db, { userId: event.userId, type: event.type, title: event.title, body: event.body, dedupeKey: event.dedupeKey, entityType: "planned_shift", entityId: event.shiftId });
+    if (event.type === "late" || event.type === "no_show") {
+      await notifyAdmins(db, { type: event.type, title: event.title, body: event.body, dedupeKey: `${event.dedupeKey}:admin`, entityType: "planned_shift", entityId: event.shiftId });
+    }
+  }
+}
+
 function mapUser(row: Json) {
   return {
     id: row.id, email: row.email, name: row.name, phone: row.phone || "", role: row.role,
@@ -148,6 +207,8 @@ function mapShift(row: Json) {
     clockInDistance: row.clock_in_distance === null || row.clock_in_distance === undefined ? undefined : Number(row.clock_in_distance),
     ...(row.clock_out ? { clockOut: Number(row.clock_out), clockOutLoc: { lat: Number(row.clock_out_lat), lng: Number(row.clock_out_lng), accuracy: Number(row.clock_out_accuracy || 0), capturedAt: Number(row.clock_out_client_at || row.clock_out) }, clockOutDistance: row.clock_out_distance === null || row.clock_out_distance === undefined ? undefined : Number(row.clock_out_distance) } : {}),
     geofenceStatus: row.geofence_status || undefined, statusTag: row.status_tag || undefined, notes: row.notes || undefined,
+    approvalStatus: row.approval_status || "pending", approvedBy: row.reviewed_by || undefined,
+    approvedAt: row.reviewed_at ? Number(row.reviewed_at) : undefined, approvalNote: row.admin_note || undefined,
   };
 }
 
@@ -201,12 +262,15 @@ function cleanAvailability(input: unknown) {
 
 async function snapshot(user: AppUser) {
   const db = database();
+  await runAttendanceSweep(db);
   const usersQuery = user.role === "admin"
     ? db.prepare("SELECT * FROM users ORDER BY name")
     : db.prepare("SELECT * FROM users WHERE id = ?").bind(user.uid);
   const shiftsQuery = user.role === "admin"
-    ? db.prepare("SELECT * FROM shifts ORDER BY clock_in DESC LIMIT 1000")
-    : db.prepare("SELECT * FROM shifts WHERE user_id = ? ORDER BY clock_in DESC LIMIT 500").bind(user.uid);
+    ? db.prepare(`SELECT s.*, ta.status AS approval_status, ta.reviewed_by, ta.reviewed_at, ta.admin_note
+        FROM shifts s LEFT JOIN timesheet_approvals ta ON ta.shift_id=s.id ORDER BY s.clock_in DESC LIMIT 1000`)
+    : db.prepare(`SELECT s.*, ta.status AS approval_status, ta.reviewed_by, ta.reviewed_at, ta.admin_note
+        FROM shifts s LEFT JOIN timesheet_approvals ta ON ta.shift_id=s.id WHERE s.user_id = ? ORDER BY s.clock_in DESC LIMIT 500`).bind(user.uid);
   const assignmentsQuery = user.role === "admin"
     ? db.prepare(`SELECT a.*, c.name AS customer_name FROM assignments a LEFT JOIN customers c ON c.id = a.customer_id ORDER BY a.date DESC, a.start_time DESC LIMIT 1000`)
     : db.prepare(`SELECT a.*, c.name AS customer_name FROM assignments a LEFT JOIN customers c ON c.id = a.customer_id WHERE a.user_id = ? ORDER BY a.date DESC, a.start_time DESC LIMIT 500`).bind(user.uid);
@@ -236,10 +300,14 @@ async function snapshot(user: AppUser) {
           SELECT 1 FROM planned_shift_members psm WHERE psm.shift_id=a.entity_id AND psm.user_id=?
         )
       ) ORDER BY a.created_at DESC LIMIT 500`).bind(user.uid, user.uid);
-  const [usersResult, shiftsResult, assignmentsResult, customersResult, plannedResult, breaksResult, incidentsResult, correctionsResult, attachmentsResult] = await Promise.all([
+  const notificationsQuery = user.role === "admin"
+    ? db.prepare("SELECT * FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 500").bind(user.uid)
+    : db.prepare("SELECT * FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 300").bind(user.uid);
+  const [usersResult, shiftsResult, assignmentsResult, customersResult, plannedResult, breaksResult, incidentsResult, correctionsResult, attachmentsResult, notificationsResult, pushCount] = await Promise.all([
     usersQuery.all<Json>(), shiftsQuery.all<Json>(), assignmentsQuery.all<Json>(),
     db.prepare("SELECT * FROM customers ORDER BY name").all<Json>(),
     plannedQuery.all<Json>(), breaksQuery.all<Json>(), incidentsQuery.all<Json>(), correctionsQuery.all<Json>(), attachmentsQuery.all<Json>(),
+    notificationsQuery.all<Json>(), db.prepare("SELECT COUNT(*) AS total FROM push_subscriptions WHERE user_id=?").bind(user.uid).first<{ total: number }>(),
   ]);
   return {
     user: mapUser((usersResult.results as Json[]).find(item => item.id === user.uid) || {}),
@@ -255,6 +323,12 @@ async function snapshot(user: AppUser) {
     incidents: (incidentsResult.results as Json[]).map(row => ({ id: row.id, userId: row.user_id, plannedShiftId: row.planned_shift_id || undefined, category: row.category, severity: row.severity, description: row.description, status: row.status, latitude: row.latitude ?? undefined, longitude: row.longitude ?? undefined, accuracy: row.accuracy ?? undefined, occurredAt: Number(row.occurred_at), createdAt: Number(row.created_at) })),
     correctionRequests: (correctionsResult.results as Json[]).map(row => ({ id: row.id, userId: row.user_id, shiftId: row.shift_id, requestedClockIn: row.requested_clock_in ? Number(row.requested_clock_in) : undefined, requestedClockOut: row.requested_clock_out ? Number(row.requested_clock_out) : undefined, reason: row.reason, status: row.status, reviewedAt: row.reviewed_at ? Number(row.reviewed_at) : undefined, createdAt: Number(row.created_at) })),
     attachments: (attachmentsResult.results as Json[]).map(row => ({ id: row.id, userId: row.user_id, entityType: row.entity_type, entityId: row.entity_id, filename: row.filename, mimeType: row.mime_type, size: Number(row.size), createdAt: Number(row.created_at) })),
+    notifications: (notificationsResult.results as Json[]).map(row => ({
+      id: row.id, userId: row.user_id, type: row.type, title: row.title, body: row.body,
+      entityType: row.entity_type || undefined, entityId: row.entity_id || undefined,
+      readAt: row.read_at ? Number(row.read_at) : undefined, pushStatus: row.push_status, createdAt: Number(row.created_at),
+    })),
+    push: { supported: Boolean(env.VAPID_SERVER_PUBLIC_KEY), enabled: Number(pushCount?.total || 0) > 0, publicKey: env.VAPID_SERVER_PUBLIC_KEY || "" },
   };
 }
 
@@ -262,6 +336,50 @@ async function act(user: AppUser, action: string, input: Json) {
   const db = database();
   const now = Date.now();
   if (action === "snapshot") return snapshot(user);
+
+  if (action === "savePushSubscription") {
+    const subscription = input.subscription && typeof input.subscription === "object" ? input.subscription as Json : {};
+    const keys = subscription.keys && typeof subscription.keys === "object" ? subscription.keys as Json : {};
+    const endpoint = clean(subscription.endpoint, 2000);
+    const p256dh = clean(keys.p256dh, 500);
+    const auth = clean(keys.auth, 500);
+    if (!endpoint.startsWith("https://") || !p256dh || !auth) throw new Error("Ongeldig pushabonnement.");
+    const subscriptionId = id();
+    await db.prepare(`INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth, user_agent, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(endpoint) DO UPDATE SET user_id=excluded.user_id,
+      p256dh=excluded.p256dh, auth=excluded.auth, user_agent=excluded.user_agent, updated_at=excluded.updated_at`)
+      .bind(subscriptionId, user.uid, endpoint, p256dh, auth, clean(input.userAgent, 500) || null, now, now).run();
+    await audit(db, user.uid, "notifications.push_enabled", "user", user.uid);
+    return { ok: true };
+  }
+
+  if (action === "deletePushSubscription") {
+    const endpoint = clean(input.endpoint, 2000);
+    await db.prepare("DELETE FROM push_subscriptions WHERE user_id=? AND endpoint=?").bind(user.uid, endpoint).run();
+    await audit(db, user.uid, "notifications.push_disabled", "user", user.uid);
+    return { ok: true };
+  }
+
+  if (action === "testPush") {
+    await notify(db, { userId: user.uid, type: "test", title: "Pushmeldingen werken", body: "U ontvangt voortaan belangrijke teammeldingen op dit toestel.", dedupeKey: `test:${user.uid}:${now}` });
+    return { ok: true };
+  }
+
+  if (action === "markNotificationRead") {
+    const notificationId = clean(input.id, 160);
+    await db.prepare("UPDATE notifications SET read_at=? WHERE id=? AND user_id=?").bind(now, notificationId, user.uid).run();
+    return { ok: true };
+  }
+
+  if (action === "markAllNotificationsRead") {
+    await db.prepare("UPDATE notifications SET read_at=? WHERE user_id=? AND read_at IS NULL").bind(now, user.uid).run();
+    return { ok: true };
+  }
+
+  if (action === "runNotificationSweep") {
+    await runAttendanceSweep(db);
+    return { ok: true };
+  }
 
   if (action === "inviteEmployee") {
     requireAdmin(user);
@@ -373,6 +491,13 @@ async function act(user: AppUser, action: string, input: Json) {
       .bind(now, now, ...shiftIds).run();
     if (!result.meta.changes) throw new Error("Er zijn geen conceptdiensten om te publiceren.");
     await audit(db, user.uid, "planning.published", "planned_shift", shiftIds[0], { shiftIds, count: result.meta.changes });
+    const members = await db.prepare(`SELECT ps.id, ps.title, ps.date, ps.start_time, psm.user_id FROM planned_shifts ps
+      JOIN planned_shift_members psm ON psm.shift_id=ps.id WHERE ps.id IN (${placeholders})`).bind(...shiftIds).all<Json>();
+    await Promise.all((members.results as Json[]).map(row => notify(db, {
+      userId: String(row.user_id), type: "planning_published", title: "Nieuwe planning gepubliceerd",
+      body: `${String(row.title)} op ${String(row.date)} om ${String(row.start_time)}.`,
+      dedupeKey: `published:${String(row.id)}:${String(row.user_id)}:${now}`, entityType: "planned_shift", entityId: String(row.id),
+    })));
     return { count: result.meta.changes };
   }
 
@@ -399,6 +524,9 @@ async function act(user: AppUser, action: string, input: Json) {
       .bind(confirmation, now, shiftId, user.uid, shiftId).run();
     if (!result.meta.changes) throw new Error("Deze dienst kan niet bevestigd worden.");
     await audit(db, user.uid, `planning.${confirmation}`, "planned_shift", shiftId);
+    await notifyAdmins(db, { type: "planning_confirmation", title: confirmation === "confirmed" ? "Dienst bevestigd" : "Dienst geweigerd",
+      body: `${user.name} heeft een geplande dienst ${confirmation === "confirmed" ? "bevestigd" : "geweigerd"}.`,
+      dedupeKey: `confirmation:${shiftId}:${user.uid}:${confirmation}:${now}`, entityType: "planned_shift", entityId: shiftId });
     return { ok: true };
   }
 
@@ -538,6 +666,9 @@ async function act(user: AppUser, action: string, input: Json) {
       latitude, longitude, accuracy, occurred_at, created_at) VALUES (?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?, ?)`)
       .bind(incidentId, user.uid, plannedShiftId, category, severity, description, loc?.lat || null, loc?.lng || null, loc?.accuracy || null, safeOccurredAt, now).run();
     await audit(db, user.uid, "incident.created", "incident", incidentId, { severity, category });
+    await notifyAdmins(db, { type: "incident", title: severity === "high" ? "Dringend incident" : "Nieuw incident",
+      body: `${user.name}: ${category} — ${description.slice(0, 180)}`, dedupeKey: `incident:${incidentId}`,
+      entityType: "incident", entityId: incidentId });
     return { id: incidentId };
   }
 
@@ -554,6 +685,8 @@ async function act(user: AppUser, action: string, input: Json) {
       VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)`)
       .bind(requestId, user.uid, shiftId, requestedClockIn, requestedClockOut, reason, now).run();
     await audit(db, user.uid, "correction.requested", "shift", shiftId, { requestId });
+    await notifyAdmins(db, { type: "correction", title: "Nieuw correctieverzoek", body: `${user.name} vraagt een aanpassing van geregistreerde uren.`,
+      dedupeKey: `correction:${requestId}`, entityType: "correction_request", entityId: requestId });
     return { id: requestId };
   }
 
@@ -573,7 +706,56 @@ async function act(user: AppUser, action: string, input: Json) {
     await db.prepare("UPDATE correction_requests SET status=?, reviewed_by=?, reviewed_at=? WHERE id=?")
       .bind(decision, user.uid, now, requestId).run();
     await audit(db, user.uid, `correction.${decision}`, "correction_request", requestId);
+    await notify(db, { userId: String(requestRow.user_id), type: "correction_reviewed",
+      title: decision === "approved" ? "Correctie goedgekeurd" : "Correctie afgewezen",
+      body: decision === "approved" ? "Uw tijdcorrectie is verwerkt." : "Uw tijdcorrectie werd afgewezen.",
+      dedupeKey: `correction-reviewed:${requestId}:${decision}`, entityType: "correction_request", entityId: requestId });
     return { ok: true };
+  }
+
+  if (action === "reviewTimesheet") {
+    requireAdmin(user);
+    const shiftId = clean(input.shiftId, 160);
+    const decision = input.status === "approved" ? "approved" : input.status === "rejected" ? "rejected" : "";
+    const shift = await db.prepare("SELECT user_id, clock_out FROM shifts WHERE id=?").bind(shiftId).first<Json>();
+    if (!shift || !shift.clock_out || !decision) throw new Error("Alleen afgesloten tijdregistraties kunnen worden beoordeeld.");
+    await db.prepare(`INSERT INTO timesheet_approvals (shift_id, status, reviewed_by, reviewed_at, admin_note, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(shift_id) DO UPDATE SET status=excluded.status, reviewed_by=excluded.reviewed_by,
+      reviewed_at=excluded.reviewed_at, admin_note=excluded.admin_note, updated_at=excluded.updated_at`)
+      .bind(shiftId, decision, user.uid, now, clean(input.note, 1000) || null, now).run();
+    await audit(db, user.uid, `timesheet.${decision}`, "shift", shiftId);
+    await notify(db, { userId: String(shift.user_id), type: "timesheet_reviewed",
+      title: decision === "approved" ? "Uren goedgekeurd" : "Uren afgewezen",
+      body: decision === "approved" ? "Uw geregistreerde uren zijn goedgekeurd." : `Uw uren zijn afgewezen.${clean(input.note, 1000) ? ` Reden: ${clean(input.note, 1000)}` : ""}`,
+      dedupeKey: `timesheet:${shiftId}:${decision}:${now}`, entityType: "shift", entityId: shiftId });
+    return { ok: true };
+  }
+
+  if (action === "exportHours") {
+    requireAdmin(user);
+    const startDate = clean(input.startDate, 10);
+    const endDate = clean(input.endDate, 10);
+    const kind = input.kind === "invoice" ? "invoice" : "payroll";
+    if (!isValidDate(startDate) || !isValidDate(endDate) || startDate > endDate) throw new Error("Kies een geldige exportperiode.");
+    const rows = await db.prepare(`SELECT s.id, s.clock_in, s.clock_out, u.name AS user_name, u.email,
+        ps.title, ps.date, ps.break_minutes, c.name AS customer_name,
+        COALESCE((SELECT SUM(CASE WHEN sb.ended_at IS NOT NULL THEN sb.ended_at-sb.started_at ELSE 0 END) FROM shift_breaks sb WHERE sb.shift_id=s.id), 0) AS actual_break_ms
+      FROM shifts s JOIN users u ON u.id=s.user_id
+      JOIN timesheet_approvals ta ON ta.shift_id=s.id AND ta.status='approved'
+      LEFT JOIN planned_shifts ps ON ps.id=s.planned_shift_id LEFT JOIN customers c ON c.id=ps.customer_id
+      WHERE date(s.clock_in/1000, 'unixepoch') BETWEEN ? AND ? AND s.clock_out IS NOT NULL ORDER BY s.clock_in`)
+      .bind(startDate, endDate).all<Json>();
+    const header = kind === "payroll"
+      ? ["Medewerker", "E-mail", "Datum", "Start", "Einde", "Geplande pauze minuten", "Geregistreerde pauze minuten", "Gewerkte minuten", "Gewerkte uren", "Dienst"]
+      : ["Klant", "Datum", "Medewerker", "Start", "Einde", "Geplande pauze minuten", "Geregistreerde pauze minuten", "Factureerbare minuten", "Factureerbare uren", "Dienst"];
+    const exportRows = (rows.results as Json[]).map(row => {
+      const recordedBreakMinutes = Math.round(Number(row.actual_break_ms || 0) / 60000);
+      const minutes = workedMinutes(Number(row.clock_in), Number(row.clock_out), recordedBreakMinutes);
+      const common = [String(row.date || new Date(Number(row.clock_in)).toISOString().slice(0, 10)), new Date(Number(row.clock_in)).toLocaleTimeString("nl-BE", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Brussels" }), new Date(Number(row.clock_out)).toLocaleTimeString("nl-BE", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Brussels" }), Number(row.break_minutes || 0), recordedBreakMinutes, minutes, (minutes / 60).toFixed(2), String(row.title || "Niet gekoppeld")];
+      return kind === "payroll" ? [row.user_name, row.email, ...common] : [row.customer_name || "Geen klant", common[0], row.user_name, ...common.slice(1)];
+    });
+    await audit(db, user.uid, `export.${kind}`, "export", `${startDate}:${endDate}`, { rows: exportRows.length });
+    return { filename: `${kind === "payroll" ? "loonexport" : "facturatie-export"}-${startDate}-${endDate}.csv`, csv: csv([header, ...exportRows]), rows: exportRows.length };
   }
 
   if (action === "acknowledgeAssignment") {

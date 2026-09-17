@@ -1,4 +1,4 @@
-import type { Assignment, AssignmentTask, Attachment, CorrectionRequest, Customer, GeoLocation, Incident, PlannedShift, Shift, ShiftBreak, User, WeeklyAvailability } from '../types';
+import type { Assignment, AssignmentTask, Attachment, CorrectionRequest, Customer, GeoLocation, Incident, PlannedShift, PushState, Shift, ShiftBreak, TeamNotification, User, WeeklyAvailability } from '../types';
 import { auth } from './firebase';
 import { enqueueOfflineAction, flushOfflineQueue } from './offlineQueue';
 
@@ -10,7 +10,7 @@ type AssignmentTransitionInput = { assignmentId: string; status: 'arrived' | 'co
 type CustomerInput = { id?: string; name: string; address: string; phone?: string; email?: string; latitude?: number | ''; longitude?: number | '' };
 type AssignmentInput = { id?: string; userId: string; customerId: string; date: string; startTime: string; description: string };
 type PlannedShiftInput = { title: string; customerId?: string; date: string; startTime: string; endTime: string; breakMinutes: number; notes?: string; memberIds: string[]; repeatWeeks: number; checklist: string[] };
-export type TeamSnapshot = { user: User; users: User[]; shifts: Shift[]; assignments: Assignment[]; customers: Customer[]; plannedShifts: PlannedShift[]; breaks: ShiftBreak[]; incidents: Incident[]; correctionRequests: CorrectionRequest[]; attachments: Attachment[] };
+export type TeamSnapshot = { user: User; users: User[]; shifts: Shift[]; assignments: Assignment[]; customers: Customer[]; plannedShifts: PlannedShift[]; breaks: ShiftBreak[]; incidents: Incident[]; correctionRequests: CorrectionRequest[]; attachments: Attachment[]; notifications: TeamNotification[]; push: PushState };
 
 async function call<T>(action: string, input: Record<string, unknown> = {}): Promise<{ data: T }> {
   const current = auth.currentUser;
@@ -87,6 +87,14 @@ export const secureApi = {
   createIncident: (input: { plannedShiftId?: string; category: string; severity: 'low' | 'medium' | 'high'; description: string; location?: GeoLocation; occurredAt: number }) => call<{ id: string }>('createIncident', input),
   createCorrectionRequest: (input: { shiftId: string; requestedClockIn?: number; requestedClockOut?: number; reason: string }) => queueable('createCorrectionRequest', input),
   reviewCorrectionRequest: (id: string, status: 'approved' | 'rejected') => call<{ ok: boolean }>('reviewCorrectionRequest', { id, status }),
+  reviewTimesheet: (shiftId: string, status: 'approved' | 'rejected', note = '') => call<{ ok: boolean }>('reviewTimesheet', { shiftId, status, note }),
+  savePushSubscription: (subscription: PushSubscriptionJSON) => call<{ ok: boolean }>('savePushSubscription', { subscription, userAgent: navigator.userAgent }),
+  deletePushSubscription: (endpoint: string) => call<{ ok: boolean }>('deletePushSubscription', { endpoint }),
+  testPush: () => call<{ ok: boolean }>('testPush'),
+  markNotificationRead: (id: string) => call<{ ok: boolean }>('markNotificationRead', { id }),
+  markAllNotificationsRead: () => call<{ ok: boolean }>('markAllNotificationsRead'),
+  runNotificationSweep: () => call<{ ok: boolean }>('runNotificationSweep'),
+  exportHours: (kind: 'payroll' | 'invoice', startDate: string, endDate: string) => call<{ filename: string; csv: string; rows: number }>('exportHours', { kind, startDate, endDate }),
   uploadAttachment,
   downloadAttachment,
   flushOfflineQueue: () => flushOfflineQueue((action, input) => call(action, input)),

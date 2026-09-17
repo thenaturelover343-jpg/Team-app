@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { User, Assignment, Shift, Customer, CorrectionRequest, Incident, PlannedShift, formatDate, formatTime, localDateKey } from './types';
-import { Calendar, Clock, MapPin, Plus, User as UserIcon, ListTodo, Loader2, Users, CheckSquare, Square, Download, BarChart2, CalendarDays, AlertTriangle } from 'lucide-react';
+import { User, Assignment, Shift, Customer, CorrectionRequest, Incident, PlannedShift, PushState, TeamNotification, formatDate, formatTime, localDateKey } from './types';
+import { Calendar, Clock, MapPin, Plus, User as UserIcon, ListTodo, Loader2, Users, CheckSquare, Square, Download, BarChart2, CalendarDays, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { handleFirestoreError, OperationType } from './lib/firebase';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { secureApi } from './lib/secureApi';
 import WeekPlanner from './components/WeekPlanner';
+import ControlCenter from './components/ControlCenter';
 
 export default function AdminView() {
-  const [activeTab, setActiveTab] = useState<'week' | 'planning' | 'timesheets' | 'reports' | 'customers' | 'team'>('week');
+  const [activeTab, setActiveTab] = useState<'control' | 'week' | 'planning' | 'timesheets' | 'reports' | 'customers' | 'team'>('control');
   
   const [users, setUsers] = useState<User[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
@@ -16,6 +17,8 @@ export default function AdminView() {
   const [plannedShifts, setPlannedShifts] = useState<PlannedShift[]>([]);
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [correctionRequests, setCorrectionRequests] = useState<CorrectionRequest[]>([]);
+  const [notifications, setNotifications] = useState<TeamNotification[]>([]);
+  const [push, setPush] = useState<PushState>({ supported: false, enabled: false, publicKey: '' });
   const [loading, setLoading] = useState(true);
 
   const loadData = React.useCallback(async () => {
@@ -27,6 +30,8 @@ export default function AdminView() {
     setPlannedShifts(data.plannedShifts);
     setIncidents(data.incidents);
     setCorrectionRequests(data.correctionRequests);
+    setNotifications(data.notifications);
+    setPush(data.push);
     setLoading(false);
   }, []);
 
@@ -53,6 +58,7 @@ export default function AdminView() {
   return (
     <div className="max-w-4xl mx-auto w-full space-y-8 pb-12">
       <div className="bg-white rounded-[16px] shadow-[0_4px_14px_0_rgb(0,0,0,0.03)] border border-zinc-200/60 p-1.5 flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-1.5">
+        <button onClick={() => setActiveTab('control')} className={`flex-1 py-3 px-4 rounded-[12px] font-bold text-sm flex items-center justify-center space-x-2 transition-all relative ${activeTab === 'control' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600 hover:bg-zinc-100/50'}`}><ShieldCheck className="w-4 h-4" /><span>Controle</span>{notifications.some(item => !item.readAt) && <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full" />}</button>
         <button
           onClick={() => setActiveTab('week')}
           className={`flex-1 py-3 px-4 rounded-[12px] font-bold text-sm flex items-center justify-center space-x-2 transition-all ${activeTab === 'week' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600 hover:bg-zinc-100/50'}`}
@@ -91,6 +97,7 @@ export default function AdminView() {
         </button>
       </div>
 
+      {activeTab === 'control' && <ControlCenter users={users} plannedShifts={plannedShifts} shifts={shifts} notifications={notifications} push={push} onChanged={loadData} />}
       {activeTab === 'week' && <WeekPlanner users={users} customers={customers} shifts={plannedShifts} onChanged={loadData} />}
       {activeTab === 'planning' && <PlanningTab users={users} assignments={assignments} customers={customers} />}
       {activeTab === 'timesheets' && <TimesheetsTab users={users} shifts={shifts} assignments={assignments} />}

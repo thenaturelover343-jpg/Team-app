@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { cleanText, distanceMeters, isAllowedTransition, normalizeEmail, validateGeofence, validateLocation } from '../server/policy.ts';
 import { addWeeks, availabilityConflict, overlaps, validateShiftWindow } from '../server/planning.ts';
+import { attendanceEvents, csv, workedMinutes } from '../server/phase4.ts';
 
 test('vrije registratie wordt niet als statusovergang geaccepteerd', () => {
   assert.equal(isAllowedTransition('pending', 'completed'), false);
@@ -56,4 +57,17 @@ test('beschikbaarheid blokkeert dagen en uren buiten het venster', () => {
   assert.equal(availabilityConflict(availability, '2026-09-14', '09:00', '16:00'), false);
   assert.equal(availabilityConflict(availability, '2026-09-14', '07:00', '16:00'), true);
   assert.equal(availabilityConflict(availability, '2026-09-15', '09:00', '16:00'), true);
+});
+
+test('herinneringen, te-laat- en no-showmeldingen worden gededupliceerd opgebouwd', () => {
+  const row = { shiftId: 'shift-1', userId: 'user-1', userName: 'Karim', date: '2026-09-17', startTime: '10:00', title: 'Ochtenddienst', hasClockIn: false };
+  assert.equal(attendanceEvents([row], new Date('2026-09-17T07:30:00Z')).at(0)?.type, 'reminder');
+  assert.equal(attendanceEvents([row], new Date('2026-09-17T08:15:00Z')).at(0)?.type, 'late');
+  assert.equal(attendanceEvents([row], new Date('2026-09-17T08:35:00Z')).at(0)?.type, 'no_show');
+  assert.equal(attendanceEvents([{ ...row, hasClockIn: true }], new Date('2026-09-17T08:35:00Z')).length, 0);
+});
+
+test('gewerkte minuten trekken de pauze af en CSV ontsnapt velden', () => {
+  assert.equal(workedMinutes(0, 8 * 60 * 60 * 1000, 30), 450);
+  assert.equal(csv([['Naam', 'Notitie'], ['A', 'tekst, met komma']]), '\uFEFFNaam;Notitie\r\nA;"tekst, met komma"\r\n');
 });

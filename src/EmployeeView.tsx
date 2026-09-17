@@ -1,17 +1,18 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
-import { User, Shift, ShiftBreak, Assignment, Attachment, CorrectionRequest, Incident, PlannedShift, WeeklyAvailability, getCurrentLocation, formatTime, formatDate, AssignmentTask, localDateKey } from './types';
-import { MapPin, Clock, CheckCircle, Play, Square, Navigation2, FileText, Loader2, User as UserIcon, Calendar, History, Save, Plus, Trash2, CheckSquare, CalendarDays, XCircle, AlertTriangle, ClipboardList, WifiOff, Coffee, Upload, Download } from 'lucide-react';
+import { User, Shift, ShiftBreak, Assignment, Attachment, CorrectionRequest, Incident, PlannedShift, PushState, TeamNotification, WeeklyAvailability, getCurrentLocation, formatTime, formatDate, AssignmentTask, localDateKey } from './types';
+import { MapPin, Clock, CheckCircle, Play, Square, Navigation2, FileText, Loader2, User as UserIcon, Calendar, History, Save, Plus, Trash2, CheckSquare, CalendarDays, XCircle, AlertTriangle, ClipboardList, WifiOff, Coffee, Upload, Download, Bell } from 'lucide-react';
 import { useAuth } from './hooks/useAuth';
 import { handleFirestoreError, OperationType } from './lib/firebase';
 import { secureApi } from './lib/secureApi';
 import { readOfflineQueue } from './lib/offlineQueue';
+import NotificationCenter from './components/NotificationCenter';
 
 const LiveLocationMap = dynamic(() => import('./components/LiveLocationMap'), { ssr: false });
 
 export default function EmployeeView() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'planning' | 'reports' | 'profile'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'planning' | 'reports' | 'notifications' | 'profile'>('dashboard');
 
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
@@ -20,44 +21,10 @@ export default function EmployeeView() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [correctionRequests, setCorrectionRequests] = useState<CorrectionRequest[]>([]);
+  const [notifications, setNotifications] = useState<TeamNotification[]>([]);
+  const [push, setPush] = useState<PushState>({ supported: false, enabled: false, publicKey: '' });
   const [queueCount, setQueueCount] = useState(0);
   const [loading, setLoading] = useState(true);
-  const alertedAssignments = useRef<Set<string>>(new Set());
-
-  useEffect(() => {
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!assignments.length || !('Notification' in window) || Notification.permission !== 'granted') return;
-
-    const intervalId = setInterval(() => {
-      const now = new Date();
-      assignments.forEach(assignment => {
-        if (assignment.status === 'pending' && assignment.startTime && !alertedAssignments.current.has(assignment.id)) {
-          const [hours, minutes] = assignment.startTime.split(':').map(Number);
-          const assignmentTime = new Date();
-          assignmentTime.setHours(hours, minutes, 0, 0);
-          
-          const timeDiff = assignmentTime.getTime() - now.getTime();
-          const minutesDiff = Math.floor(timeDiff / (1000 * 60));
-          
-          if (minutesDiff > 0 && minutesDiff <= 15) {
-            new Notification('Binnenkort verwacht', {
-              body: `Uw opdracht bij ${assignment.customerName} start over ${minutesDiff} minuten.`,
-              icon: '/favicon.ico'
-            });
-            alertedAssignments.current.add(assignment.id);
-          }
-        }
-      });
-    }, 60000); // Check every minute
-
-    return () => clearInterval(intervalId);
-  }, [assignments]);
-
   const loadData = React.useCallback(async () => {
     const { data } = await secureApi.snapshot();
     setShifts(data.shifts);
@@ -67,6 +34,8 @@ export default function EmployeeView() {
     setAttachments(data.attachments);
     setIncidents(data.incidents);
     setCorrectionRequests(data.correctionRequests);
+    setNotifications(data.notifications);
+    setPush(data.push);
     setLoading(false);
   }, []);
 
@@ -104,7 +73,7 @@ export default function EmployeeView() {
   return (
     <div className="max-w-lg mx-auto w-full space-y-6 pb-28">
       {queueCount > 0 && <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm font-semibold text-amber-800 flex items-center gap-2"><WifiOff className="w-4 h-4" />{queueCount} actie{queueCount === 1 ? '' : 's'} wachten op internet.</div>}
-      <div className="fixed bottom-3 left-3 right-3 z-50 max-w-lg mx-auto bg-white/95 backdrop-blur rounded-2xl shadow-xl border border-zinc-200 p-1.5 grid grid-cols-4 gap-1">
+      <div className="fixed bottom-3 left-3 right-3 z-50 max-w-lg mx-auto bg-white/95 backdrop-blur rounded-2xl shadow-xl border border-zinc-200 p-1.5 grid grid-cols-5 gap-1">
         <button
           onClick={() => setActiveTab('dashboard')}
           className={`py-3 px-1 rounded-[12px] font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all relative ${activeTab === 'dashboard' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600'}`}
@@ -125,6 +94,7 @@ export default function EmployeeView() {
           <span>Planning</span>
         </button>
         <button onClick={() => setActiveTab('reports')} className={`py-3 px-1 rounded-[12px] font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all ${activeTab === 'reports' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600'}`}><AlertTriangle className="w-4 h-4" /><span>Melden</span></button>
+        <button onClick={() => setActiveTab('notifications')} className={`py-3 px-1 rounded-[12px] font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all relative ${activeTab === 'notifications' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600'}`}><Bell className="w-4 h-4" /><span>Berichten</span>{notifications.some(item => !item.readAt) && <span className="absolute top-1.5 right-2 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-white" />}</button>
         <button
           onClick={() => setActiveTab('profile')}
           className={`py-3 px-1 rounded-[12px] font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all ${activeTab === 'profile' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600'}`}
@@ -137,6 +107,7 @@ export default function EmployeeView() {
       {activeTab === 'dashboard' && <DashboardTab userId={user.id} shifts={shifts} breaks={breaks} assignments={assignments} plannedShifts={plannedShifts} loading={loading} onChanged={loadData} />}
       {activeTab === 'planning' && <EmployeePlanningTab userId={user.id} shifts={plannedShifts} attachments={attachments} onChanged={loadData} />}
       {activeTab === 'reports' && <ReportsTab shifts={shifts} plannedShifts={plannedShifts} incidents={incidents} corrections={correctionRequests} onChanged={loadData} />}
+      {activeTab === 'notifications' && <NotificationCenter notifications={notifications} push={push} onChanged={loadData} />}
       {activeTab === 'profile' && <ProfileTab user={user} />}
     </div>
   );
@@ -147,9 +118,6 @@ function DashboardTab({ userId, shifts, breaks, assignments, plannedShifts, load
   const [errorMsg, setErrorMsg] = useState('');
   const [shiftNotes, setShiftNotes] = useState('');
   const [shiftStatus, setShiftStatus] = useState<'Normaal' | 'Vertraagd' | 'Gedeeltelijk afgerond' | 'Probleem gemeld'>('Normaal');
-  const [notificationPermission, setNotificationPermission] = useState(
-    typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'denied'
-  );
 
   const activeShift = shifts.find(s => !s.clockOut);
   const activeBreak = activeShift ? breaks.find(item => item.shiftId === activeShift.id && !item.endedAt) : undefined;
@@ -239,29 +207,8 @@ function DashboardTab({ userId, shifts, breaks, assignments, plannedShifts, load
     }
   };
 
-  const requestNotificationPermission = async () => {
-    if ('Notification' in window) {
-      const perm = await Notification.requestPermission();
-      setNotificationPermission(perm);
-    }
-  };
-
   return (
     <div className="space-y-6">
-      {notificationPermission === 'default' && (
-        <div className="bg-zinc-100 border border-zinc-200 p-4 rounded-[24px] flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="text-zinc-900 text-sm font-medium">
-            Zet meldingen aan om een herinnering te krijgen 15 minuten voor een opdracht start.
-          </div>
-          <button 
-            onClick={requestNotificationPermission}
-            className="whitespace-nowrap bg-zinc-900 text-white px-4 py-2 rounded-[12px] font-bold text-sm hover:bg-zinc-900 transition-colors"
-          >
-            Meldingen aanzetten
-          </button>
-        </div>
-      )}
-      
       {errorMsg && (
         <div className="p-4 bg-red-50 text-red-700 rounded-[12px] border border-red-200 text-sm font-medium">
           {errorMsg}

@@ -29,6 +29,13 @@
       "when": 1789657902174,
       "tag": "0003_oval_talisman",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1789658901790,
+      "tag": "0004_daffy_lady_deathstrike",
+      "breakpoints": true
     }
   ]
 }

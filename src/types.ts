@@ -40,6 +40,29 @@ export interface Shift {
   clockInDistance?: number;
   clockOutDistance?: number;
   geofenceStatus?: 'inside' | 'unverified';
+  approvalStatus?: 'pending' | 'approved' | 'rejected';
+  approvedBy?: string;
+  approvedAt?: number;
+  approvalNote?: string;
+}
+
+export interface TeamNotification {
+  id: string;
+  userId: string;
+  type: 'planning_published' | 'planning_confirmation' | 'reminder' | 'late' | 'no_show' | 'incident' | 'correction' | 'correction_reviewed' | 'timesheet_reviewed' | 'test';
+  title: string;
+  body: string;
+  entityType?: string;
+  entityId?: string;
+  readAt?: number;
+  pushStatus: 'pending' | 'sent' | 'failed' | 'no_subscription' | 'unavailable';
+  createdAt: number;
+}
+
+export interface PushState {
+  supported: boolean;
+  enabled: boolean;
+  publicKey: string;
 }
 
 export interface ShiftBreak {
