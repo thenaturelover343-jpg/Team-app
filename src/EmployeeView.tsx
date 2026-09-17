@@ -78,11 +78,11 @@ export default function EmployeeView() {
 
   return (
     <div className="employee-shell max-w-lg mx-auto w-full space-y-6 pb-28">
-      {queueCount > 0 && <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm font-semibold text-amber-800 flex items-center gap-2"><WifiOff className="w-4 h-4" />{queueCount} actie{queueCount === 1 ? '' : 's'} wachten op internet.</div>}
-      <div className="employee-nav fixed bottom-3 left-3 right-3 z-50 max-w-lg mx-auto p-1.5 grid grid-cols-5 gap-1">
+      {queueCount > 0 && <div className="ops-chip-warning w-full justify-start p-3"><WifiOff className="w-4 h-4" />{queueCount} actie{queueCount === 1 ? '' : 's'} wachten op internet.</div>}
+      <div className="employee-nav ops-nav fixed bottom-3 left-3 right-3 z-50 max-w-lg mx-auto p-1.5">
         <button
           onClick={() => setActiveTab('dashboard')}
-          className={`py-3 px-1 rounded-[12px] font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all relative ${activeTab === 'dashboard' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600'}`}
+          className={`ops-nav-btn flex-col gap-1 relative ${activeTab === 'dashboard' ? 'ops-nav-btn-active' : ''}`}
         >
           <Calendar className="w-4 h-4" />
           <span>{fr ? "Aujourd'hui" : 'Vandaag'}</span>
@@ -94,16 +94,16 @@ export default function EmployeeView() {
         </button>
         <button
           onClick={() => setActiveTab('planning')}
-          className={`py-3 px-1 rounded-[12px] font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all ${activeTab === 'planning' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600'}`}
+          className={`ops-nav-btn flex-col gap-1 ${activeTab === 'planning' ? 'ops-nav-btn-active' : ''}`}
         >
           <CalendarDays className="w-4 h-4" />
           <span>Planning</span>
         </button>
-        <button onClick={() => setActiveTab('reports')} className={`py-3 px-1 rounded-[12px] font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all ${activeTab === 'reports' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600'}`}><AlertTriangle className="w-4 h-4" /><span>{fr ? 'Signaler' : 'Melden'}</span></button>
-        <button onClick={() => setActiveTab('notifications')} className={`py-3 px-1 rounded-[12px] font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all relative ${activeTab === 'notifications' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600'}`}><Bell className="w-4 h-4" /><span>{fr ? 'Messages' : 'Berichten'}</span>{notifications.some(item => !item.readAt) && <span className="absolute top-1.5 right-2 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-white" />}</button>
+        <button onClick={() => setActiveTab('reports')} className={`ops-nav-btn flex-col gap-1 ${activeTab === 'reports' ? 'ops-nav-btn-active' : ''}`}><AlertTriangle className="w-4 h-4" /><span>{fr ? 'Signaler' : 'Melden'}</span></button>
+        <button onClick={() => setActiveTab('notifications')} className={`ops-nav-btn flex-col gap-1 relative ${activeTab === 'notifications' ? 'ops-nav-btn-active' : ''}`}><Bell className="w-4 h-4" /><span>{fr ? 'Messages' : 'Berichten'}</span>{notifications.some(item => !item.readAt) && <span className="absolute top-1.5 right-2 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-white" />}</button>
         <button
           onClick={() => setActiveTab('profile')}
-          className={`py-3 px-1 rounded-[12px] font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all ${activeTab === 'profile' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600'}`}
+          className={`ops-nav-btn flex-col gap-1 ${activeTab === 'profile' ? 'ops-nav-btn-active' : ''}`}
         >
           <UserIcon className="w-4 h-4" />
           <span>{fr ? 'Profil' : 'Mijn Profiel'}</span>
@@ -241,7 +241,7 @@ function DashboardTab({ userId, shifts, breaks, assignments, plannedShifts, load
           </div>
           <div className="space-y-3">
             {unacknowledgedAssignments.map(a => (
-               <div key={a.id} className="flex flex-col sm:flex-row sm:items-center justify-between bg-white p-4 rounded-[12px] border border-amber-100 shadow-[0_4px_14px_0_rgb(0,0,0,0.03)] gap-3">
+               <div key={a.id} className="ops-panel flex flex-col sm:flex-row sm:items-center justify-between p-4 gap-3">
                   <div>
                     <div className="font-bold text-zinc-800">{a.customerName}</div>
                     <div className="text-sm text-zinc-500 line-clamp-1">{a.description}</div>
@@ -258,635 +258,36 @@ function DashboardTab({ userId, shifts, breaks, assignments, plannedShifts, load
         </div>
       )}
 
-      {todaysPlanned.length > 0 && <div className="bg-white rounded-[24px] border border-zinc-200 p-5 space-y-3">
+      {todaysPlanned.length > 0 && <div className="ops-card p-5 space-y-3">
         <h2 className="font-bold text-zinc-900">Vandaag gepland</h2>
-        {todaysPlanned.map(item => <div key={item.id} className="bg-zinc-50 border border-zinc-200 rounded-xl p-3 flex justify-between gap-3"><div><div className="font-bold">{item.title}</div><div className="text-sm text-zinc-500">{item.startTime}â€“{item.endTime}{item.customerName ? ` Â· ${item.customerName}` : ''}</div></div>{item.customerLatitude !== undefined && item.customerLongitude !== undefined && <a target="_blank" rel="noreferrer" href={`https://www.google.com/maps/dir/?api=1&destination=${item.customerLatitude},${item.customerLongitude}`} className="shrink-0 bg-zinc-900 text-white rounded-lg px-3 py-2 text-xs font-bold flex items-center gap-1"><Navigation2 className="w-3.5 h-3.5" />Route</a>}</div>)}
+        {todaysPlanned.map(item => <div key={item.id} className="ops-panel p-3 flex justify-between gap-3"><div><div className="font-bold">{item.title}</div><div className="text-sm text-zinc-500">{item.startTime}â€“{item.endTime}{item.customerName ? ` Â· ${item.customerName}` : ''}</div></div>{item.customerLatitude !== undefined && item.customerLongitude !== undefined && <a target="_blank" rel="noreferrer" href={`https://www.google.com/maps/dir/?api=1&destination=${item.customerLatitude},${item.customerLongitude}`} className="ops-btn-primary shrink-0 px-3 text-xs gap-1"><Navigation2 className="w-3.5 h-3.5" />Route</a>}</div>)}
       </div>}
 
       {/* Time Tracking Card */}
-      <div className="bg-white rounded-[24px] shadow-[0_4px_14px_0_rgb(0,0,0,0.03)] border border-zinc-200/60 overflow-hidden">
+      <div className="ops-card overflow-hidden">
         <div className="p-8 text-center space-y-6">
           <h2 className="text-xl font-bold text-zinc-800">Urenregistratie</h2>
           
           {activeShift ? (
             <div className="space-y-6">
-              <div className="inline-flex items-center justify-center space-x-2 bg-green-50 text-green-700 px-5 py-2.5 rounded-full font-semibold border border-green-200/50">
+              <div className="ops-chip-success px-5 py-2.5">
                 <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse" />
                 <span>Ingeklokt sinds {formatTime(activeShift.clockIn)}</span>
               </div>
               {activeShift.clockInLoc?.accuracy > 0 && <div className="text-xs font-semibold text-zinc-500">GPS-nauwkeurigheid: Â±{Math.round(activeShift.clockInLoc.accuracy)} m{activeShift.clockInDistance !== undefined ? ` Â· afstand locatie: ${Math.round(activeShift.clockInDistance)} m` : ''}</div>}
               
-              <div className="text-left space-y-4 bg-[#FAFAFA] p-5 rounded-[24px] border border-zinc-200">
+              <div className="ops-panel text-left space-y-4 p-5">
                 <div>
                   <label className="block text-sm font-bold text-zinc-700 mb-1.5">Dienst Status</label>
                   <select 
                     value={shiftStatus} 
                     onChange={e => setShiftStatus(e.target.value as typeof shiftStatus)}
-                    className="w-full border border-zinc-200 rounded-[12px] p-3 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none bg-white transition-all font-medium text-sm"
+                    className="ops-input w-full p-3 font-medium text-sm"
                   >
                     <option value="Normaal">Normaal</option>
                     <option value="Vertraagd">Vertraagd</option>
                     <option value="Gedeeltelijk afgerond">Gedeeltelijk afgerond</option>
                     <option value="Probleem gemeld">Probleem gemeld</option>
                   </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-zinc-700 mb-1.5">Opmerkingen (optioneel)</label>
-                  <textarea 
-                    value={shiftNotes} 
-                    onChange={e => setShiftNotes(e.target.value)}
-                    placeholder="Bijzonderheden over deze werkdag..."
-                    className="w-full border border-zinc-200 rounded-[12px] p-3 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none bg-white transition-all font-medium resize-none h-20 text-sm"
-                  />
-                </div>
-              </div>
-
-              <button onClick={toggleBreak} disabled={isLocating} className={`w-full flex items-center justify-center gap-2 py-4 rounded-[18px] font-bold border ${activeBreak ? 'bg-amber-100 border-amber-300 text-amber-900' : 'bg-white border-zinc-300 text-zinc-800'}`}><Coffee className="w-5 h-5" />{activeBreak ? `Pauze beÃ«indigen Â· sinds ${formatTime(activeBreak.startedAt)}` : 'Pauze starten'}</button>
-
-              <button
-                onClick={handleClockOut}
-                disabled={isLocating}
-                className="w-full flex items-center justify-center space-x-3 bg-zinc-900 hover:bg-zinc-800 text-white py-5 rounded-[24px] font-bold text-lg transition-colors disabled:opacity-50 shadow-lg shadow-[0_4px_14px_0_rgb(0,0,0,0.1)]"
-              >
-                {isLocating ? <Loader2 className="animate-spin w-6 h-6" /> : <Square className="w-6 h-6" />}
-                <span>{isLocating ? 'Locatie zoeken...' : 'Uitklokken'}</span>
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              <p className="text-zinc-500 font-medium">Je bent momenteel niet ingeklokt.</p>
-              {todaysPlanned.length > 0 && <select value={selectedPlannedShiftId} onChange={e => setPlannedShiftId(e.target.value)} className="w-full border border-zinc-200 rounded-xl p-3 bg-white font-semibold text-sm"><option value="">Algemene werkdag</option>{todaysPlanned.map(item => <option key={item.id} value={item.id}>{item.startTime} â€” {item.title}</option>)}</select>}
-              <button
-                onClick={handleClockIn}
-                disabled={isLocating}
-                className="w-full flex items-center justify-center space-x-3 bg-zinc-900 hover:bg-zinc-900 text-white py-5 rounded-[24px] font-bold text-lg transition-colors disabled:opacity-50 shadow-lg shadow-[0_4px_14px_0_rgb(0,0,0,0.1)]"
-              >
-                {isLocating ? <Loader2 className="animate-spin w-6 h-6" /> : <Play className="w-6 h-6" />}
-                <span>{isLocating ? 'Locatie zoeken...' : 'Start Werkdag (Inklokken)'}</span>
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Assignments Card */}
-      <div className="space-y-4">
-        <h2 className="text-xl font-bold text-zinc-800 px-2 pt-4">Mijn Planning Vandaag</h2>
-        
-        {myAssignments.length === 0 ? (
-          <div className="bg-zinc-100/50/50 border-2 border-dashed border-zinc-200/60 rounded-[24px] p-10 text-center text-zinc-500 font-medium">
-            Je hebt nog geen opdrachten voor vandaag.
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {myAssignments.map(assignment => (
-              <AssignmentCard key={assignment.id} assignment={assignment} />
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function EmployeePlanningTab({ userId, shifts, attachments, onChanged }: { userId: string; shifts: PlannedShift[]; attachments: Attachment[]; onChanged: () => Promise<void> }) {
-  const [busyId, setBusyId] = useState('');
-  const [error, setError] = useState('');
-  const upcoming = [...shifts].filter(shift => shift.date >= localDateKey()).sort((a, b) => `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`));
-  const respond = async (shiftId: string, status: 'confirmed' | 'declined') => {
-    setBusyId(shiftId); setError('');
-    try { await secureApi.confirmPlannedShift(shiftId, status); await onChanged(); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : 'Uw antwoord kon niet worden opgeslagen.'); }
-    finally { setBusyId(''); }
-  };
-  const toggleTask = async (shift: PlannedShift, taskId: string) => {
-    const current = shift.checklistStates[userId] || [];
-    const completed = current.includes(taskId) ? current.filter(id => id !== taskId) : [...current, taskId];
-    setBusyId(shift.id); setError('');
-    try { await secureApi.updatePlannedShiftChecklist(shift.id, completed); await onChanged().catch(() => undefined); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : 'Checklist kon niet worden bijgewerkt.'); }
-    finally { setBusyId(''); }
-  };
-  const upload = async (shiftId: string, files: FileList | null) => {
-    if (!files?.length) return;
-    setBusyId(shiftId); setError('');
-    try { for (const file of Array.from(files).slice(0, 5)) await secureApi.uploadAttachment('planned_shift', shiftId, file); await onChanged(); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : 'Uploaden is mislukt.'); }
-    finally { setBusyId(''); }
-  };
-  const download = async (item: Attachment) => {
-    const blob = await secureApi.downloadAttachment(item.id);
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a'); anchor.href = url; anchor.download = item.filename; anchor.click();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-  };
-  return <div className="space-y-4">
-    <div className="px-1"><h2 className="text-2xl font-bold text-zinc-900">Weekoverzicht</h2><p className="text-sm text-zinc-500 mt-1">Diensten, route, checklist en documenten.</p></div>
-    {error && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</div>}
-    {!upcoming.length && <div className="bg-white border border-zinc-200 rounded-2xl p-8 text-center text-zinc-500">Er staan nog geen gepubliceerde diensten klaar.</div>}
-    {upcoming.map(shift => {
-      const confirmation = shift.confirmations[userId] || 'pending';
-      return <article key={shift.id} className="bg-white border border-zinc-200 rounded-[24px] p-5 shadow-sm space-y-4">
-        <div className="flex items-start justify-between gap-3"><div><div className="text-xs uppercase tracking-wide font-bold text-zinc-400">{formatDate(shift.date)}</div><h3 className="text-lg font-extrabold text-zinc-900 mt-1">{shift.title}</h3></div><span className={`text-xs font-bold px-3 py-1.5 rounded-full ${confirmation === 'confirmed' ? 'bg-emerald-100 text-emerald-700' : confirmation === 'declined' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'}`}>{confirmation === 'confirmed' ? 'Bevestigd' : confirmation === 'declined' ? 'Geweigerd' : 'Antwoord nodig'}</span></div>
-        <div className="grid grid-cols-2 gap-3 text-sm"><div className="bg-zinc-50 rounded-xl p-3"><span className="block text-xs text-zinc-400 font-bold uppercase mb-1">Uren</span><span className="font-bold">{shift.startTime}â€“{shift.endTime}</span></div><div className="bg-zinc-50 rounded-xl p-3"><span className="block text-xs text-zinc-400 font-bold uppercase mb-1">Pauze</span><span className="font-bold">{shift.breakMinutes} min.</span></div></div>
-        {shift.customerName && <div className="flex items-start gap-2 text-sm text-zinc-600"><MapPin className="w-4 h-4 mt-0.5 shrink-0" /><div><div className="font-bold text-zinc-800">{shift.customerName}</div><div>{shift.customerAddress}</div>{shift.customerLatitude !== undefined && shift.customerLongitude !== undefined && <a className="text-zinc-900 underline font-semibold" target="_blank" rel="noreferrer" href={`https://www.google.com/maps/search/?api=1&query=${shift.customerLatitude},${shift.customerLongitude}`}>Open locatie</a>}</div></div>}
-        {shift.notes && <p className="text-sm text-zinc-600 bg-zinc-50 rounded-xl p-3">{shift.notes}</p>}
-        {shift.checklist.length > 0 && <div className="border border-zinc-200 rounded-xl p-3 space-y-2"><div className="text-xs uppercase font-bold tracking-wide text-zinc-400 flex items-center gap-2"><ClipboardList className="w-4 h-4" />Checklist</div>{shift.checklist.map((task, index) => { const taskId=String(index); const done=(shift.checklistStates[userId] || []).includes(taskId); return <label key={taskId} className="flex items-start gap-3 text-sm font-semibold cursor-pointer"><input type="checkbox" checked={done} disabled={busyId === shift.id} onChange={() => toggleTask(shift, taskId)} className="mt-0.5 w-4 h-4 accent-zinc-900" /><span className={done ? 'line-through text-zinc-400' : 'text-zinc-700'}>{task}</span></label>; })}</div>}
-        <div className="border border-zinc-200 rounded-xl p-3 space-y-2"><div className="text-xs uppercase font-bold tracking-wide text-zinc-400">Fotoâ€™s en documenten</div>{attachments.filter(item => item.entityType === 'planned_shift' && item.entityId === shift.id).map(item => <button key={item.id} type="button" onClick={() => download(item)} className="w-full text-left flex items-center gap-2 text-sm font-semibold text-zinc-700 bg-zinc-50 rounded-lg p-2"><Download className="w-4 h-4" /><span className="truncate">{item.filename}</span></button>)}<label className="flex items-center justify-center gap-2 border border-dashed border-zinc-300 rounded-lg p-3 text-sm font-bold text-zinc-600 cursor-pointer"><Upload className="w-4 h-4" />Bestand toevoegen<input type="file" accept="image/*,.pdf,.doc,.docx,.txt" multiple className="hidden" onChange={event => upload(shift.id, event.target.files)} /></label></div>
-        <div className="grid grid-cols-2 gap-3"><button disabled={busyId === shift.id} onClick={() => respond(shift.id, 'declined')} className="py-3 rounded-xl border border-red-200 text-red-700 font-bold flex items-center justify-center gap-2 disabled:opacity-40"><XCircle className="w-4 h-4" />Weigeren</button><button disabled={busyId === shift.id} onClick={() => respond(shift.id, 'confirmed')} className="py-3 rounded-xl bg-zinc-900 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-40">{busyId === shift.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}Bevestigen</button></div>
-      </article>;
-    })}
-  </div>;
-}
-
-function ReportsTab({ shifts, plannedShifts, incidents, corrections, onChanged }: { shifts: Shift[]; plannedShifts: PlannedShift[]; incidents: Incident[]; corrections: CorrectionRequest[]; onChanged: () => Promise<void> }) {
-  const [mode, setMode] = useState<'incident' | 'correction'>('incident');
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState('');
-  const [category, setCategory] = useState('Schade');
-  const [severity, setSeverity] = useState<'low' | 'medium' | 'high'>('medium');
-  const [description, setDescription] = useState('');
-  const [plannedShiftId, setPlannedShiftId] = useState('');
-  const [incidentFiles, setIncidentFiles] = useState<File[]>([]);
-  const [shiftId, setShiftId] = useState('');
-  const [requestedClockIn, setRequestedClockIn] = useState('');
-  const [requestedClockOut, setRequestedClockOut] = useState('');
-  const [reason, setReason] = useState('');
-
-  const submitIncident = async (event: React.FormEvent) => {
-    event.preventDefault(); setBusy(true); setMessage('');
-    try {
-      let incidentLocation;
-      try { incidentLocation = await getCurrentLocation(); } catch { incidentLocation = undefined; }
-      const { data } = await secureApi.createIncident({ plannedShiftId: plannedShiftId || undefined, category, severity, description, location: incidentLocation, occurredAt: Date.now() });
-      for (const file of incidentFiles.slice(0, 5)) await secureApi.uploadAttachment('incident', data.id, file);
-      setDescription(''); setIncidentFiles([]); setMessage('Incident is veilig gemeld.'); await onChanged();
-    } catch (error) { setMessage(error instanceof Error ? error.message : 'Incident melden is mislukt.'); }
-    finally { setBusy(false); }
-  };
-
-  const submitCorrection = async (event: React.FormEvent) => {
-    event.preventDefault(); setBusy(true); setMessage('');
-    try {
-      const result = await secureApi.createCorrectionRequest({ shiftId, requestedClockIn: requestedClockIn ? new Date(requestedClockIn).getTime() : undefined, requestedClockOut: requestedClockOut ? new Date(requestedClockOut).getTime() : undefined, reason });
-      setReason(''); setRequestedClockIn(''); setRequestedClockOut(''); setMessage(result.queued ? 'Correctieverzoek staat offline klaar.' : 'Correctieverzoek is ingediend.'); await onChanged().catch(() => undefined);
-    } catch (error) { setMessage(error instanceof Error ? error.message : 'Correctieverzoek is mislukt.'); }
-    finally { setBusy(false); }
-  };
-
-  return <div className="space-y-5">
-    <div><h2 className="text-2xl font-bold text-zinc-900">Melden</h2><p className="text-sm text-zinc-500 mt-1">Leg incidenten vast of vraag een tijdscorrectie aan.</p></div>
-    <div className="grid grid-cols-2 gap-2 bg-white border border-zinc-200 rounded-xl p-1.5"><button onClick={() => setMode('incident')} className={`py-3 rounded-lg font-bold text-sm ${mode === 'incident' ? 'bg-zinc-900 text-white' : 'text-zinc-600'}`}>Incident</button><button onClick={() => setMode('correction')} className={`py-3 rounded-lg font-bold text-sm ${mode === 'correction' ? 'bg-zinc-900 text-white' : 'text-zinc-600'}`}>Tijdcorrectie</button></div>
-    {message && <div className="bg-zinc-100 border border-zinc-200 rounded-xl p-3 text-sm font-semibold text-zinc-700">{message}</div>}
-    {mode === 'incident' ? <form onSubmit={submitIncident} className="bg-white border border-zinc-200 rounded-[24px] p-5 space-y-4">
-      <label className="block text-sm font-bold">Geplande dienst<select value={plannedShiftId} onChange={e => setPlannedShiftId(e.target.value)} className="mt-1.5 w-full border border-zinc-200 rounded-xl p-3 bg-white"><option value="">Niet gekoppeld</option>{plannedShifts.map(item => <option key={item.id} value={item.id}>{item.date} Â· {item.title}</option>)}</select></label>
-      <div className="grid grid-cols-2 gap-3"><label className="text-sm font-bold">Categorie<select value={category} onChange={e => setCategory(e.target.value)} className="mt-1.5 w-full border border-zinc-200 rounded-xl p-3 bg-white"><option>Schade</option><option>Ongeval</option><option>Veiligheid</option><option>Klantmelding</option><option>Overig</option></select></label><label className="text-sm font-bold">Ernst<select value={severity} onChange={e => setSeverity(e.target.value as typeof severity)} className="mt-1.5 w-full border border-zinc-200 rounded-xl p-3 bg-white"><option value="low">Laag</option><option value="medium">Middel</option><option value="high">Hoog</option></select></label></div>
-      <label className="block text-sm font-bold">Wat is er gebeurd?<textarea required value={description} onChange={e => setDescription(e.target.value)} className="mt-1.5 w-full border border-zinc-200 rounded-xl p-3 h-32 resize-none" /></label>
-      <label className="flex items-center justify-center gap-2 border border-dashed border-zinc-300 rounded-xl p-4 text-sm font-bold text-zinc-600 cursor-pointer"><Upload className="w-4 h-4" />Fotoâ€™s of documenten ({incidentFiles.length})<input type="file" accept="image/*,.pdf,.doc,.docx,.txt" multiple className="hidden" onChange={e => setIncidentFiles(Array.from(e.target.files || []).slice(0, 5))} /></label>
-      <button disabled={busy} className="w-full bg-red-600 text-white rounded-xl py-4 font-bold flex justify-center gap-2">{busy && <Loader2 className="w-5 h-5 animate-spin" />}Incident melden</button>
-    </form> : <form onSubmit={submitCorrection} className="bg-white border border-zinc-200 rounded-[24px] p-5 space-y-4">
-      <label className="block text-sm font-bold">Tijdregistratie<select required value={shiftId} onChange={e => setShiftId(e.target.value)} className="mt-1.5 w-full border border-zinc-200 rounded-xl p-3 bg-white"><option value="">Selecteer...</option>{shifts.slice(0, 30).map(item => <option key={item.id} value={item.id}>{formatDate(item.clockIn)} Â· {formatTime(item.clockIn)}{item.clockOut ? `â€“${formatTime(item.clockOut)}` : ' Â· actief'}</option>)}</select></label>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><label className="text-sm font-bold">Nieuwe starttijd<input type="datetime-local" value={requestedClockIn} onChange={e => setRequestedClockIn(e.target.value)} className="mt-1.5 w-full border border-zinc-200 rounded-xl p-3" /></label><label className="text-sm font-bold">Nieuwe eindtijd<input type="datetime-local" value={requestedClockOut} onChange={e => setRequestedClockOut(e.target.value)} className="mt-1.5 w-full border border-zinc-200 rounded-xl p-3" /></label></div>
-      <label className="block text-sm font-bold">Reden<textarea required value={reason} onChange={e => setReason(e.target.value)} className="mt-1.5 w-full border border-zinc-200 rounded-xl p-3 h-28 resize-none" /></label>
-      <button disabled={busy} className="w-full bg-zinc-900 text-white rounded-xl py-4 font-bold">Correctie aanvragen</button>
-    </form>}
-    <div className="space-y-2"><h3 className="font-bold text-zinc-800">Mijn recente meldingen</h3>{incidents.slice(0, 5).map(item => <div key={item.id} className="bg-white border border-zinc-200 rounded-xl p-3 text-sm"><div className="font-bold">{item.category} Â· {item.severity === 'high' ? 'hoog' : item.severity === 'medium' ? 'middel' : 'laag'}</div><div className="text-zinc-500 line-clamp-2">{item.description}</div></div>)}{corrections.slice(0, 5).map(item => <div key={item.id} className="bg-white border border-zinc-200 rounded-xl p-3 text-sm flex justify-between gap-2"><span className="font-semibold">Tijdcorrectie Â· {formatDate(item.createdAt)}</span><span className="font-bold capitalize">{item.status}</span></div>)}</div>
-  </div>;
-}
-
-function ProfileTab({ user }: { user: User }) {
-  const [name, setName] = useState(user.name || '');
-  const [phone, setPhone] = useState(user.phone || '');
-  const [availability, setAvailability] = useState(user.availability || '');
-  const [availabilitySchedule, setAvailabilitySchedule] = useState<WeeklyAvailability>(() => user.availabilitySchedule || {
-    '0': { enabled: false, start: '09:00', end: '17:00' },
-    '1': { enabled: true, start: '09:00', end: '17:00' },
-    '2': { enabled: true, start: '09:00', end: '17:00' },
-    '3': { enabled: true, start: '09:00', end: '17:00' },
-    '4': { enabled: true, start: '09:00', end: '17:00' },
-    '5': { enabled: true, start: '09:00', end: '17:00' },
-    '6': { enabled: false, start: '09:00', end: '17:00' },
-  });
-  const [isUpdating, setIsUpdating] = useState(false);
-  const [msg, setMsg] = useState({ text: '', type: '' });
-
-  const [historyAssignments, setHistoryAssignments] = useState<Assignment[]>([]);
-  const [historyShifts, setHistoryShifts] = useState<Shift[]>([]);
-  const [loadingHistory, setLoadingHistory] = useState(true);
-
-  useEffect(() => {
-    let active = true;
-    const load = async () => {
-      try {
-        const { data } = await secureApi.snapshot();
-        if (!active) return;
-        setHistoryAssignments(data.assignments.filter(item => item.status === 'completed'));
-        setHistoryShifts(data.shifts);
-        setLoadingHistory(false);
-      } catch (error) {
-        console.error(error);
-        if (active) setLoadingHistory(false);
-      }
-    };
-    void load();
-    const timer = window.setInterval(load, 10000);
-    return () => { active = false; window.clearInterval(timer); };
-  }, [user.id]);
-
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsUpdating(true);
-    setMsg({ text: '', type: '' });
-    try {
-      await secureApi.updateProfile({ name, phone, availability, availabilitySchedule });
-      setMsg({ text: 'Profiel succesvol bijgewerkt!', type: 'success' });
-    } catch (err) {
-      console.error(err);
-      setMsg({ text: 'Er is een fout opgetreden bij het opslaan.', type: 'error' });
-    } finally {
-      setIsUpdating(false);
-    }
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="bg-white rounded-[24px] shadow-[0_4px_14px_0_rgb(0,0,0,0.03)] border border-zinc-200/60 overflow-hidden">
-        <div className="p-8 space-y-6">
-          <h2 className="text-xl font-bold text-zinc-800">Persoonlijke Gegevens</h2>
-          
-          {msg.text && (
-            <div className={`p-4 rounded-[12px] text-sm font-medium border ${msg.type === 'success' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
-              {msg.text}
-            </div>
-          )}
-
-          <form onSubmit={handleSave} className="space-y-4">
-            <div>
-              <label className="block text-sm font-bold text-zinc-700 mb-1.5">Volledige Naam</label>
-              <input type="text" value={name} onChange={e => setName(e.target.value)} required className="w-full border border-zinc-200 rounded-[24px] p-3.5 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none bg-[#FAFAFA] transition-all font-medium" />
-            </div>
-            <div>
-              <label className="block text-sm font-bold text-zinc-700 mb-1.5">Telefoonnummer</label>
-              <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="04xx xx xx xx" className="w-full border border-zinc-200 rounded-[24px] p-3.5 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none bg-[#FAFAFA] transition-all font-medium" />
-            </div>
-            <div>
-              <label className="block text-sm font-bold text-zinc-700 mb-1.5">Mijn Beschikbaarheid</label>
-              <textarea value={availability} onChange={e => setAvailability(e.target.value)} placeholder="Bijv. Ma-Vr beschikbaar, in het weekend in overleg..." rows={3} className="w-full border border-zinc-200 rounded-[24px] p-3.5 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none bg-[#FAFAFA] transition-all font-medium resize-none"></textarea>
-            </div>
-            <div className="space-y-2">
-              <div className="text-sm font-bold text-zinc-700">Vaste weekuren voor conflictcontrole</div>
-              {[['1','Ma'],['2','Di'],['3','Wo'],['4','Do'],['5','Vr'],['6','Za'],['0','Zo']].map(([key, label]) => {
-                const day = availabilitySchedule[key] || { enabled: false, start: '09:00', end: '17:00' };
-                return <div key={key} className="grid grid-cols-[48px_1fr_1fr] gap-2 items-center bg-zinc-50 border border-zinc-200 rounded-xl p-2.5">
-                  <label className="font-bold text-sm flex items-center gap-2"><input type="checkbox" checked={day.enabled} onChange={e => setAvailabilitySchedule(current => ({ ...current, [key]: { ...day, enabled: e.target.checked } }))} className="accent-zinc-900" />{label}</label>
-                  <input aria-label={`Start ${label}`} type="time" disabled={!day.enabled} value={day.start} onChange={e => setAvailabilitySchedule(current => ({ ...current, [key]: { ...day, start: e.target.value } }))} className="border border-zinc-200 rounded-lg p-2 text-sm disabled:opacity-40" />
-                  <input aria-label={`Einde ${label}`} type="time" disabled={!day.enabled} value={day.end} onChange={e => setAvailabilitySchedule(current => ({ ...current, [key]: { ...day, end: e.target.value } }))} className="border border-zinc-200 rounded-lg p-2 text-sm disabled:opacity-40" />
-                </div>;
-              })}
-            </div>
-            <button type="submit" disabled={isUpdating} className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-bold py-4 rounded-[24px] flex items-center justify-center space-x-2 transition-all shadow-lg shadow-[0_4px_14px_0_rgb(0,0,0,0.1)] disabled:opacity-50">
-              {isUpdating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
-              <span>Gegevens Opslaan</span>
-            </button>
-          </form>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-[24px] shadow-[0_4px_14px_0_rgb(0,0,0,0.03)] border border-zinc-200/60 overflow-hidden">
-        <div className="p-8 space-y-6">
-           <div className="flex items-center space-x-2">
-             <History className="w-6 h-6 text-zinc-400" />
-             <h2 className="text-xl font-bold text-zinc-800">Mijn Historiek</h2>
-           </div>
-
-           {loadingHistory ? (
-             <div className="flex justify-center py-4"><Loader2 className="w-6 h-6 animate-spin text-zinc-900" /></div>
-           ) : (
-             <div className="space-y-5">
-               {historyShifts.filter(s => s.clockOut).length === 0 ? (
-                 <p className="text-sm text-zinc-500">Geen voltooide shifts gevonden.</p>
-               ) : (
-                 historyShifts.filter(s => s.clockOut).sort((a,b) => b.clockIn - a.clockIn).map(shift => {
-                   const durationMs = shift.clockOut! - shift.clockIn;
-                   const hours = Math.floor(durationMs / (1000 * 60 * 60));
-                   const minutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
-                   
-                   const shiftDateObj = new Date(shift.clockIn);
-                   const shiftDateStr = shiftDateObj.getFullYear() + '-' + String(shiftDateObj.getMonth()+1).padStart(2, '0') + '-' + String(shiftDateObj.getDate()).padStart(2, '0');
-                   const shiftAssignments = historyAssignments.filter(a => a.date === shiftDateStr);
-
-                   return (
-                     <div key={shift.id} className="bg-[#FAFAFA] p-5 rounded-[24px] border border-zinc-200/60">
-                       <div className="flex justify-between items-start mb-4">
-                         <div>
-                           <div className="font-bold text-zinc-900 text-lg mb-1">{formatDate(shift.clockIn)}</div>
-                           <div className="flex items-center space-x-2 text-sm text-zinc-600 font-medium">
-                             <Clock className="w-4 h-4 text-zinc-400" />
-                             <span>{formatTime(shift.clockIn)} - {formatTime(shift.clockOut!)}</span>
-                             <span className="text-zinc-500">â€¢</span>
-                             <span className="text-zinc-900 font-bold">{hours}u {minutes}m gewerkt</span>
-                           </div>
-                         </div>
-                       </div>
-
-                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
-                          <div className="bg-white p-3 rounded-[12px] border border-zinc-200 flex items-start space-x-3 shadow-[0_4px_14px_0_rgb(0,0,0,0.03)]">
-                            <div className="mt-0.5"><MapPin className="w-4 h-4 text-green-500" /></div>
-                            <div>
-                              <span className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-0.5">Ingeklokt Geocatie</span>
-                              <div className="text-sm font-medium text-zinc-700 truncate">
-                                 {shift.clockInLoc?.lat ? `${shift.clockInLoc.lat.toFixed(5)}, ${shift.clockInLoc.lng.toFixed(5)}` : 'Locatie niet beschikbaar'}
-                              </div>
-                              <div className="text-xs text-zinc-500 mt-0.5 font-medium">@ {formatTime(shift.clockIn)}</div>
-                            </div>
-                          </div>
-                          <div className="bg-white p-3 rounded-[12px] border border-zinc-200 flex items-start space-x-3 shadow-[0_4px_14px_0_rgb(0,0,0,0.03)]">
-                            <div className="mt-0.5"><MapPin className="w-4 h-4 text-amber-500" /></div>
-                            <div>
-                              <span className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-0.5">Uitgeklokt Geolocatie</span>
-                              <div className="text-sm font-medium text-zinc-700 truncate">
-                                 {shift.clockOutLoc?.lat ? `${shift.clockOutLoc.lat.toFixed(5)}, ${shift.clockOutLoc.lng.toFixed(5)}` : 'Locatie niet beschikbaar'}
-                              </div>
-                              <div className="text-xs text-zinc-500 mt-0.5 font-medium">@ {formatTime(shift.clockOut!)}</div>
-                            </div>
-                          </div>
-                       </div>
-
-                       <div className="space-y-3">
-                         <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center space-x-1.5 border-b border-zinc-200/60 pb-2">
-                            <CheckSquare className="w-4 h-4" />
-                            <span>Afgeronde Opdrachten & Taken</span>
-                         </span>
-                         {shiftAssignments.length > 0 ? (
-                           shiftAssignments.map(assignment => {
-                              const tasksTotal = assignment.tasks?.length || 0;
-                              const tasksDone = assignment.tasks?.filter(t => t.completed).length || 0;
-                              
-                              return (
-                                <div key={assignment.id} className="bg-white p-4 rounded-[12px] border border-zinc-200 shadow-[0_4px_14px_0_rgb(0,0,0,0.03)]">
-                                   <div className="flex justify-between items-start mb-2">
-                                      <span className="font-bold text-zinc-800">{assignment.customerName || 'Onbekende Klant'}</span>
-                                      {tasksTotal > 0 ? (
-                                        <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${tasksDone === tasksTotal ? 'bg-green-100 text-green-700' : 'bg-zinc-100 text-zinc-600'}`}>
-                                          {tasksDone}/{tasksTotal} taken
-                                        </span>
-                                      ) : (
-                                        <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-zinc-100/50 text-zinc-600">Geen taken</span>
-                                      )}
-                                   </div>
-                                   {assignment.tasks && assignment.tasks.length > 0 && (
-                                      <ul className="space-y-1.5 mt-3 pt-3 border-t border-zinc-200">
-                                        {assignment.tasks.map(t => (
-                                          <li key={t.id} className="flex items-start space-x-2 text-sm text-zinc-600">
-                                            {t.completed ? <CheckSquare className="w-4 h-4 text-green-500 shrink-0 mt-0.5" /> : <Square className="w-4 h-4 shrink-0 mt-0.5 text-zinc-500" />}
-                                            <span className={t.completed ? 'line-through text-zinc-400' : ''}>{t.text}</span>
-                                          </li>
-                                        ))}
-                                      </ul>
-                                   )}
-                                </div>
-                              );
-                           })
-                         ) : (
-                           <div className="text-sm text-zinc-500 italic px-2 py-1">Geen opdrachten gekoppeld aan deze shift.</div>
-                         )}
-                       </div>
-                     </div>
-                   );
-                 })
-               )}
-             </div>
-           )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function AssignmentCard({ assignment }: { assignment: Assignment; key?: string | number }) {
-  const [notes, setNotes] = useState(assignment.workNotes || '');
-  const [tasks, setTasks] = useState<AssignmentTask[]>(assignment.tasks || []);
-  const [newTaskText, setNewTaskText] = useState('');
-  const [isUpdating, setIsUpdating] = useState(false);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => setTasks(assignment.tasks || []), 0);
-    return () => window.clearTimeout(timer);
-  }, [assignment.tasks]);
-
-  const handleUpdate = async (updates: Partial<Assignment>) => {
-    setIsUpdating(true);
-    try {
-      await secureApi.updateAssignmentDetails(
-        assignment.id,
-        (updates.tasks as AssignmentTask[] | undefined) || tasks,
-        typeof updates.workNotes === 'string' ? updates.workNotes : notes,
-      );
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsUpdating(false);
-    }
-  };
-
-  const handleAddTask = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTaskText.trim()) return;
-    const newTask = { id: Date.now().toString(), text: newTaskText.trim(), completed: false };
-    const updatedTasks = [...tasks, newTask];
-    setTasks(updatedTasks);
-    setNewTaskText('');
-    await handleUpdate({ tasks: updatedTasks });
-  };
-
-  const handleToggleTask = async (taskId: string) => {
-    const updatedTasks = tasks.map(t => t.id === taskId ? { ...t, completed: !t.completed } : t);
-    setTasks(updatedTasks);
-    await handleUpdate({ tasks: updatedTasks });
-  };
-
-  const handleDeleteTask = async (taskId: string) => {
-    const updatedTasks = tasks.filter(t => t.id !== taskId);
-    setTasks(updatedTasks);
-    await handleUpdate({ tasks: updatedTasks });
-  };
-
-  const handleArrive = async () => {
-    setIsUpdating(true);
-    try {
-      const location = await getCurrentLocation();
-      await secureApi.transitionAssignment({ assignmentId: assignment.id, status: 'arrived', location });
-    } finally {
-      setIsUpdating(false);
-    }
-  };
-
-  const handleComplete = async () => {
-    setIsUpdating(true);
-    try {
-      const location = await getCurrentLocation();
-      await secureApi.transitionAssignment({ assignmentId: assignment.id, status: 'completed', location, notes });
-    } finally {
-      setIsUpdating(false);
-    }
-  };
-
-  return (
-    <div className={`bg-white rounded-[24px] shadow-[0_4px_14px_0_rgb(0,0,0,0.03)] border overflow-hidden transition-all ${assignment.status === 'completed' ? 'border-green-200 bg-green-50/10' : 'border-zinc-200/60'}`}>
-      <div className="p-6 space-y-5">
-        <div className="flex justify-between items-start">
-          <div>
-            <div className="flex items-center space-x-2 mb-1">
-              <h3 className="font-bold text-lg text-zinc-900">{assignment.customerName || 'Onbekende Klant'}</h3>
-              {assignment.startTime && (
-                <span className="bg-zinc-100 text-zinc-600 text-xs font-bold px-2 py-1 rounded-md flex items-center space-x-1">
-                  <Clock className="w-3.5 h-3.5" />
-                  <span>{assignment.startTime}</span>
-                </span>
-              )}
-            </div>
-            <p className="text-zinc-500 mt-1.5 leading-relaxed">{assignment.description}</p>
-          </div>
-          {assignment.status === 'completed' && (
-            <span className="bg-green-100 text-green-700 p-2 rounded-full shrink-0">
-              <CheckCircle className="w-6 h-6" />
-            </span>
-          )}
-        </div>
-
-        {assignment.status === 'pending' && (
-          <div className="space-y-4">
-            <div>
-              <span className="text-xs font-bold text-zinc-400 block mb-2 uppercase tracking-wider">Locatie Verificatie</span>
-              <LiveLocationMap />
-            </div>
-            <button
-              onClick={handleArrive}
-              disabled={isUpdating}
-              className="w-full flex items-center justify-center space-x-2 bg-zinc-100/50 hover:bg-zinc-100 text-zinc-900 py-4 rounded-[24px] font-bold transition-colors disabled:opacity-50"
-            >
-              {isUpdating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Navigation2 className="w-5 h-5" />}
-              <span>Markeer als aangekomen</span>
-            </button>
-          </div>
-        )}
-
-        {assignment.status === 'arrived' && (
-          <div className="space-y-5 pt-4 border-t border-zinc-200">
-            <div className="flex items-center space-x-2 text-sm font-medium text-zinc-900 bg-zinc-900/50 border border-zinc-200 p-3.5 rounded-[12px]">
-              <Clock className="w-4 h-4 text-zinc-900" />
-              <span>Aangekomen om {formatTime(assignment.arrivalTime!)}</span>
-            </div>
-            
-            <div className="space-y-3">
-              <label className="text-sm font-bold text-zinc-800 flex items-center space-x-2">
-                <CheckSquare className="w-4 h-4 text-zinc-400" />
-                <span>Checklist / Uitgevoerde taken</span>
-              </label>
-              
-              {tasks.length > 0 && (
-                <div className="space-y-2 mb-3">
-                  {tasks.map(task => (
-                    <div key={task.id} className="flex items-center justify-between p-3 bg-[#FAFAFA] border border-zinc-200/60 rounded-[12px]">
-                      <label className="flex items-center space-x-3 cursor-pointer flex-1">
-                        <input 
-                          type="checkbox" 
-                          checked={task.completed} 
-                          onChange={() => handleToggleTask(task.id)}
-                          className="w-5 h-5 text-zinc-900 rounded border-zinc-200 focus:ring-zinc-900/10 cursor-pointer"
-                        />
-                        <span className={`text-sm font-medium ${task.completed ? 'text-zinc-400 line-through' : 'text-zinc-700'}`}>
-                          {task.text}
-                        </span>
-                      </label>
-                      <button onClick={() => handleDeleteTask(task.id)} className="text-zinc-400 hover:text-red-500 transition-colors p-1" title="Taak verwijderen">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <form onSubmit={handleAddTask} className="flex items-center space-x-2">
-                <input 
-                  type="text" 
-                  value={newTaskText} 
-                  onChange={e => setNewTaskText(e.target.value)}
-                  placeholder="Nieuwe taak toevoegen..."
-                  className="flex-1 border border-zinc-200 rounded-[12px] p-3 text-sm focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none transition-all"
-                />
-                <button type="submit" disabled={!newTaskText.trim() || isUpdating} className="bg-zinc-900 text-white p-3 rounded-[12px] hover:bg-zinc-800 transition-colors disabled:opacity-50">
-                  <Plus className="w-5 h-5" />
-                </button>
-              </form>
-            </div>
-
-            <div className="space-y-2.5 pt-2 border-t border-zinc-200">
-              <label className="text-sm font-bold text-zinc-800 flex items-center space-x-2">
-                <FileText className="w-4 h-4 text-zinc-400" />
-                <span>Overige notities</span>
-              </label>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                className="w-full border border-zinc-200 rounded-[24px] p-4 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none resize-none transition-all"
-                rows={3}
-                placeholder="Details over levering, opmerkingen klant..."
-              />
-            </div>
-            
-            <div className="pt-2">
-              <span className="text-xs font-bold text-zinc-400 block mb-2 uppercase tracking-wider">Locatie Verificatie Vertrek</span>
-              <LiveLocationMap />
-            </div>
-
-            <button
-              onClick={handleComplete}
-              disabled={isUpdating}
-              className="w-full flex items-center justify-center space-x-2 bg-zinc-900 hover:bg-zinc-900 text-white py-4 rounded-[24px] font-bold transition-all disabled:opacity-50 disabled:scale-[0.98] shadow-lg shadow-[0_4px_14px_0_rgb(0,0,0,0.1)] mt-4"
-            >
-              {isUpdating ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle className="w-5 h-5" />}
-              <span>Opdracht Afronden & Vertrekken</span>
-            </button>
-          </div>
-        )}
-
-        {assignment.status === 'completed' && (
-          <div className="pt-4 border-t border-green-100/50 space-y-3 text-sm">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-[#FAFAFA] p-3 rounded-[12px] border border-zinc-200">
-                <span className="text-zinc-500 block text-xs font-medium mb-1 uppercase tracking-wider">Aankomst</span>
-                <span className="font-bold text-zinc-900">{formatTime(assignment.arrivalTime!)}</span>
-              </div>
-              <div className="bg-[#FAFAFA] p-3 rounded-[12px] border border-zinc-200">
-                <span className="text-zinc-500 block text-xs font-medium mb-1 uppercase tracking-wider">Vertrek</span>
-                <span className="font-bold text-zinc-900">{formatTime(assignment.departureTime!)}</span>
-              </div>
-            </div>
-            
-            {assignment.tasks && assignment.tasks.length > 0 && (
-              <div className="mt-4 bg-white p-4 rounded-[12px] border-2 border-zinc-200">
-                <span className="text-xs font-bold text-zinc-400 block mb-3 uppercase tracking-wider">Uitgevoerde Taken</span>
-                <ul className="space-y-2">
-                  {assignment.tasks.map(t => (
-                    <li key={t.id} className={`flex items-center space-x-2 text-sm ${t.completed ? 'text-zinc-700' : 'text-zinc-400'}`}>
-                      {t.completed ? <CheckSquare className="w-4 h-4 text-green-500 shrink-0" /> : <Square className="w-4 h-4 shrink-0" />}
-                      <span className={t.completed ? 'line-through opacity-70' : ''}>{t.text}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {assignment.workNotes && (
-              <div className="mt-3 bg-white p-4 rounded-[12px] border-2 border-zinc-200 text-zinc-700 leading-relaxed">
-                <span className="text-xs font-bold text-zinc-400 block mb-2 uppercase tracking-wider">Notities</span>
-                {assignment.workNotes}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+    #^¹êÚ$z{-®éÜj×“°¢Ó°¢&WGW&âÆF—b6Æ74æÖSÒ'76R×’ÓB#à¢ÆF—b6Æ74æÖSÒ'‚Ó#ãÆƒ"6Æ74æÖSÒ'FW‡BÓ'†ÂföçBÖ&öÆBFW‡B×¦–æ2Ó“#åvVV¶÷fW'¦–6‡CÂöƒ#ãÇ6Æ74æÖSÒ'FW‡B×6ÒFW‡B×¦–æ2ÓS×BÓ#äF–Vç7FVâÂ&÷WFRÂ6†V6¶Æ—7BVâFö7VÖVçFVâãÂ÷ãÂöF—cà¢¶W'&÷"bbÆF—b6Æ74æÖSÒ'&÷VæFVB×†Â&÷&FW"&÷&FW"×&VBÓ#&r×&VBÓSÓ2FW‡B×6ÒföçB×6VÖ–&öÆBFW‡B×&VBÓs#ç¶W'&÷'ÓÂöF—cçĞ¢²W6öÖ–æræÆVæwF‚bbÆF—b6Æ74æÖSÒ&&r×v†—FR&÷&FW"&÷&FW"×¦–æ2Ó#&÷VæFVBÓ'†ÂÓ‚FW‡BÖ6VçFW"FW‡B×¦–æ2ÓS#äW"7FâæörvVVâvWV&Æ–6VW&FRF–Vç7FVâ¶Æ"ãÂöF—cçĞ¢·W6öÖ–æræÖ‡6†–gBÓâ°¢6öç7B6öæf—&ÖF–öâÒ6†–gBæ6öæf—&ÖF–öç5·W6W$–EÒÇÂwVæF–ærs°¢&WGW&âÆ'F–6ÆR¶W“×·6†–gBæ–GÒ6Æ74æÖSÒ&&r×v†—FR&÷&FW"&÷&FW"×¦–æ2Ó#&÷VæFVBÕ³#G…ÒÓR6†F÷r×6Ò76R×’ÓB#à¢ÆF—b6Æ74æÖSÒ&fÆW‚—FV×2×7F'B§W7F–g’Ö&WGvVVâvÓ2#ãÆF—cãÆF—b6Æ74æÖSÒ'FW‡B×‡2WW&66RG&6¶–ær×v–FRföçBÖ&öÆBFW‡B×¦–æ2ÓC#ç¶f÷&ÖDFFR‡6†–gBæFFR—ÓÂöF—cãÆƒ26Æ74æÖSÒ'FW‡BÖÆrföçBÖW‡G&&öÆBFW‡B×¦–æ2Ó“×BÓ#ç·6†–gBçF—FÆWÓÂöƒ3ãÂöF—cãÇ7â6Æ74æÖS×¶FW‡B×‡2föçBÖ&öÆB‚Ó2’ÓãR&÷VæFVBÖgVÆÂG¶6öæf—&ÖF–öâÓÓÒv6öæf—&ÖVBròv&rÖVÖW&ÆBÓFW‡BÖVÖW&ÆBÓsr¢6öæf—&ÖF–öâÓÓÒvFV6Æ–æVBròv&r×&VBÓFW‡B×&VBÓsr¢v&rÖÖ&W"ÓFW‡BÖÖ&W"ÓƒwÖÓç¶6öæf—&ÖF–öâÓÓÒv6öæf—&ÖVBròt&WfW7F–vBr¢6öæf—&ÖF–öâÓÓÒvFV6Æ–æVBròtvWvV–vW&Br¢tçGvö÷&BæöF–rwÓÂ÷7ããÂöF—cà¢ÆF—b6Æ74æÖSÒ&w&–Bw&–BÖ6öÇ2Ó"vÓ2FW‡B×6Ò#ãÆF—b6Æ74æÖSÒ&&r×¦–æ2ÓS&÷VæFVB×†ÂÓ2#ãÇ7â6Æ74æÖSÒ&&Æö6²FW‡B×‡2FW‡B×¦–æ2ÓCföçBÖ&öÆBWW&66RÖ"Ó#åW&VãÂ÷7ããÇ7â6Æ74æÖSÒ&föçBÖ&öÆB#ç·6†–gBç7F'EF–ÖWŞ(	7·6†–gBæVæEF–ÖWÓÂ÷7ããÂöF—cãÆF—b6Æ74æÖSÒ&&r×¦–æ2ÓS&÷VæFVB×†ÂÓ2#ãÇ7â6Æ74æÖSÒ&&Æö6²FW‡B×‡2FW‡B×¦–æ2ÓCföçBÖ&öÆBWW&66RÖ"Ó#åW¦SÂ÷7ããÇ7â6Æ74æÖSÒ&föçBÖ&öÆB#ç·6†–gBæ'&V´Ö–çWFW7ÒÖ–âãÂ÷7ããÂöF—cãÂöF—cà¢·6†–gBæ7W7FöÖW$æÖRbbÆF—b6Æ74æÖSÒ&fÆW‚—FV×2×7F'BvÓ"FW‡B×6ÒFW‡B×¦–æ2Óc#ãÄÖ–â6Æ74æÖSÒ'rÓB‚ÓB×BÓãR6‡&–æ²Ó"óãÆF—cãÆF—b6Æ74æÖSÒ&föçBÖ&öÆBFW‡B×¦–æ2Óƒ#ç·6†–gBæ7W7FöÖW$æÖWÓÂöF—cãÆF—cç·6†–gBæ7W7FöÖW$FG&W77ÓÂöF—cç·6†–gBæ7W7FöÖW$ÆF—GVFRÓÒVæFVf–æVBbb6†–gBæ7W7FöÖW$Æöæv—GVFRÓÒVæFVf–æVBbbÆ6Æ74æÖSÒ'FW‡B×¦–æ2Ó“VæFW&Æ–æRföçB×6VÖ–&öÆB"F&vWCÒ%ö&Ææ²"&VÃÒ&æ÷&VfW'&W""‡&Vc×¶‡GG3¢ò÷wwrævöövÆRæ6öÒöÖ2÷6V&6‚óö“ÓgVW'“ÒG·6†–gBæ7W7FöÖW$ÆF—GVFWÒÂG·6†–gBæ7W7FöÖW$Æöæv—GVFWÖÓä÷VâÆö6F–SÂöçÓÂöF—cãÂöF—cçĞ¢·6†–gBææ÷FW2bbÇ6Æ74æÖSÒ'FW‡B×6ÒFW‡B×¦–æ2Óc&r×¦–æ2ÓS&÷VæFVB×†ÂÓ2#ç·6†–gBææ÷FW7ÓÂ÷çĞ¢·6†–gBæ6†V6¶Æ—7BæÆVæwF‚âbbÆF—b6Æ74æÖSÒ&&÷&FW"&÷&FW"×¦–æ2Ó#&÷VæFVB×†ÂÓ276R×’Ó"#ãÆF—b6Æ74æÖSÒ'FW‡B×‡2WW&66RföçBÖ&öÆBG&6¶–ær×v–FRFW‡B×¦–æ2ÓCfÆW‚—FV×2Ö6VçFW"vÓ"#ãÄ6Æ—&ö&DÆ—7B6Æ74æÖSÒ'rÓB‚ÓB"óä6†V6¶Æ—7CÂöF—cç·6†–gBæ6†V6¶Æ—7BæÖ‚‡F6²Â–æFW‚’Óâ²6öç7BF6´–CÕ7G&–ær†–æFW‚“²6öç7BFöæSÒ‡6†–gBæ6†V6¶Æ—7E7FFW5·W6W$–EÒÇÂµÒ’æ–æ6ÇVFW2‡F6´–B“²&WGW&âÆÆ&VÂ¶W“×·F6´–GÒ6Æ74æÖSÒ&fÆW‚—FV×2×7F'BvÓ2FW‡B×6ÒföçB×6VÖ–&öÆB7W'6÷"×ö–çFW"#ãÆ–çWBG—SÒ&6†V6¶&÷‚"6†V6¶VC×¶FöæWÒF—6&ÆVC×¶'W7”–BÓÓÒ6†–gBæ–GÒöä6†ævS×²‚’ÓâFövvÆUF6²‡6†–gBÂF6´–B—Ò6Æ74æÖSÒ&×BÓãRrÓB‚ÓB66VçB×¦–æ2Ó“"óãÇ7â6Æ74æÖS×¶FöæRòvÆ–æR×F‡&÷Vv‚FW‡B×¦–æ2ÓCr¢wFW‡B×¦–æ2ÓswÓç·F6·ÓÂ÷7ããÂöÆ&VÃã²Ò—ÓÂöF—cçĞ¢ÆF—b6Æ74æÖSÒ&&÷&FW"&÷&FW"×¦–æ2Ó#&÷VæFVB×†ÂÓ276R×’Ó"#ãÆF—b6Æ74æÖSÒ'FW‡B×‡2WW&66RföçBÖ&öÆBG&6¶–ær×v–FRFW‡B×¦–æ2ÓC#äf÷Fş(	—2VâFö7VÖVçFVãÂöF—cç¶GF6†ÖVçG2æf–ÇFW"†—FVÒÓâ—FVÒæVçF—G•G—RÓÓÒwÆææVE÷6†–gBrbb—FVÒæVçF—G”–BÓÓÒ6†–gBæ–B’æÖ†—FVÒÓâÆ'WGFöâ¶W“×¶—FVÒæ–GÒG—SÒ&'WGFöâ"öä6Æ–6³×²‚’ÓâF÷væÆöB†—FVÒ—Ò6Æ74æÖSÒ'rÖgVÆÂFW‡BÖÆVgBfÆW‚—FV×2Ö6VçFW"vÓ"FW‡B×6ÒföçB×6VÖ–&öÆBFW‡B×¦–æ2Ós&r×¦–æ2ÓS&÷VæFVBÖÆrÓ"#ãÄF÷væÆöB6Æ74æÖSÒ'rÓB‚ÓB"óãÇ7â6Æ74æÖSÒ'G'Væ6FR#ç¶—FVÒæf–ÆVæÖWÓÂ÷7ããÂö'WGFöãâ—ÓÆÆ&VÂ6Æ74æÖSÒ&fÆW‚—FV×2Ö6VçFW"§W7F–g’Ö6VçFW"vÓ"&÷&FW"&÷&FW"ÖF6†VB&÷&FW"×¦–æ2Ó3&÷VæFVBÖÆrÓ2FW‡B×6ÒföçBÖ&öÆBFW‡B×¦–æ2Óc7W'6÷"×ö–çFW"#ãÅWÆöB6Æ74æÖSÒ'rÓB‚ÓB"óä&W7FæBFöWföVvVãÆ–çWBG—SÒ&f–ÆR"66WCÒ&–ÖvRò¢ÂçFbÂæFö2ÂæFö7‚ÂçG‡B"×VÇF—ÆR6Æ74æÖSÒ&†–FFVâ"öä6†ævS×¶WfVçBÓâWÆöB‡6†–gBæ–BÂWfVçBçF&vWBæf–ÆW2—ÒóãÂöÆ&VÃãÂöF—cà¢ÆF—b6Æ74æÖSÒ&w&–Bw&–BÖ6öÇ2Ó"vÓ2#ãÆ'WGFöâF—6&ÆVC×¶'W7”–BÓÓÒ6†–gBæ–GÒöä6Æ–6³×²‚’Óâ&W7öæB‡6†–gBæ–BÂvFV6Æ–æVBr—Ò6Æ74æÖSÒ'’Ó2&÷VæFVB×†Â&÷&FW"&÷&FW"×&VBÓ#FW‡B×&VBÓsföçBÖ&öÆBfÆW‚—FV×2Ö6VçFW"§W7F–g’Ö6VçFW"vÓ"F—6&ÆVC¦÷6—G’ÓC#ãÅ„6—&6ÆR6Æ74æÖSÒ'rÓB‚ÓB"óåvV–vW&VãÂö'WGFöããÆ'WGFöâF—6&ÆVC×¶'W7”–BÓÓÒ6†–gBæ–GÒöä6Æ–6³×²‚’Óâ&W7öæB‡6†–gBæ–BÂv6öæf—&ÖVBr—Ò6Æ74æÖSÒ'’Ó2&÷VæFVB×†Â&r×¦–æ2Ó“FW‡B×v†—FRföçBÖ&öÆBfÆW‚—FV×2Ö6VçFW"§W7F–g’Ö6VçFW"vÓ"F—6&ÆVC¦÷6—G’ÓC#ç¶'W7”–BÓÓÒ6†–gBæ–BòÄÆöFW#"6Æ74æÖSÒ'rÓB‚ÓBæ–ÖFR×7–â"óâ¢Ä6†V6´6—&6ÆR6Æ74æÖSÒ'rÓB‚ÓB"óçÔ&WfW7F–vVãÂö'WGFöããÂöF—cà¢Âö'F–6ÆSã°¢Ò—Ğ¢ÂöF—cã°§Ğ ¦gVæ7F–öâ&W÷'G5F"‡²6†–gG2ÂÆææVE6†–gG2Â–æ6–FVçG2Â6÷'&V7F–öç2Âöä6†ævVBÓ¢²6†–gG3¢6†–gEµÓ²ÆææVE6†–gG3¢ÆææVE6†–gEµÓ²–æ6–FVçG3¢–æ6–FVçEµÓ²6÷'&V7F–öç3¢6÷'&V7F–öå&WVW7EµÓ²öä6†ævVC¢‚’Óâ&öÖ—6SÇfö–CâÒ’°¢6öç7B¶ÖöFRÂ6WDÖöFUÒÒW6U7FFSÂv–æ6–FVçBrÂv6÷'&V7F–öâsâ‚v–æ6–FVçBr“°¢6öç7B¶'W7’Â6WD'W7•ÒÒW6U7FFR†fÇ6R“°¢6öç7B¶ÖW76vRÂ6WDÖW76vUÒÒW6U7FFR‚rr“°¢6öç7B¶6FVv÷'’Â6WD6FVv÷'•ÒÒW6U7FFR‚u66†FRr“°¢6öç7B·6WfW&—G’Â6WE6WfW&—G•ÒÒW6U7FFSÂvÆ÷rrÂvÖVF—VÒrÂv†–v‚sâ‚vÖVF—VÒr“°¢6öç7B¶FW67&—F–öâÂ6WDFW67&—F–öåÒÒW6U7FFR‚rr“°¢6öç7B·ÆææVE6†–gD–BÂ6WEÆææVE6†–gD–EÒÒW6U7FFR‚rr“°¢6öç7B¶–æ6–FVçDf–ÆW2Â6WD–æ6–FVçDf–ÆW5ÒÒW6U7FFSÄf–ÆUµÓâ…µÒ“°¢6öç7B·6†–gD–BÂ6WE6†–gD–EÒÒW6U7FFR‚rr“°¢6öç7B·&WVW7FVD6Æö6´–âÂ6WE&WVW7FVD6Æö6´–åÒÒW6U7FFR‚rr“°¢6öç7B·&WVW7FVD6Æö6´÷WBÂ6WE&WVW7FVD6Æö6´÷WEÒÒW6U7FFR‚rr“°¢6öç7B·&V6öâÂ6WE&V6öåÒÒW6U7FFR‚rr“° ¢6öç7B7V&Ö—D–æ6–FVçBÒ7–æ2†WfVçC¢&V7Bäf÷&ÔWfVçB’Óâ°¢WfVçBç&WfVçDFVfVÇB‚“²6WD'W7’‡G'VR“²6WDÖW76vR‚rr“°¢G'’°¢ÆWB–æ6–FVçDÆö6F–öã°¢G'’²–æ6–FVçDÆö6F–öâÒv—BvWD7W'&VçDÆö6F–öâ‚“²Ò6F6‚²–æ6–FVçDÆö6F–öâÒVæFVf–æVC²Ğ¢6öç7B²FFÒÒv—B6V7W&T’æ7&VFT–æ6–FVçB‡²ÆææVE6†–gD–C¢ÆææVE6†–gD–BÇÂVæFVf–æVBÂ6FVv÷'’Â6WfW&—G’ÂFW67&—F–öâÂÆö6F–öã¢–æ6–FVçDÆö6F–öâÂö67W'&VDC¢FFRææ÷r‚’Ò“°¢f÷"†6öç7Bf–ÆRöb–æ6–FVçDf–ÆW2ç6Æ–6RƒÂR’’v—B6V7W&T’çWÆöDGF6†ÖVçB‚v–æ6–FVçBrÂFFæ–BÂf–ÆR“°¢6WDFW67&—F–öâ‚rr“²6WD–æ6–FVçDf–ÆW2…µÒ“²6WDÖW76vR‚t–æ6–FVçB—2fV–Æ–rvVÖVÆBâr“²v—Böä6†ævVB‚“°¢Ò6F6‚†W'&÷"’²6WDÖW76vR†W'&÷"–ç7Fæ6VöbW'&÷"òW'&÷"æÖW76vR¢t–æ6–FVçBÖVÆFVâ—2Ö—6ÇV·Bâr“²Ğ¢f–æÆÇ’²6WD'W7’†fÇ6R“²Ğ¢Ó° ¢6öç7B7V&Ö—D6÷'&V7F–öâÒ7–æ2†WfVçC¢&V7Bäf÷&ÔWfVçB’Óâ°¢WfVçBç&WfVçDFVfVÇB‚“²6WD'W7’‡G'VR“²6WDÖW76vR‚rr“°¢G'’°¢6öç7B&W7VÇBÒv—B6V7W&T’æ7&VFT6÷'&V7F–öå&WVW7B‡²6†–gD–BÂ&WVW7FVD6Æö6´–ã¢&WVW7FVD6Æö6´–âòæWrFFR‡&WVW7FVD6Æö6´–â’ævWEF–ÖR‚’¢VæFVf–æVBÂ&WVW7FVD6Æö6´÷WC¢&WVW7FVD6Æö6´÷WBòæWrFFR‡&WVW7FVD6Æö6´÷WB’ævWEF–ÖR‚’¢VæFVf–æVBÂ&V6öâÒ“°¢6WE&V6öâ‚rr“²6WE&WVW7FVD6Æö6´–â‚rr“²6WE&WVW7FVD6Æö6´÷WB‚rr“²6WDÖW76vR‡&W7VÇBçVWVVBòt6÷'&V7F–WfW'¦öV²7FBöffÆ–æR¶Æ"âr¢t6÷'&V7F–WfW'¦öV²—2–ævVF–VæBâr“²v—Böä6†ævVB‚’æ6F6‚‚‚’ÓâVæFVf–æVB“°¢Ò6F6‚†W'&÷"’²6WDÖW76vR†W'&÷"–ç7Fæ6VöbW'&÷"òW'&÷"æÖW76vR¢t6÷'&V7F–WfW'¦öV²—2Ö—6ÇV·Bâr“²Ğ¢f–æÆÇ’²6WD'W7’†fÇ6R“²Ğ¢Ó° ¢&WGW&âÆF—b6Æ74æÖSÒ'76R×’ÓR#à¢ÆF—cãÆƒ"6Æ74æÖSÒ'FW‡BÓ'†ÂföçBÖ&öÆBFW‡B×¦–æ2Ó“#äÖVÆFVãÂöƒ#ãÇ6Æ74æÖSÒ'FW‡B×6ÒFW‡B×¦–æ2ÓS×BÓ#äÆVr–æ6–FVçFVâf7Böbg&rVVâF–¦G66÷'&V7F–RâãÂ÷ãÂöF—cà¢ÆF—b6Æ74æÖSÒ&w&–Bw&–BÖ6öÇ2Ó"vÓ"&r×v†—FR&÷&FW"&÷&FW"×¦–æ2Ó#&÷VæFVB×†ÂÓãR#ãÆ'WGFöâöä6Æ–6³×²‚’Óâ6WDÖöFR‚v–æ6–FVçBr—Ò6Æ74æÖS×¶’Ó2&÷VæFVBÖÆrföçBÖ&öÆBFW‡B×6ÒG¶ÖöFRÓÓÒv–æ6–FVçBròv&r×¦–æ2Ó“FW‡B×v†—FRr¢wFW‡B×¦–æ2ÓcwÖÓä–æ6–FVçCÂö'WGFöããÆ'WGFöâöä6Æ–6³×²‚’Óâ6WDÖöFR‚v6÷'&V7F–öâr—Ò6Æ74æÖS×¶’Ó2&÷VæFVBÖÆrföçBÖ&öÆBFW‡B×6ÒG¶ÖöFRÓÓÒv6÷'&V7F–öâròv&r×¦–æ2Ó“FW‡B×v†—FRr¢wFW‡B×¦–æ2ÓcwÖÓåF–¦F6÷'&V7F–SÂö'WGFöããÂöF—cà¢¶ÖW76vRbbÆF—b6Æ74æÖSÒ&&r×¦–æ2Ó&÷&FW"&÷&FW"×¦–æ2Ó#&÷VæFVB×†ÂÓ2FW‡B×6ÒföçB×6VÖ–&öÆBFW‡B×¦–æ2Ós#ç¶ÖW76vWÓÂöF—cçĞ¢¶ÖöFRÓÓÒv–æ6–FVçBròÆf÷&Òöå7V&Ö—C×·7V&Ö—D–æ6–FVçGÒ6Æ74æÖSÒ&&r×v†—FR&÷&FW"&÷&FW"×¦–æ2Ó#&÷VæFVBÕ³#G…ÒÓR76R×’ÓB#à¢ÆÆ&VÂ6Æ74æÖSÒ&&Æö6²FW‡B×6ÒföçBÖ&öÆB#ävWÆæFRF–Vç7CÇ6VÆV7BfÇVS×·ÆææVE6†–gD–GÒöä6†ævS×¶RÓâ6WEÆææVE6†–gD–B†RçF&vWBçfÇVR—Ò6Æ74æÖSÒ&×BÓãRrÖgVÆÂ&÷&FW"&÷&FW"×¦–æ2Ó#&÷VæFVB×†ÂÓ2&r×v†—FR#ãÆ÷F–öâfÇVSÒ"#äæ–WBvV¶÷VÆCÂö÷F–öãç·ÆææVE6†–gG2æÖ†—FVÒÓâÆ÷F–öâ¶W“×¶—FVÒæ–GÒfÇVS×¶—FVÒæ–GÓç¶—FVÒæFFWÒ+r¶—FVÒçF—FÆWÓÂö÷F–öãâ—ÓÂ÷6VÆV7CãÂöÆ&VÃà¢ÆF—b6Æ74æÖSÒ&w&–Bw&–BÖ6öÇ2Ó"vÓ2#ãÆÆ&VÂ6Æ74æÖSÒ'FW‡B×6ÒföçBÖ&öÆB#ä6FVv÷&–SÇ6VÆV7BfÇVS×¶6FVv÷'—Òöä6†ævS×¶RÓâ6WD6FVv÷'’†RçF&vWBçfÇVR—Ò6Æ74æÖSÒ&×BÓãRrÖgVÆÂ&÷&FW"&÷&FW"×¦–æ2Ó#&÷VæFVB×†ÂÓ2&r×v†—FR#ãÆ÷F–öãå66†FSÂö÷F–öããÆ÷F–öãäöævWfÃÂö÷F–öããÆ÷F–öãåfV–Æ–v†V–CÂö÷F–öããÆ÷F–öãä¶ÆçFÖVÆF–æsÂö÷F–öããÆ÷F–öãä÷fW&–sÂö÷F–öããÂ÷6VÆV7CãÂöÆ&VÃãÆÆ&VÂ6Æ74æÖSÒ'FW‡B×6ÒföçBÖ&öÆB#äW&ç7CÇ6VÆV7BfÇVS×·6WfW&—G—Òöä6†ævS×¶RÓâ6WE6WfW&—G’†RçF&vWBçfÇVR2G—Vöb6WfW&—G’—Ò6Æ74æÖSÒ&×BÓãRrÖgVÆÂ&÷&FW"&÷&FW"×¦–æ2Ó#&÷VæFVB×†ÂÓ2&r×v†—FR#ãÆ÷F–öâfÇVSÒ&Æ÷r#äÆsÂö÷F–öããÆ÷F–öâfÇVSÒ&ÖVF—VÒ#äÖ–FFVÃÂö÷F–öããÆ÷F–öâfÇVSÒ&†–v‚#ä†öösÂö÷F–öããÂ÷6VÆV7CãÂöÆ&VÃãÂöF—cà¢ÆÆ&VÂ6Æ74æÖSÒ&&Æö6²FW‡B×6ÒföçBÖ&öÆB#åvB—2W"vV&WW&CóÇFW‡F&V&WV—&VBfÇVS×¶FW67&—F–öçÒöä6†ævS×¶RÓâ6WDFW67&—F–öâ†RçF&vWBçfÇVR—Ò6Æ74æÖSÒ&×BÓãRrÖgVÆÂ&÷&FW"&÷&FW"×¦–æ2Ó#&÷VæFVB×†ÂÓ2‚Ó3"&W6—¦RÖæöæR"óãÂöÆ&VÃà¢ÆÆ&VÂ6Æ74æÖSÒ&fÆW‚—FV×2Ö6VçFW"§W7F–g’Ö6VçFW"vÓ"&÷&FW"&÷&FW"ÖF6†VB&÷&FW"×¦–æ2Ó3&÷VæFVB×†ÂÓBFW‡B×6ÒföçBÖ&öÆBFW‡B×¦–æ2Óc7W'6÷"×ö–çFW"#ãÅWÆöB6Æ74æÖSÒ'rÓB‚ÓB"óäf÷Fş(	—2öbFö7VÖVçFVâ‡¶–æ6–FVçDf–ÆW2æÆVæwF‡Ò“Æ–çWBG—SÒ&f–ÆR"66WCÒ&–ÖvRò¢ÂçFbÂæFö2ÂæFö7‚ÂçG‡B"×VÇF—ÆR6Æ74æÖSÒ&†–FFVâ"öä6†ævS×¶RÓâ6WD–æ6–FVçDf–ÆW2„'&’æg&öÒ†RçF&vWBæf–ÆW2ÇÂµÒ’ç6Æ–6RƒÂR’—ÒóãÂöÆ&VÃà¢Æ'WGFöâF—6&ÆVC×¶'W7—Ò6Æ74æÖSÒ'rÖgVÆÂ&r×&VBÓcFW‡B×v†—FR&÷VæFVB×†Â’ÓBföçBÖ&öÆBfÆW‚§W7F–g’Ö6VçFW"vÓ"#ç¶'W7’bbÄÆöFW#"6Æ74æÖSÒ'rÓR‚ÓRæ–ÖFR×7–â"óçÔ–æ6–FVçBÖVÆFVãÂö'WGFöãà¢Âöf÷&Óâ¢Æf÷&Òöå7V&Ö—C×·7V&Ö—D6÷'&V7F–öçÒ6Æ74æÖSÒ&&r×v†—FR&÷&FW"&÷&FW"×¦–æ2Ó#&÷VæFVBÕ³#G…ÒÓR76R×’ÓB#à¢ÆÆ&VÂ6Æ74æÖSÒ&&Æö6²FW‡B×6ÒföçBÖ&öÆB#åF–¦G&Vv—7G&F–SÇ6VÆV7B&WV—&VBfÇVS×·6†–gD–GÒöä6†ævS×¶RÓâ6WE6†–gD–B†RçF&vWBçfÇVR—Ò6Æ74æÖSÒ&×BÓãRrÖgVÆÂ&÷&FW"&÷&FW"×¦–æ2Ó#&÷VæFVB×†ÂÓ2&r×v†—FR#ãÆ÷F–öâfÇVSÒ"#å6VÆV7FVW"ââãÂö÷F–öãç·6†–gG2ç6Æ–6RƒÂ3’æÖ†—FVÒÓâÆ÷F–öâ¶W“×¶—FVÒæ–GÒfÇVS×¶—FVÒæ–GÓç¶f÷&ÖDFFR†—FVÒæ6Æö6´–â—Ò+r¶f÷&ÖEF–ÖR†—FVÒæ6Æö6´–â—×¶—FVÒæ6Æö6´÷WBò(	2G¶f÷&ÖEF–ÖR†—FVÒæ6Æö6´÷WB—Ö¢r+r7F–VbwÓÂö÷F–öãâ—ÓÂ÷6VÆV7CãÂöÆ&VÃà¢ÆF—b6Æ74æÖSÒ&w&–Bw&–BÖ6öÇ2Ó6Ó¦w&–BÖ6öÇ2Ó"vÓ2#ãÆÆ&VÂ6Æ74æÖSÒ'FW‡B×6ÒföçBÖ&öÆB#äæ–WWvR7F'GF–¦CÆ–çWBG—SÒ&FFWF–ÖRÖÆö6Â"fÇVS×·&WVW7FVD6Æö6´–çÒöä6†ævS×¶RÓâ6WE&WVW7FVD6Æö6´–â†RçF&vWBçfÇVR—Ò6Æ74æÖSÒ&×BÓãRrÖgVÆÂ&÷&FW"&÷&FW"×¦–æ2Ó#&÷VæFVB×†ÂÓ2"óãÂöÆ&VÃãÆÆ&VÂ6Æ74æÖSÒ'FW‡B×6ÒföçBÖ&öÆB#äæ–WWvRV–æGF–¦CÆ–çWBG—SÒ&FFWF–ÖRÖÆö6Â"fÇVS×·&WVW7FVD6Æö6´÷WGÒöä6†ævS×¶RÓâ6WE&WVW7FVD6Æö6´÷WB†RçF&vWBçfÇVR—Ò6Æ74æÖSÒ&×BÓãRrÖgVÆÂ&÷&FW"&÷&FW"×¦–æ2Ó#&÷VæFVB×†ÂÓ2"óãÂöÆ&VÃãÂöF—cà¢ÆÆ&VÂ6Æ74æÖSÒ&&Æö6²FW‡B×6ÒföçBÖ&öÆB#å&VFVãÇFW‡F&V&WV—&VBfÇVS×·&V6öçÒöä6†ævS×¶RÓâ6WE&V6öâ†RçF&vWBçfÇVR—Ò6Æ74æÖSÒ&×BÓãRrÖgVÆÂ&÷&FW"&÷&FW"×¦–æ2Ó#&÷VæFVB×†ÂÓ2‚Ó#‚&W6—¦RÖæöæR"óãÂöÆ&VÃà¢Æ'WGFöâF—6&ÆVC×¶'W7—Ò6Æ74æÖSÒ'rÖgVÆÂ&r×¦–æ2Ó“FW‡B×v†—FR&÷VæFVB×†Â’ÓBföçBÖ&öÆB#ä6÷'&V7F–Rçg&vVãÂö'WGFöãà¢Âöf÷&ÓçĞ¢ÆF—b6Æ74æÖSÒ'76R×’Ó"#ãÆƒ26Æ74æÖSÒ&föçBÖ&öÆBFW‡B×¦–æ2Óƒ#äÖ–¦â&V6VçFRÖVÆF–ævVãÂöƒ3ç¶–æ6–FVçG2ç6Æ–6RƒÂR’æÖ†—FVÒÓâÆF—b¶W“×¶—FVÒæ–GÒ6Æ74æÖSÒ&&r×v†—FR&÷&FW"&÷&FW"×¦–æ2Ó#&÷VæFVB×†ÂÓ2FW‡B×6Ò#ãÆF—b6Æ74æÖSÒ&föçBÖ&öÆB#ç¶—FVÒæ6FVv÷'—Ò+r¶—FVÒç6WfW&—G’ÓÓÒv†–v‚ròv†öörr¢—FVÒç6WfW&—G’ÓÓÒvÖVF—VÒròvÖ–FFVÂr¢vÆrwÓÂöF—cãÆF—b6Æ74æÖSÒ'FW‡B×¦–æ2ÓSÆ–æRÖ6Æ×Ó"#ç¶—FVÒæFW67&—F–öçÓÂöF—cãÂöF—câ—×¶6÷'&V7F–öç2ç6Æ–6RƒÂR’æÖ†—FVÒÓâÆF—b¶W“×¶—FVÒæ–GÒ6Æ74æÖSÒ&&r×v†—FR&÷&FW"&÷&FW"×¦–æ2Ó#&÷VæFVB×†ÂÓ2FW‡B×6ÒfÆW‚§W7F–g’Ö&WGvVVâvÓ"#ãÇ7â6Æ74æÖSÒ&föçB×6VÖ–&öÆB#åF–¦F6÷'&V7F–R+r¶f÷&ÖDFFR†—FVÒæ7&VFVDB—ÓÂ÷7ããÇ7â6Æ74æÖSÒ&föçBÖ&öÆB6—FÆ—¦R#ç¶—FVÒç7FGW7ÓÂ÷7ããÂöF—câ—ÓÂöF—cà¢ÂöF—cã°§Ğ ¦gVæ7F–öâ&öf–ÆUF"‡²W6W"Ó¢²W6W#¢W6W"Ò’°¢6öç7B¶æÖRÂ6WDæÖUÒÒW6U7FFR‡W6W"ææÖRÇÂrr“°¢6öç7B·†öæRÂ6WE†öæUÒÒW6U7FFR‡W6W"ç†öæRÇÂrr“°¢6öç7B¶f–Æ&–Æ—G’Â6WDf–Æ&–Æ—G•ÒÒW6U7FFR‡W6W"æf–Æ&–Æ—G’ÇÂrr“°¢6öç7B¶f–Æ&–Æ—G•66†VGVÆRÂ6WDf–Æ&–Æ—G•66†VGVÆUÒÒW6U7FFSÅvVV¶Ç”f–Æ&–Æ—G“â‚‚’ÓâW6W"æf–Æ&–Æ—G•66†VGVÆRÇÂ°¢ss¢²Væ&ÆVC¢fÇ6RÂ7F'C¢s“£rÂVæC¢ss£rÒÀ¢ss¢²Væ&ÆVC¢G'VRÂ7F'C¢s“£rÂVæC¢ss£rÒÀ¢s"s¢²Væ&ÆVC¢G'VRÂ7F'C¢s“£rÂVæC¢ss£rÒÀ¢s2s¢²Væ&ÆVC¢G'VRÂ7F'C¢s“£rÂVæC¢ss£rÒÀ¢sBs¢²Væ&ÆVC¢G'VRÂ7F'C¢s“£rÂVæC¢ss£rÒÀ¢sRs¢²Væ&ÆVC¢G'VRÂ7F'C¢s“£rÂVæC¢ss£rÒÀ¢sbs¢²Væ&ÆVC¢fÇ6RÂ7F'C¢s“£rÂVæC¢ss£rÒÀ¢Ò“°¢6öç7B¶—5WFF–ærÂ6WD—5WFF–æuÒÒW6U7FFR†fÇ6R“°¢6öç7B¶×6rÂ6WD×6uÒÒW6U7FFR‡²FW‡C¢rrÂG—S¢rrÒ“° ¢6öç7B¶†—7F÷'”76–væÖVçG2Â6WD†—7F÷'”76–væÖVçG5ÒÒW6U7FFSÄ76–væÖVçEµÓâ…µÒ“°¢6öç7B¶†—7F÷'•6†–gG2Â6WD†—7F÷'•6†–gG5ÒÒW6U7FFSÅ6†–gEµÓâ…µÒ“°¢6öç7B¶ÆöF–æt†—7F÷'’Â6WDÆöF–æt†—7F÷'•ÒÒW6U7FFR‡G'VR“° ¢W6TVffV7B‚‚’Óâ°¢ÆWB7F—fRÒG'VS°¢6öç7BÆöBÒ7–æ2‚’Óâ°¢G'’°¢6öç7B²FFÒÒv—B6V7W&T’ç6æ6†÷B‚“°¢–b‚7F—fR’&WGW&ã°¢6WD†—7F÷'”76–væÖVçG2†FFæ76–væÖVçG2æf–ÇFW"†—FVÒÓâ—FVÒç7FGW2ÓÓÒv6ö×ÆWFVBr’“°¢6WD†—7F÷'•6†–gG2†FFç6†–gG2“°¢6WDÆöF–æt†—7F÷'’†fÇ6R“°¢Ò6F6‚†W'&÷"’°¢6öç6öÆRæW'&÷"†W'&÷"“°¢–b†7F—fR’6WDÆöF–æt†—7F÷'’†fÇ6R“°¢Ğ¢Ó°¢fö–BÆöB‚“°¢6öç7BF–ÖW"Òv–æF÷rç6WD–çFW'fÂ†ÆöBÂ“°¢&WGW&â‚’Óâ²7F—fRÒfÇ6S²v–æF÷ræ6ÆV$–çFW'fÂ‡F–ÖW"“²Ó°¢ÒÂ·W6W"æ–EÒ“° ¢6öç7B†æFÆU6fRÒ7–æ2†S¢&V7Bäf÷&ÔWfVçB’Óâ°¢Rç&WfVçDFVfVÇB‚“°¢6WD—5WFF–ær‡G'VR“°¢6WD×6r‡²FW‡C¢rrÂG—S¢rrÒ“°¢G'’°¢v—B6V7W&T’çWFFU&öf–ÆR‡²æÖRÂ†öæRÂf–Æ&–Æ—G’Âf–Æ&–Æ—G•66†VGVÆRÒ“°¢6WD×6r‡²FW‡C¢u&öf–VÂ7V66W7föÂ&–¦vWvW&·BrÂG—S¢w7V66W72rÒ“°¢Ò6F6‚†W'"’°¢6öç6öÆRæW'&÷"†W'"“°¢6WD×6r‡²FW‡C¢tW"—2VVâf÷WB÷vWG&VFVâ&–¢†WB÷6ÆâârÂG—S¢vW'&÷"rÒ“°¢Òf–æÆÇ’°¢6WD—5WFF–ær†fÇ6R“°¢Ğ¢Ó° ¢&WGW&â€¢ÆF—b6Æ74æÖSÒ'76R×’Ób#à¢ÆF—b6Æ74æÖSÒ&&r×v†—FR&÷VæFVBÕ³#G…Ò6†F÷rÕ³óG…óG…ó÷&v"ƒÃÃÃã2•Ò&÷&FW"&÷&FW"×¦–æ2Ó#óc÷fW&fÆ÷rÖ†–FFVâ#à¢ÆF—b6Æ74æÖSÒ'Ó‚76R×’Ób#à¢Æƒ"6Æ74æÖSÒ'FW‡B×†ÂföçBÖ&öÆBFW‡B×¦–æ2Óƒ#åW'6ööæÆ–¦¶RvVvWfVç3Âöƒ#à¢ ¢¶×6rçFW‡Bbb€¢ÆF—b6Æ74æÖS×¶ÓB&÷VæFVBÕ³'…ÒFW‡B×6ÒföçBÖÖVF—VÒ&÷&FW"G¶×6rçG—RÓÓÒw7V66W72ròv&rÖw&VVâÓSFW‡BÖw&VVâÓs&÷&FW"Öw&VVâÓ#r¢v&r×&VBÓSFW‡B×&VBÓs&÷&FW"×&VBÓ#wÖÓà¢¶×6rçFW‡GĞ¢ÂöF—cà¢—Ğ ¢Æf÷&Òöå7V&Ö—C×¶†æFÆU6fWÒ6Æ74æÖSÒ'76R×’ÓB#à¢ÆF—cà¢ÆÆ&VÂ6Æ74æÖSÒ&&Æö6²FW‡B×6ÒföçBÖ&öÆBFW‡B×¦–æ2ÓsÖ"ÓãR#åföÆÆVF–vRæÓÂöÆ&VÃà¢Æ–çWBG—SÒ'FW‡B"fÇVS×¶æÖWÒöä6†ævS×¶RÓâ6WDæÖR†RçF&vWBçfÇVR—Ò&WV—&VB6Æ74æÖSÒ'rÖgVÆÂ&÷&FW"&÷&FW"×¦–æ2Ó#&÷VæFVBÕ³#G…ÒÓ2ãRfö7W3§&–ærÓBfö7W3§&–ær×¦–æ2Ó“ófö7W3¦&÷&FW"×¦–æ2Ó“÷WFÆ–æRÖæöæR&rÕ²4dddÒG&ç6—F–öâÖÆÂföçBÖÖVF—VÒ"óà¢ÂöF—cà¢ÆF—cà¢ÆÆ&VÂ6Æ74æÖSÒ&&Æö6²FW‡B×6ÒföçBÖ&öÆBFW‡B×¦–æ2ÓsÖ"ÓãR#åFVÆVfööæçVÖÖW#ÂöÆ&VÃà¢Æ–çWBG—SÒ'FVÂ"fÇVS×·†öæWÒöä6†ævS×¶RÓâ6WE†öæR†RçF&vWBçfÇVR—ÒÆ6V†öÆFW#Ò#G‡‚‡‚‡‚‡‚"6Æ74æÖSÒ'rÖgVÆÂ&÷&FW"&÷&FW"×¦–æ2Ó#&÷VæFVBÕ³#G…ÒÓ2ãRfö7W3§&–ærÓBfö7W3§&–ær×¦–æ2Ó“ófö7W3¦&÷&FW"×¦–æ2Ó“÷WFÆ–æRÖæöæR&rÕ²4dddÒG&ç6—F–öâÖÆÂföçBÖÖVF—VÒ"óà¢ÂöF—cà¢ÆF—cà¢ÆÆ&VÂ6Æ74æÖSÒ&&Æö6²FW‡B×6ÒföçBÖ&öÆBFW‡B×¦–æ2ÓsÖ"ÓãR#äÖ–¦â&W66†–¶&&†V–CÂöÆ&VÃà¢ÇFW‡F&VfÇVS×¶f–Æ&–Æ—G—Òöä6†ævS×¶RÓâ6WDf–Æ&–Æ—G’†RçF&vWBçfÇVR—ÒÆ6V†öÆFW#Ò$&–§bâÖÕg"&W66†–¶&"Â–â†WBvVV¶VæB–â÷fW&ÆVrâââ"&÷w3×³7Ò6Æ74æÖSÒ'rÖgVÆÂ&÷&FW"&÷&FW"×¦–æ2Ó#&÷VæFVBÕ³#G…ÒÓ2ãRfö7W3§&–ærÓBfö7W3§&–ær×¦–æ2Ó“ófö7W3¦&÷&FW"×¦–æ2Ó“÷WFÆ–æRÖæöæR&rÕ²4dddÒG&ç6—F–öâÖÆÂföçBÖÖVF—VÒ&W6—¦RÖæöæR#ãÂ÷FW‡F&Và¢ÂöF—cà¢ÆF—b6Æ74æÖSÒ'76R×’Ó"#à¢ÆF—b6Æ74æÖSÒ'FW‡B×6ÒföçBÖ&öÆBFW‡B×¦–æ2Ós#åf7FRvVV·W&Vâfö÷"6öæfÆ–7F6öçG&öÆSÂöF—cà¢µµ²srÂtÖuÒÅ²s"rÂtF’uÒÅ²s2rÂuvòuÒÅ²sBrÂtFòuÒÅ²sRrÂug"uÒÅ²sbrÂu¦uÒÅ²srÂu¦òuÕÒæÖ‚…¶¶W’ÂÆ&VÅÒ’Óâ°¢6öç7BF’Òf–Æ&–Æ—G•66†VGVÆU¶¶W•ÒÇÂ²Væ&ÆVC¢fÇ6RÂ7F'C¢s“£rÂVæC¢ss£rÓ°¢&WGW&âÆF—b¶W“×¶¶W—Ò6Æ74æÖSÒ&w&–Bw&–BÖ6öÇ2Õ³C‡…óg%óg%ÒvÓ"—FV×2Ö6VçFW"&r×¦–æ2ÓS&÷&FW"&÷&FW"×¦–æ2Ó#&÷VæFVB×†ÂÓ"ãR#à¢ÆÆ&VÂ6Æ74æÖSÒ&föçBÖ&öÆBFW‡B×6ÒfÆW‚—FV×2Ö6VçFW"vÓ"#ãÆ–çWBG—SÒ&6†V6¶&÷‚"6†V6¶VC×¶F’æVæ&ÆVGÒöä6†ævS×¶RÓâ6WDf–Æ&–Æ—G•66†VGVÆR†7W'&VçBÓâ‡²ââæ7W'&VçBÂ¶¶W•Ó¢²ââæF’ÂVæ&ÆVC¢RçF&vWBæ6†V6¶VBÒÒ’—Ò6Æ74æÖSÒ&66VçB×¦–æ2Ó“"óç¶Æ&VÇÓÂöÆ&VÃà¢Æ–çWB&–ÖÆ&VÃ×¶7F'BG¶Æ&VÇÖÒG—SÒ'F–ÖR"F—6&ÆVC×²F’æVæ&ÆVGÒfÇVS×¶F’ç7F'GÒöä6†ævS×¶RÓâ6WDf–Æ&–Æ—G•66†VGVÆR†7W'&VçBÓâ‡²ââæ7W'&VçBÂ¶¶W•Ó¢²ââæF’Â7F'C¢RçF&vWBçfÇVRÒÒ’—Ò6Æ74æÖSÒ&&÷&FW"&÷&FW"×¦–æ2Ó#&÷VæFVBÖÆrÓ"FW‡B×6ÒF—6&ÆVC¦÷6—G’ÓC"óà¢Æ–çWB&–ÖÆ&VÃ×¶V–æFRG¶Æ&VÇÖÒG—SÒ'F–ÖR"F—6&ÆVC×²F’æVæ&ÆVGÒfÇVS×¶F’æVæGÒöä6†ævS×¶RÓâ6WDf–Æ&–Æ—G•66†VGVÆR†7W'&VçBÓâ‡²ââæ7W'&VçBÂ¶¶W•Ó¢²ââæF’ÂVæC¢RçF&vWBçfÇVRÒÒ’—Ò6Æ74æÖSÒ&&÷&FW"&÷&FW"×¦–æ2Ó#&÷VæFVBÖÆrÓ"FW‡B×6ÒF—6&ÆVC¦÷6—G’ÓC"óà¢ÂöF—cã°¢Ò—Ğ¢ÂöF—cà¢Æ'WGFöâG—SÒ'7V&Ö—B"F—6&ÆVC×¶—5WFF–æwÒ6Æ74æÖSÒ'rÖgVÆÂ&r×¦–æ2Ó“†÷fW#¦&r×¦–æ2ÓƒFW‡B×v†—FRföçBÖ&öÆB’ÓB&÷VæFVBÕ³#G…ÒfÆW‚—FV×2Ö6VçFW"§W7F–g’Ö6VçFW"76R×‚Ó"G&ç6—F–öâÖÆÂ6†F÷rÖÆr6†F÷rÕ³óG…óG…ó÷&v"ƒÃÃÃã•ÒF—6&ÆVC¦÷6—G’ÓS#à¢¶—5WFF–æròÄÆöFW#"6Æ74æÖSÒ'rÓR‚ÓRæ–ÖFR×7–â"óâ¢Å6fR6Æ74æÖSÒ'rÓR‚ÓR"óçĞ¢Ç7ãävVvWfVç2÷6ÆãÂ÷7ãà¢Âö'WGFöãà¢Âöf÷&Óà¢ÂöF—cà¢ÂöF—cà ¢ÆF—b6Æ74æÖSÒ&&r×v†—FR&÷VæFVBÕ³#G…Ò6†F÷rÕ³óG…óG…ó÷&v"ƒÃÃÃã2•Ò&÷&FW"&÷&FW"×¦–æ2Ó#óc÷fW&fÆ÷rÖ†–FFVâ#à¢ÆF—b6Æ74æÖSÒ'Ó‚76R×’Ób#à¢ÆF—b6Æ74æÖSÒ&fÆW‚—FV×2Ö6VçFW"76R×‚Ó"#à¢Ä†—7F÷'’6Æ74æÖSÒ'rÓb‚ÓbFW‡B×¦–æ2ÓC"óà¢Æƒ"6Æ74æÖSÒ'FW‡B×†ÂföçBÖ&öÆBFW‡B×¦–æ2Óƒ#äÖ–¦â†—7F÷&–V³Âöƒ#à¢ÂöF—cà ¢¶ÆöF–æt†—7F÷'’ò€¢ÆF—b6Æ74æÖSÒ&fÆW‚§W7F–g’Ö6VçFW"’ÓB#ãÄÆöFW#"6Æ74æÖSÒ'rÓb‚Óbæ–ÖFR×7–âFW‡B×¦–æ2Ó“"óãÂöF—cà¢’¢€¢ÆF—b6Æ74æÖSÒ'76R×’ÓR#à¢¶†—7F÷'•6†–gG2æf–ÇFW"‡2Óâ2æ6Æö6´÷WB’æÆVæwF‚ÓÓÒò€¢Ç6Æ74æÖSÒ'FW‡B×6ÒFW‡B×¦–æ2ÓS#ävVVâföÇFöö–FR6†–gG2vWföæFVâãÂ÷à¢’¢€¢†—7F÷'•6†–gG2æf–ÇFW"‡2Óâ2æ6Æö6´÷WB’ç6÷'B‚†Æ"’Óâ"æ6Æö6´–âÒæ6Æö6´–â’æÖ‡6†–gBÓâ°¢6öç7BGW&F–öä×2Ò6†–gBæ6Æö6´÷WBÒ6†–gBæ6Æö6´–ã°¢6öç7B†÷W'2ÒÖF‚æfÆö÷"†GW&F–öä×2òƒ¢c¢c’“°¢6öç7BÖ–çWFW2ÒÖF‚æfÆö÷"‚†GW&F–öä×2Rƒ¢c¢c’’òƒ¢c’“°¢ ¢6öç7B6†–gDFFTö&¢ÒæWrFFR‡6†–gBæ6Æö6´–â“°¢6öç7B6†–gDFFU7G"Ò6†–gDFFTö&¢ævWDgVÆÅ–V"‚’²rÒr²7G&–ær‡6†–gDFFTö&¢ævWDÖöçF‚‚’³’çE7F'Bƒ"Âsr’²rÒr²7G&–ær‡6†–gDFFTö&¢ævWDFFR‚’’çE7F'Bƒ"Âsr“°¢6öç7B6†–gD76–væÖVçG2Ò†—7F÷'”76–væÖVçG2æf–ÇFW"†ÓâæFFRÓÓÒ6†–gDFFU7G"“° ¢&WGW&â€¢ÆF—b¶W“×·6†–gBæ–GÒ6Æ74æÖSÒ&&rÕ²4dddÒÓR&÷VæFVBÕ³#G…Ò&÷&FW"&÷&FW"×¦–æ2Ó#óc#à¢ÆF—b6Æ74æÖSÒ&fÆW‚§W7F–g’Ö&WGvVVâ—FV×2×7F'BÖ"ÓB#à¢ÆF—cà¢ÆF—b6Æ74æÖSÒ&föçBÖ&öÆBFW‡B×¦–æ2Ó“FW‡BÖÆrÖ"Ó#ç¶f÷&ÖDFFR‡6†–gBæ6Æö6´–â—ÓÂöF—cà¢ÆF—b6Æ74æÖSÒ&fÆW‚—FV×2Ö6VçFW"76R×‚Ó"FW‡B×6ÒFW‡B×¦–æ2ÓcföçBÖÖVF—VÒ#à¢Ä6Æö6²6Æ74æÖSÒ'rÓB‚ÓBFW‡B×¦–æ2ÓC"óà¢Ç7ãç¶f÷&ÖEF–ÖR‡6†–gBæ6Æö6´–â—ÒÒ¶f÷&ÖEF–ÖR‡6†–gBæ6Æö6´÷WB—ÓÂ÷7ãà¢Ç7â6Æ74æÖSÒ'FW‡B×¦–æ2ÓS#î(
+#Â÷7ãà¢Ç7â6Æ74æÖSÒ'FW‡B×¦–æ2Ó“föçBÖ&öÆB#ç¶†÷W'7×R¶Ö–çWFW7ÖÒvWvW&·CÂ÷7ãà¢ÂöF—cà¢ÂöF—cà¢ÂöF—cà ¢ÆF—b6Æ74æÖSÒ&w&–Bw&–BÖ6öÇ2Ó6Ó¦w&–BÖ6öÇ2Ó"vÓ2Ö"ÓR#à¢ÆF—b6Æ74æÖSÒ&&r×v†—FRÓ2&÷VæFVBÕ³'…Ò&÷&FW"&÷&FW"×¦–æ2Ó#fÆW‚—FV×2×7F'B76R×‚Ó26†F÷rÕ³óG…óG…ó÷&v"ƒÃÃÃã2•Ò#à¢ÆF—b6Æ74æÖSÒ&×BÓãR#ãÄÖ–â6Æ74æÖSÒ'rÓB‚ÓBFW‡BÖw&VVâÓS"óãÂöF—cà¢ÆF—cà¢Ç7â6Æ74æÖSÒ&&Æö6²FW‡B×‡2föçBÖ&öÆBFW‡B×¦–æ2ÓCWW&66RG&6¶–ær×v–FW"Ö"ÓãR#ä–ævV¶Æö·BvVö6F–SÂ÷7ãà¢ÆF—b6Æ74æÖSÒ'FW‡B×6ÒföçBÖÖVF—VÒFW‡B×¦–æ2ÓsG'Væ6FR#à¢·6†–gBæ6Æö6´–äÆö3òæÆBòG·6†–gBæ6Æö6´–äÆö2æÆBçFôf—†VBƒR—ÒÂG·6†–gBæ6Æö6´–äÆö2æÆærçFôf—†VBƒR—Ö¢tÆö6F–Ræ–WB&W66†–¶&"wĞ¢ÂöF—cà¢ÆF—b6Æ74æÖSÒ'FW‡B×‡2FW‡B×¦–æ2ÓS×BÓãRföçBÖÖVF—VÒ#ä¶f÷&ÖEF–ÖR‡6†–gBæ6Æö6´–â—ÓÂöF—cà¢ÂöF—cà¢ÂöF—cà¢ÆF—b6Æ74æÖSÒ&&r×v†—FRÓ2&÷VæFVBÕ³'…Ò&÷&FW"&÷&FW"×¦–æ2Ó#fÆW‚—FV×2×7F'B76R×‚Ó26†F÷rÕ³óG…óG…ó÷&v"ƒÃÃÃã2•Ò#à¢ÆF—b6Æ74æÖSÒ&×BÓãR#ãÄÖ–â6Æ74æÖSÒ'rÓB‚ÓBFW‡BÖÖ&W"ÓS"óãÂöF—cà¢ÆF—cà¢Ç7â6Æ74æÖSÒ&&Æö6²FW‡B×‡2föçBÖ&öÆBFW‡B×¦–æ2ÓCWW&66RG&6¶–ær×v–FW"Ö"ÓãR#åV—FvV¶Æö·BvVöÆö6F–SÂ÷7ãà¢ÆF—b6Æ74æÖSÒ'FW‡B×6ÒföçBÖÖVF—VÒFW‡B×¦–æ2ÓsG'Væ6FR#à¢·6†–gBæ6Æö6´÷WDÆö3òæÆBòG·6†–gBæ6Æö6´÷WDÆö2æÆBçFôf—†VBƒR—ÒÂG·6†–gBæ6Æö6´÷WDÆö2æÆærçFôf—†VBƒR—Ö¢tÆö6F–Ræ–WB&W66†–¶&"wĞ¢ÂöF—cà¢ÆF—b6Æ74æÖSÒ'FW‡B×‡2FW‡B×¦–æ2ÓS×BÓãRföçBÖÖVF—VÒ#ä¶f÷&ÖEF–ÖR‡6†–gBæ6Æö6´÷WB—ÓÂöF—cà¢ÂöF—cà¢ÂöF—cà¢ÂöF—cà ¢ÆF—b6Æ74æÖSÒ'76R×’Ó2#à¢Ç7â6Æ74æÖSÒ'FW‡B×‡2föçBÖ&öÆBFW‡B×¦–æ2ÓCWW&66RG&6¶–ær×v–FW"fÆW‚—FV×2Ö6VçFW"76R×‚ÓãR&÷&FW"Ö"&÷&FW"×¦–æ2Ó#óc"Ó"#à¢Ä6†V6µ7V&R6Æ74æÖSÒ'rÓB‚ÓB"óà¢Ç7ãäfvW&öæFR÷G&6‡FVâbF¶VãÂ÷7ãà¢Â÷7ãà¢·6†–gD76–væÖVçG2æÆVæwF‚âò€¢6†–gD76–væÖVçG2æÖ†76–væÖVçBÓâ°¢6öç7BF6·5F÷FÂÒ76–væÖVçBçF6·3òæÆVæwF‚ÇÂ°¢6öç7BF6·4FöæRÒ76–væÖVçBçF6·3òæf–ÇFW"‡BÓâBæ6ö×ÆWFVB’æÆVæwF‚ÇÂ°¢ ¢&WGW&â€¢ÆF—b¶W“×¶76–væÖVçBæ–GÒ6Æ74æÖSÒ&&r×v†—FRÓB&÷VæFVBÕ³'…Ò&÷&FW"&÷&FW"×¦–æ2Ó#6†F÷rÕ³óG…óG…ó÷&v"ƒÃÃÃã2•Ò#à¢ÆF—b6Æ74æÖSÒ&fÆW‚§W7F–g’Ö&WGvVVâ—FV×2×7F'BÖ"Ó"#à¢Ç7â6Æ74æÖSÒ&föçBÖ&öÆBFW‡B×¦–æ2Óƒ#ç¶76–væÖVçBæ7W7FöÖW$æÖRÇÂtöæ&V¶VæFR¶ÆçBwÓÂ÷7ãà¢·F6·5F÷FÂâò€¢Ç7â6Æ74æÖS×¶FW‡B×‡2föçBÖ&öÆB‚Ó"ãR’Ó&÷VæFVBÖgVÆÂG·F6·4FöæRÓÓÒF6·5F÷FÂòv&rÖw&VVâÓFW‡BÖw&VVâÓsr¢v&r×¦–æ2ÓFW‡B×¦–æ2ÓcwÖÓà¢·F6·4FöæWÒ÷·F6·5F÷FÇÒF¶Và¢Â÷7ãà¢’¢€¢Ç7â6Æ74æÖSÒ'FW‡B×‡2föçBÖ&öÆB‚Ó"ãR’Ó&÷VæFVBÖgVÆÂ&r×¦–æ2ÓóSFW‡B×¦–æ2Óc#ävVVâF¶VãÂ÷7ãà¢—Ğ¢ÂöF—cà¢¶76–væÖVçBçF6·2bb76–væÖVçBçF6·2æÆVæwF‚âbb€¢ÇVÂ6Æ74æÖSÒ'76R×’ÓãR×BÓ2BÓ2&÷&FW"×B&÷&FW"×¦–æ2Ó##à¢¶76–væÖVçBçF6·2æÖ‡BÓâ€¢ÆÆ’¶W“×·Bæ–GÒ6Æ74æÖSÒ&fÆW‚—FV×2×7F'B76R×‚Ó"FW‡B×6ÒFW‡B×¦–æ2Óc#à¢·Bæ6ö×ÆWFVBòÄ6†V6µ7V&R6Æ74æÖSÒ'rÓB‚ÓBFW‡BÖw&VVâÓS6‡&–æ²Ó×BÓãR"óâ¢Å7V&R6Æ74æÖSÒ'rÓB‚ÓB6‡&–æ²Ó×BÓãRFW‡B×¦–æ2ÓS"óçĞ¢Ç7â6Æ74æÖS×·Bæ6ö×ÆWFVBòvÆ–æR×F‡&÷Vv‚FW‡B×¦–æ2ÓCr¢rwÓç·BçFW‡GÓÂ÷7ãà¢ÂöÆ“à¢’—Ğ¢Â÷VÃà¢—Ğ¢ÂöF—cà¢“°¢Ò¢’¢€¢ÆF—b6Æ74æÖSÒ'FW‡B×6ÒFW‡B×¦–æ2ÓS—FÆ–2‚Ó"’Ó#ävVVâ÷G&6‡FVâvV¶÷VÆBâFW¦R6†–gBãÂöF—cà¢—Ğ¢ÂöF—cà¢ÂöF—cà¢“°¢Ò¢—Ğ¢ÂöF—cà¢—Ğ¢ÂöF—cà¢ÂöF—cà¢ÂöF—cà¢§Ğ ¦gVæ7F–öâ76–væÖVçD6&B‡²76–væÖVçBÓ¢²76–væÖVçC¢76–væÖVçC²¶W“ó¢7G&–ærÂçVÖ&W"Ò’°¢6öç7B¶æ÷FW2Â6WDæ÷FW5ÒÒW6U7FFR†76–væÖVçBçv÷&´æ÷FW2ÇÂrr“°¢6öç7B·F6·2Â6WEF6·5ÒÒW6U7FFSÄ76–væÖVçEF6µµÓâ†76–væÖVçBçF6·2ÇÂµÒ“°¢6öç7B¶æWuF6µFW‡BÂ6WDæWuF6µFW‡EÒÒW6U7FFR‚rr“°¢6öç7B¶—5WFF–ærÂ6WD—5WFF–æuÒÒW6U7FFR†fÇ6R“° ¢W6TVffV7B‚‚’Óâ°¢6öç7BF–ÖW"Òv–æF÷rç6WEF–ÖV÷WB‚‚’Óâ6WEF6·2†76–væÖVçBçF6·2ÇÂµÒ’Â“°¢&WGW&â‚’Óâv–æF÷ræ6ÆV%F–ÖV÷WB‡F–ÖW"“°¢ÒÂ¶76–væÖVçBçF6·5Ò“° ¢6öç7B†æFÆUWFFRÒ7–æ2‡WFFW3¢'F–ÃÄ76–væÖVçCâ’Óâ°¢6WD—5WFF–ær‡G'VR“°¢G'’°¢v—B6V7W&T’çWFFT76–væÖVçDFWF–Ç2€¢76–væÖVçBæ–BÀ¢‡WFFW2çF6·2276–væÖVçEF6µµÒÂVæFVf–æVB’ÇÂF6·2À¢G—VöbWFFW2çv÷&´æ÷FW2ÓÓÒw7G&–ærròWFFW2çv÷&´æ÷FW2¢æ÷FW2À¢“°¢Ò6F6‚†W'"’°¢6öç6öÆRæW'&÷"†W'"“°¢Òf–æÆÇ’°¢6WD—5WFF–ær†fÇ6R“°¢Ğ¢Ó° ¢6öç7B†æFÆTFEF6²Ò7–æ2†S¢&V7Bäf÷&ÔWfVçB’Óâ°¢Rç&WfVçDFVfVÇB‚“°¢–b‚æWuF6µFW‡BçG&–Ò‚’’&WGW&ã°¢6öç7BæWuF6²Ò²–C¢FFRææ÷r‚’çFõ7G&–ær‚’ÂFW‡C¢æWuF6µFW‡BçG&–Ò‚’Â6ö×ÆWFVC¢fÇ6RÓ°¢6öç7BWFFVEF6·2Ò²ââçF6·2ÂæWuF6µÓ°¢6WEF6·2‡WFFVEF6·2“°¢6WDæWuF6µFW‡B‚rr“°¢v—B†æFÆUWFFR‡²F6·3¢WFFVEF6·2Ò“°¢Ó° ¢6öç7B†æFÆUFövvÆUF6²Ò7–æ2‡F6´–C¢7G&–ær’Óâ°¢6öç7BWFFVEF6·2ÒF6·2æÖ‡BÓâBæ–BÓÓÒF6´–Bò²ââçBÂ6ö×ÆWFVC¢Bæ6ö×ÆWFVBÒ¢B“°¢6WEF6·2‡WFFVEF6·2“°¢v—B†æFÆUWFFR‡²F6·3¢WFFVEF6·2Ò“°¢Ó° ¢6öç7B†æFÆTFVÆWFUF6²Ò7–æ2‡F6´–C¢7G&–ær’Óâ°¢6öç7BWFFVEF6·2ÒF6·2æf–ÇFW"‡BÓâBæ–BÓÒF6´–B“°¢6WEF6·2‡WFFVEF6·2“°¢v—B†æFÆUWFFR‡²F6·3¢WFFVEF6·2Ò“°¢Ó° ¢6öç7B†æFÆT'&—fRÒ7–æ2‚’Óâ°¢6WD—5WFF–ær‡G'VR“°¢G'’°¢6öç7BÆö6F–öâÒv—BvWD7W'&VçDÆö6F–öâ‚“°¢v—B6V7W&T’çG&ç6—F–öä76–væÖVçB‡²76–væÖVçD–C¢76–væÖVçBæ–BÂ7FGW3¢v'&—fVBrÂÆö6F–öâÒ“°¢Òf–æÆÇ’°¢6WD—5WFF–ær†fÇ6R“°¢Ğ¢Ó° ¢6öç7B†æFÆT6ö×ÆWFRÒ7–æ2‚’Óâ°¢6WD—5WFF–ær‡G'VR“°¢G'’°¢6öç7BÆö6F–öâÒv—BvWD7W'&VçDÆö6F–öâ‚“°¢v—B6V7W&T’çG&ç6—F–öä76–væÖVçB‡²76–væÖVçD–C¢76–væÖVçBæ–BÂ7FGW3¢v6ö×ÆWFVBrÂÆö6F–öâÂæ÷FW2Ò“°¢Òf–æÆÇ’°¢6WD—5WFF–ær†fÇ6R“°¢Ğ¢Ó° ¢&WGW&â€¢ÆF—b6Æ74æÖS×¶÷2Ö6&B÷fW&fÆ÷rÖ†–FFVâG&ç6—F–öâÖÆÂG¶76–væÖVçBç7FGW2ÓÓÒv6ö×ÆWFVBròv&÷&FW"ÖVÖW&ÆBÓCócr¢rwÖÓà¢ÆF—b6Æ74æÖSÒ'Ób76R×’ÓR#à¢ÆF—b6Æ74æÖSÒ&fÆW‚§W7F–g’Ö&WGvVVâ—FV×2×7F'B#à¢ÆF—cà¢ÆF—b6Æ74æÖSÒ&fÆW‚—FV×2Ö6VçFW"76R×‚Ó"Ö"Ó#à¢Æƒ26Æ74æÖSÒ&föçBÖ&öÆBFW‡BÖÆrFW‡B×¦–æ2Ó“#ç¶76–væÖVçBæ7W7FöÖW$æÖRÇÂtöæ&V¶VæFR¶ÆçBwÓÂöƒ3à¢¶76–væÖVçBç7F'EF–ÖRbb€¢Ç7â6Æ74æÖSÒ&&r×¦–æ2ÓFW‡B×¦–æ2ÓcFW‡B×‡2föçBÖ&öÆB‚Ó"’Ó&÷VæFVBÖÖBfÆW‚—FV×2Ö6VçFW"76R×‚Ó#à¢Ä6Æö6²6Æ74æÖSÒ'rÓ2ãR‚Ó2ãR"óà¢Ç7ãç¶76–væÖVçBç7F'EF–ÖWÓÂ÷7ãà¢Â÷7ãà¢—Ğ¢ÂöF—cà¢Ç6Æ74æÖSÒ'FW‡B×¦–æ2ÓS×BÓãRÆVF–ær×&VÆ†VB#ç¶76–væÖVçBæFW67&—F–öçÓÂ÷à¢ÂöF—cà¢¶76–væÖVçBç7FGW2ÓÓÒv6ö×ÆWFVBrbb€¢Ç7â6Æ74æÖSÒ&&rÖw&VVâÓFW‡BÖw&VVâÓsÓ"&÷VæFVBÖgVÆÂ6‡&–æ²Ó#à¢Ä6†V6´6—&6ÆR6Æ74æÖSÒ'rÓb‚Ób"óà¢Â÷7ãà¢—Ğ¢ÂöF—cà ¢¶76–væÖVçBç7FGW2ÓÓÒwVæF–ærrbb€¢ÆF—b6Æ74æÖSÒ'76R×’ÓB#à¢ÆF—cà¢Ç7â6Æ74æÖSÒ'FW‡B×‡2föçBÖ&öÆBFW‡B×¦–æ2ÓC&Æö6²Ö"Ó"WW&66RG&6¶–ær×v–FW"#äÆö6F–RfW&–f–6F–SÂ÷7ãà¢ÄÆ—fTÆö6F–öäÖóà¢ÂöF—cà¢Æ'WGFöà¢öä6Æ–6³×¶†æFÆT'&—fWĞ¢F—6&ÆVC×¶—5WFF–æwĞ¢6Æ74æÖSÒ&÷2Ö'Fâ×6V6öæF'’rÖgVÆÂ76R×‚Ó"’ÓB ¢à¢¶—5WFF–æròÄÆöFW#"6Æ74æÖSÒ'rÓR‚ÓRæ–ÖFR×7–â"óâ¢Äæf–vF–öã"6Æ74æÖSÒ'rÓR‚ÓR"óçĞ¢Ç7ãäÖ&¶VW"Ç2ævV¶öÖVãÂ÷7ãà¢Âö'WGFöãà¢ÂöF—cà¢—Ğ ¢¶76–væÖVçBç7FGW2ÓÓÒv'&—fVBrbb€¢ÆF—b6Æ74æÖSÒ'76R×’ÓRBÓB&÷&FW"×B&÷&FW"×¦–æ2Ó##à¢ÆF—b6Æ74æÖSÒ&÷2×æVÂfÆW‚—FV×2Ö6VçFW"76R×‚Ó"FW‡B×6ÒföçBÖÖVF—VÒÓ2ãR#à¢Ä6Æö6²6Æ74æÖSÒ'rÓB‚ÓBFW‡B×¦–æ2Ó“"óà¢Ç7ãäævV¶öÖVâöÒ¶f÷&ÖEF–ÖR†76–væÖVçBæ'&—fÅF–ÖR—ÓÂ÷7ãà¢ÂöF—cà¢ ¢ÆF—b6Æ74æÖSÒ'76R×’Ó2#à¢ÆÆ&VÂ6Æ74æÖSÒ'FW‡B×6ÒföçBÖ&öÆBFW‡B×¦–æ2ÓƒfÆW‚—FV×2Ö6VçFW"76R×‚Ó"#à¢Ä6†V6µ7V&R6Æ74æÖSÒ'rÓB‚ÓBFW‡B×¦–æ2ÓC"óà¢Ç7ãä6†V6¶Æ—7BòV—FvWföW&FRF¶VãÂ÷7ãà¢ÂöÆ&VÃà¢ ¢·F6·2æÆVæwF‚âbb€¢ÆF—b6Æ74æÖSÒ'76R×’Ó"Ö"Ó2#à¢·F6·2æÖ‡F6²Óâ€¢ÆF—b¶W“×·F6²æ–GÒ6Æ74æÖSÒ&÷2×æVÂfÆW‚—FV×2Ö6VçFW"§W7F–g’Ö&WGvVVâÓ2#à¢ÆÆ&VÂ6Æ74æÖSÒ&fÆW‚—FV×2Ö6VçFW"76R×‚Ó27W'6÷"×ö–çFW"fÆW‚Ó#à¢Æ–çWB ¢G—SÒ&6†V6¶&÷‚" ¢6†V6¶VC×·F6²æ6ö×ÆWFVGÒ ¢öä6†ævS×²‚’Óâ†æFÆUFövvÆUF6²‡F6²æ–B—Ğ¢6Æ74æÖSÒ'rÓR‚ÓRFW‡B×¦–æ2Ó“&÷VæFVB&÷&FW"×¦–æ2Ó#fö7W3§&–ær×¦–æ2Ó“ó7W'6÷"×ö–çFW" ¢óà¢Ç7â6Æ74æÖS×¶FW‡B×6ÒföçBÖÖVF—VÒG·F6²æ6ö×ÆWFVBòwFW‡B×¦–æ2ÓCÆ–æR×F‡&÷Vv‚r¢wFW‡B×¦–æ2ÓswÖÓà¢·F6²çFW‡GĞ¢Â÷7ãà¢ÂöÆ&VÃà¢Æ'WGFöâöä6Æ–6³×²‚’Óâ†æFÆTFVÆWFUF6²‡F6²æ–B—Ò6Æ74æÖSÒ'FW‡B×¦–æ2ÓC†÷fW#§FW‡B×&VBÓSG&ç6—F–öâÖ6öÆ÷'2Ó"F—FÆSÒ%F²fW'v–¦FW&Vâ#à¢ÅG&6ƒ"6Æ74æÖSÒ'rÓB‚ÓB"óà¢Âö'WGFöãà¢ÂöF—cà¢’—Ğ¢ÂöF—cà¢—Ğ ¢Æf÷&Òöå7V&Ö—C×¶†æFÆTFEF6·Ò6Æ74æÖSÒ&fÆW‚—FV×2Ö6VçFW"76R×‚Ó"#à¢Æ–çWB ¢G—SÒ'FW‡B" ¢fÇVS×¶æWuF6µFW‡GÒ ¢öä6†ævS×¶RÓâ6WDæWuF6µFW‡B†RçF&vWBçfÇVR—Ğ¢Æ6V†öÆFW#Ò$æ–WWvRF²FöWföVvVââââ ¢6Æ74æÖSÒ&÷2Ö–çWBfÆW‚ÓÓ2FW‡B×6Ò ¢óà¢Æ'WGFöâG—SÒ'7V&Ö—B"F—6&ÆVC×²æWuF6µFW‡BçG&–Ò‚’ÇÂ—5WFF–æwÒ6Æ74æÖSÒ&÷2Ö'Fâ×&–Ö'’Ö–â×rÓÓ2#à¢ÅÇW26Æ74æÖSÒ'rÓR‚ÓR"óà¢Âö'WGFöãà¢Âöf÷&Óà¢ÂöF—cà ¢ÆF—b6Æ74æÖSÒ'76R×’Ó"ãRBÓ"&÷&FW"×B&÷&FW"×¦–æ2Ó##à¢ÆÆ&VÂ6Æ74æÖSÒ'FW‡B×6ÒföçBÖ&öÆBFW‡B×¦–æ2ÓƒfÆW‚—FV×2Ö6VçFW"76R×‚Ó"#à¢Äf–ÆUFW‡B6Æ74æÖSÒ'rÓB‚ÓBFW‡B×¦–æ2ÓC"óà¢Ç7ãä÷fW&–vRæ÷F—F–W3Â÷7ãà¢ÂöÆ&VÃà¢ÇFW‡F&V¢fÇVS×¶æ÷FW7Ğ¢öä6†ævS×²†R’Óâ6WDæ÷FW2†RçF&vWBçfÇVR—Ğ¢6Æ74æÖSÒ&÷2Ö–çWBrÖgVÆÂÓB&W6—¦RÖæöæR ¢&÷w3×³7Ğ¢Æ6V†öÆFW#Ò$FWF–Ç2÷fW"ÆWfW&–ærÂ÷ÖW&¶–ævVâ¶ÆçBâââ ¢óà¢ÂöF—cà¢ ¢ÆF—b6Æ74æÖSÒ'BÓ"#à¢Ç7â6Æ74æÖSÒ'FW‡B×‡2föçBÖ&öÆBFW‡B×¦–æ2ÓC&Æö6²Ö"Ó"WW&66RG&6¶–ær×v–FW"#äÆö6F–RfW&–f–6F–RfW'G&V³Â÷7ãà¢ÄÆ—fTÆö6F–öäÖóà¢ÂöF—cà ¢Æ'WGFöà¢öä6Æ–6³×¶†æFÆT6ö×ÆWFWĞ¢F—6&ÆVC×¶—5WFF–æwĞ¢6Æ74æÖSÒ&÷2Ö'Fâ×&–Ö'’rÖgVÆÂ76R×‚Ó"’ÓB×BÓB ¢à¢¶—5WFF–æròÄÆöFW#"6Æ74æÖSÒ'rÓR‚ÓRæ–ÖFR×7–â"óâ¢Ä6†V6´6—&6ÆR6Æ74æÖSÒ'rÓR‚ÓR"óçĞ¢Ç7ãä÷G&6‡Bg&öæFVâbfW'G&V¶¶VãÂ÷7ãà¢Âö'WGFöãà¢ÂöF—cà¢—Ğ ¢¶76–væÖVçBç7FGW2ÓÓÒv6ö×ÆWFVBrbb€¢ÆF—b6Æ74æÖSÒ'BÓB&÷&FW"×B&÷&FW"Öw&VVâÓóS76R×’Ó2FW‡B×6Ò#à¢ÆF—b6Æ74æÖSÒ&w&–Bw&–BÖ6öÇ2Ó"vÓB#à¢ÆF—b6Æ74æÖSÒ&÷2×æVÂÓ2#à¢Ç7â6Æ74æÖSÒ'FW‡B×¦–æ2ÓS&Æö6²FW‡B×‡2föçBÖÖVF—VÒÖ"ÓWW&66RG&6¶–ær×v–FW"#äæ¶ö×7CÂ÷7ãà¢Ç7â6Æ74æÖSÒ&föçBÖ&öÆBFW‡B×¦–æ2Ó“#ç¶f÷&ÖEF–ÖR†76–væÖVçBæ'&—fÅF–ÖR—ÓÂ÷7ãà¢ÂöF—cà¢ÆF—b6Æ74æÖSÒ&÷2×æVÂÓ2#à¢Ç7â6Æ74æÖSÒ'FW‡B×¦–æ2ÓS&Æö6²FW‡B×‡2föçBÖÖVF—VÒÖ"ÓWW&66RG&6¶–ær×v–FW"#åfW'G&V³Â÷7ãà¢Ç7â6Æ74æÖSÒ&föçBÖ&öÆBFW‡B×¦–æ2Ó“#ç¶f÷&ÖEF–ÖR†76–væÖVçBæFW'GW&UF–ÖR—ÓÂ÷7ãà¢ÂöF—cà¢ÂöF—cà¢ ¢¶76–væÖVçBçF6·2bb76–væÖVçBçF6·2æÆVæwF‚âbb€¢ÆF—b6Æ74æÖSÒ&÷2×æVÂ×BÓBÓB#à¢Ç7â6Æ74æÖSÒ'FW‡B×‡2föçBÖ&öÆBFW‡B×¦–æ2ÓC&Æö6²Ö"Ó2WW&66RG&6¶–ær×v–FW"#åV—FvWföW&FRF¶VãÂ÷7ãà¢ÇVÂ6Æ74æÖSÒ'76R×’Ó"#à¢¶76–væÖVçBçF6·2æÖ‡BÓâ€¢ÆÆ’¶W“×·Bæ–GÒ6Æ74æÖS×¶fÆW‚—FV×2Ö6VçFW"76R×‚Ó"FW‡B×6ÒG·Bæ6ö×ÆWFVBòwFW‡B×¦–æ2Ósr¢wFW‡B×¦–æ2ÓCwÖÓà¢·Bæ6ö×ÆWFVBòÄ6†V6µ7V&R6Æ74æÖSÒ'rÓB‚ÓBFW‡BÖw&VVâÓS6‡&–æ²Ó"óâ¢Å7V&R6Æ74æÖSÒ'rÓB‚ÓB6‡&–æ²Ó"óçĞ¢Ç7â6Æ74æÖS×·Bæ6ö×ÆWFVBòvÆ–æR×F‡&÷Vv‚÷6—G’Ósr¢rwÓç·BçFW‡GÓÂ÷7ãà¢ÂöÆ“à¢’—Ğ¢Â÷VÃà¢ÂöF—cà¢—Ğ ¢¶76–væÖVçBçv÷&´æ÷FW2bb€¢ÆF—b6Æ74æÖSÒ&÷2×æVÂ×BÓ2ÓBFW‡B×¦–æ2ÓsÆVF–ær×&VÆ†VB#à¢Ç7â6Æ74æÖSÒ'FW‡B×‡2föçBÖ&öÆBFW‡B×¦–æ2ÓC&Æö6²Ö"Ó"WW&66RG&6¶–ær×v–FW"#äæ÷F—F–W3Â÷7ãà¢¶76–væÖVçBçv÷&´æ÷FW7Ğ¢ÂöF—cà¢—Ğ¢ÂöF—cà¢—Ğ¢ÂöF—cà¢ÂöF—cà¢“°§Ğ

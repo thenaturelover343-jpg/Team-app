@@ -63,41 +63,41 @@ export default function AdminView() {
 
   return (
     <div className="admin-shell max-w-6xl mx-auto w-full space-y-7 pb-12">
-      <div className="admin-nav bg-white border border-zinc-200/60 p-1.5">
-        <button onClick={() => setActiveTab('control')} className={`flex-1 py-3 px-4 rounded-[12px] font-bold text-sm flex items-center justify-center space-x-2 transition-all relative ${activeTab === 'control' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600 hover:bg-zinc-100/50'}`}><ShieldCheck className="w-4 h-4" /><span>Controle</span>{notifications.some(item => !item.readAt) && <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full" />}</button>
+      <div className="admin-nav ops-nav p-1.5">
+        <button onClick={() => setActiveTab('control')} className={`ops-nav-btn relative ${activeTab === 'control' ? 'ops-nav-btn-active' : ''}`}><ShieldCheck className="w-4 h-4" /><span>Controle</span>{notifications.some(item => !item.readAt) && <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full" />}</button>
         <button
           onClick={() => setActiveTab('week')}
-          className={`flex-1 py-3 px-4 rounded-[12px] font-bold text-sm flex items-center justify-center space-x-2 transition-all ${activeTab === 'week' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600 hover:bg-zinc-100/50'}`}
+          className={`ops-nav-btn ${activeTab === 'week' ? 'ops-nav-btn-active' : ''}`}
         >
           <CalendarDays className="w-4 h-4" />
           <span>Weekplanner</span>
         </button>
-        <button onClick={() => setActiveTab('quality')} className={`flex-1 py-3 px-4 rounded-[12px] font-bold text-sm flex items-center justify-center space-x-2 transition-all ${activeTab === 'quality' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600 hover:bg-zinc-100/50'}`}><Settings className="w-4 h-4"/><span>{fr ? 'Qualité' : 'Kwaliteit'}</span></button>
+        <button onClick={() => setActiveTab('quality')} className={`ops-nav-btn ${activeTab === 'quality' ? 'ops-nav-btn-active' : ''}`}><Settings className="w-4 h-4"/><span>{fr ? 'Qualité' : 'Kwaliteit'}</span></button>
         <button
           onClick={() => setActiveTab('planning')}
-          className={`flex-1 py-3 px-4 rounded-[12px] font-bold text-sm flex items-center justify-center space-x-2 transition-all ${activeTab === 'planning' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600 hover:bg-zinc-100/50'}`}
+          className={`ops-nav-btn ${activeTab === 'planning' ? 'ops-nav-btn-active' : ''}`}
         >
           <Calendar className="w-4 h-4" />
           <span>Opdrachten</span>
         </button>
         <button
           onClick={() => setActiveTab('timesheets')}
-          className={`flex-1 py-3 px-4 rounded-[12px] font-bold text-sm flex items-center justify-center space-x-2 transition-all ${activeTab === 'timesheets' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600 hover:bg-zinc-100/50'}`}
+          className={`ops-nav-btn ${activeTab === 'timesheets' ? 'ops-nav-btn-active' : ''}`}
         >
           <Clock className="w-4 h-4" />
           <span>Urenregistratie (GPS)</span>
         </button>
         <button
           onClick={() => setActiveTab('customers')}
-          className={`flex-1 py-3 px-4 rounded-[12px] font-bold text-sm flex items-center justify-center space-x-2 transition-all ${activeTab === 'customers' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600 hover:bg-zinc-100/50'}`}
+          className={`ops-nav-btn ${activeTab === 'customers' ? 'ops-nav-btn-active' : ''}`}
         >
           <Users className="w-4 h-4" />
           <span>Klantenbeheer</span>
         </button>
-        <button onClick={() => setActiveTab('reports')} className={`flex-1 py-3 px-4 rounded-[12px] font-bold text-sm flex items-center justify-center space-x-2 transition-all ${activeTab === 'reports' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600 hover:bg-zinc-100/50'}`}><AlertTriangle className="w-4 h-4" /><span>Meldingen</span></button>
+        <button onClick={() => setActiveTab('reports')} className={`ops-nav-btn ${activeTab === 'reports' ? 'ops-nav-btn-active' : ''}`}><AlertTriangle className="w-4 h-4" /><span>Meldingen</span></button>
         <button
           onClick={() => setActiveTab('team')}
-          className={`flex-1 py-3 px-4 rounded-[12px] font-bold text-sm flex items-center justify-center space-x-2 transition-all ${activeTab === 'team' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600 hover:bg-zinc-100/50'}`}
+          className={`ops-nav-btn ${activeTab === 'team' ? 'ops-nav-btn-active' : ''}`}
         >
           <UserIcon className="w-4 h-4" />
           <span>Team</span>
@@ -125,8 +125,8 @@ function AdminReportsTab({ users, incidents, corrections, onChanged }: { users: 
   const userName = (id: string) => users.find(user => user.id === id)?.name || 'Onbekende medewerker';
   return <div className="space-y-6">
     <div><h2 className="text-2xl font-bold text-zinc-900">Incidenten en correcties</h2><p className="text-sm text-zinc-500 mt-1">Behandel meldingen van medewerkers.</p></div>
-    <section className="space-y-3"><h3 className="font-bold text-lg">Openstaande tijdcorrecties</h3>{corrections.filter(item => item.status === 'pending').length === 0 && <div className="bg-white border border-zinc-200 rounded-xl p-5 text-zinc-500">Geen openstaande verzoeken.</div>}{corrections.filter(item => item.status === 'pending').map(item => <article key={item.id} className="bg-white border border-zinc-200 rounded-2xl p-5 space-y-3"><div className="flex justify-between gap-3"><div><div className="font-bold">{userName(item.userId)}</div><div className="text-sm text-zinc-500">{formatDate(item.createdAt)}</div></div><span className="text-xs font-bold bg-amber-100 text-amber-800 px-3 py-1.5 rounded-full h-fit">In behandeling</span></div><p className="text-sm text-zinc-700">{item.reason}</p><div className="text-sm bg-zinc-50 rounded-xl p-3">{item.requestedClockIn && <div>Nieuwe start: <strong>{new Date(item.requestedClockIn).toLocaleString('nl-BE')}</strong></div>}{item.requestedClockOut && <div>Nieuwe einde: <strong>{new Date(item.requestedClockOut).toLocaleString('nl-BE')}</strong></div>}</div><div className="grid grid-cols-2 gap-3"><button disabled={busyId === item.id} onClick={() => review(item.id, 'rejected')} className="border border-red-200 text-red-700 rounded-xl py-3 font-bold">Afwijzen</button><button disabled={busyId === item.id} onClick={() => review(item.id, 'approved')} className="bg-zinc-900 text-white rounded-xl py-3 font-bold">Goedkeuren</button></div></article>)}</section>
-    <section className="space-y-3"><h3 className="font-bold text-lg">Incidentmeldingen</h3>{incidents.length === 0 && <div className="bg-white border border-zinc-200 rounded-xl p-5 text-zinc-500">Nog geen incidenten gemeld.</div>}{incidents.map(item => <article key={item.id} className={`bg-white border rounded-2xl p-5 ${item.severity === 'high' ? 'border-red-300' : 'border-zinc-200'}`}><div className="flex justify-between gap-3 mb-2"><div className="font-bold">{item.category} · {userName(item.userId)}</div><span className="text-xs font-bold uppercase">{item.severity}</span></div><p className="text-sm text-zinc-700">{item.description}</p><div className="text-xs text-zinc-400 mt-3">{new Date(item.occurredAt).toLocaleString('nl-BE')}{item.latitude !== undefined ? ` · GPS ${item.latitude.toFixed(5)}, ${item.longitude?.toFixed(5)}` : ''}</div></article>)}</section>
+    <section className="space-y-3"><h3 className="font-bold text-lg">Openstaande tijdcorrecties</h3>{corrections.filter(item => item.status === 'pending').length === 0 && <div className="ops-panel p-5 text-zinc-500">Geen openstaande verzoeken.</div>}{corrections.filter(item => item.status === 'pending').map(item => <article key={item.id} className="ops-card p-5 space-y-3"><div className="flex justify-between gap-3"><div><div className="font-bold">{userName(item.userId)}</div><div className="text-sm text-zinc-500">{formatDate(item.createdAt)}</div></div><span className="ops-chip-warning h-fit">In behandeling</span></div><p className="text-sm text-zinc-700">{item.reason}</p><div className="ops-panel p-3 text-sm">{item.requestedClockIn && <div>Nieuwe start: <strong>{new Date(item.requestedClockIn).toLocaleString('nl-BE')}</strong></div>}{item.requestedClockOut && <div>Nieuwe einde: <strong>{new Date(item.requestedClockOut).toLocaleString('nl-BE')}</strong></div>}</div><div className="grid grid-cols-2 gap-3"><button disabled={busyId === item.id} onClick={() => review(item.id, 'rejected')} className="ops-btn-danger">Afwijzen</button><button disabled={busyId === item.id} onClick={() => review(item.id, 'approved')} className="ops-btn-primary">Goedkeuren</button></div></article>)}</section>
+    <section className="space-y-3"><h3 className="font-bold text-lg">Incidentmeldingen</h3>{incidents.length === 0 && <div className="ops-panel p-5 text-zinc-500">Nog geen incidenten gemeld.</div>}{incidents.map(item => <article key={item.id} className={`ops-card p-5 ${item.severity === 'high' ? 'border-red-400/60' : ''}`}><div className="flex justify-between gap-3 mb-2"><div className="font-bold">{item.category} · {userName(item.userId)}</div><span className={item.severity === 'high' ? 'ops-chip-danger' : 'ops-chip-info'}>{item.severity}</span></div><p className="text-sm text-zinc-700">{item.description}</p><div className="text-xs text-zinc-400 mt-3">{new Date(item.occurredAt).toLocaleString('nl-BE')}{item.latitude !== undefined ? ` · GPS ${item.latitude.toFixed(5)}, ${item.longitude?.toFixed(5)}` : ''}</div></article>)}</section>
   </div>;
 }
 
@@ -170,7 +170,7 @@ function CustomersTab({ customers }: { customers: Customer[] }) {
         <h2 className="text-2xl font-bold text-zinc-800 tracking-tight">Klanten & Locaties</h2>
         <button 
           onClick={() => setIsAdding(!isAdding)}
-          className="flex items-center space-x-2 bg-zinc-900 text-white px-5 py-2.5 rounded-[12px] text-sm font-bold hover:bg-zinc-900 transition-colors shadow-[0_4px_14px_0_rgb(0,0,0,0.03)] shadow-[0_4px_14px_0_rgb(0,0,0,0.1)]"
+          className="ops-btn-primary space-x-2 px-5 text-sm"
         >
           <Plus className="w-4 h-4" />
           <span>Nieuwe Klant</span>
@@ -178,7 +178,7 @@ function CustomersTab({ customers }: { customers: Customer[] }) {
       </div>
 
       {isAdding && (
-        <form onSubmit={handleAdd} className="bg-white p-8 rounded-[24px] border border-zinc-200 shadow-lg shadow-blue-900/5 space-y-6 relative overflow-hidden">
+        <form onSubmit={handleAdd} className="ops-card p-8 space-y-6 relative overflow-hidden">
           <div className="absolute top-0 left-0 w-1.5 h-full bg-zinc-900"></div>
           <h3 className="font-bold text-lg text-zinc-800">Nieuwe Klant Toevoegen</h3>
           
@@ -187,43 +187,43 @@ function CustomersTab({ customers }: { customers: Customer[] }) {
               <label className="block text-sm font-bold text-zinc-700 mb-1.5">Naam (Klant of Evenement)</label>
               <input 
                 type="text" value={name} onChange={e => setName(e.target.value)} required
-                className="w-full border border-zinc-200 rounded-[16px] p-3.5 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none bg-[#FAFAFA] transition-all font-medium"
+                className="ops-input w-full p-3.5 font-medium"
               />
             </div>
             <div>
               <label className="block text-sm font-bold text-zinc-700 mb-1.5">Adres / Locatie</label>
               <input 
                 type="text" value={address} onChange={e => setAddress(e.target.value)} required
-                className="w-full border border-zinc-200 rounded-[16px] p-3.5 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none bg-[#FAFAFA] transition-all font-medium"
+                className="ops-input w-full p-3.5 font-medium"
               />
             </div>
             <div>
               <label className="block text-sm font-bold text-zinc-700 mb-1.5">Telefoonnummer (Optioneel)</label>
               <input 
                 type="tel" value={phone} onChange={e => setPhone(e.target.value)}
-                className="w-full border border-zinc-200 rounded-[16px] p-3.5 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none bg-[#FAFAFA] transition-all font-medium"
+                className="ops-input w-full p-3.5 font-medium"
               />
             </div>
             <div>
               <label className="block text-sm font-bold text-zinc-700 mb-1.5">E-mail (Optioneel)</label>
               <input 
                 type="email" value={email} onChange={e => setEmail(e.target.value)}
-                className="w-full border border-zinc-200 rounded-[16px] p-3.5 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none bg-[#FAFAFA] transition-all font-medium"
+                className="ops-input w-full p-3.5 font-medium"
               />
             </div>
             <div>
               <label className="block text-sm font-bold text-zinc-700 mb-1.5">Breedtegraad (GPS)</label>
-              <input type="number" step="any" min="-90" max="90" value={latitude} onChange={e => setLatitude(e.target.value)} placeholder="50.8503" className="w-full border border-zinc-200 rounded-[16px] p-3.5 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none bg-[#FAFAFA] transition-all font-medium" />
+              <input type="number" step="any" min="-90" max="90" value={latitude} onChange={e => setLatitude(e.target.value)} placeholder="50.8503" className="ops-input w-full p-3.5 font-medium" />
             </div>
             <div>
               <label className="block text-sm font-bold text-zinc-700 mb-1.5">Lengtegraad (GPS)</label>
-              <input type="number" step="any" min="-180" max="180" value={longitude} onChange={e => setLongitude(e.target.value)} placeholder="4.3517" className="w-full border border-zinc-200 rounded-[16px] p-3.5 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none bg-[#FAFAFA] transition-all font-medium" />
+              <input type="number" step="any" min="-180" max="180" value={longitude} onChange={e => setLongitude(e.target.value)} placeholder="4.3517" className="ops-input w-full p-3.5 font-medium" />
             </div>
           </div>
           
           <div className="pt-2 flex justify-end space-x-3">
-            <button type="button" onClick={() => setIsAdding(false)} className="px-5 py-3 text-zinc-600 font-bold hover:bg-zinc-100/50 rounded-[12px] transition-colors">Annuleren</button>
-            <button type="submit" disabled={isSubmitting} className="px-8 py-3 bg-zinc-900 text-white font-bold rounded-[12px] hover:bg-zinc-800 transition-colors disabled:opacity-50 flex items-center space-x-2 shadow-md">
+            <button type="button" onClick={() => setIsAdding(false)} className="ops-btn-secondary px-5">Annuleren</button>
+            <button type="submit" disabled={isSubmitting} className="ops-btn-primary px-8 space-x-2">
               {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
               <span>Opslaan</span>
             </button>
@@ -231,7 +231,7 @@ function CustomersTab({ customers }: { customers: Customer[] }) {
         </form>
       )}
 
-      <div className="bg-white rounded-[24px] shadow-[0_4px_14px_0_rgb(0,0,0,0.03)] border border-zinc-200/60 divide-y divide-slate-100 overflow-hidden">
+      <div className="ops-card divide-y divide-white/10 overflow-hidden">
         {sortedCustomers.length === 0 ? (
           <div className="p-12 text-center text-zinc-500 flex flex-col items-center">
             <Users className="w-12 h-12 text-zinc-500 mb-4" />
@@ -301,7 +301,7 @@ function PlanningTab({ users, assignments, customers }: { users: User[], assignm
         <h2 className="text-2xl font-bold text-zinc-800 tracking-tight">Alle Opdrachten</h2>
         <button 
           onClick={() => setIsAdding(!isAdding)}
-          className="flex items-center space-x-2 bg-zinc-900 text-white px-5 py-2.5 rounded-[12px] text-sm font-bold hover:bg-zinc-900 transition-colors shadow-[0_4px_14px_0_rgb(0,0,0,0.03)] shadow-[0_4px_14px_0_rgb(0,0,0,0.1)]"
+          className="ops-btn-primary space-x-2 px-5 text-sm"
         >
           <Plus className="w-4 h-4" />
           <span>Nieuwe Opdracht</span>
@@ -309,16 +309,16 @@ function PlanningTab({ users, assignments, customers }: { users: User[], assignm
       </div>
 
       {isAdding && (
-        <form onSubmit={handleAdd} className="bg-white p-8 rounded-[24px] border border-zinc-200 shadow-lg shadow-blue-900/5 space-y-6 relative overflow-hidden">
+        <form onSubmit={handleAdd} className="ops-card p-8 space-y-6 relative overflow-hidden">
           <div className="absolute top-0 left-0 w-1.5 h-full bg-zinc-900"></div>
           <h3 className="font-bold text-lg text-zinc-800">Opdracht Inplannen</h3>
           
           {customers.length === 0 ? (
-             <div className="p-4 bg-amber-50 text-amber-800 rounded-[12px] border border-amber-200 text-sm font-medium">
+             <div className="ops-chip-warning w-full justify-start p-4 text-sm">
                Voeg eerst een klant toe in het tabblad “Klantenbeheer” voordat je een opdracht kunt inplannen.
              </div>
           ) : employees.length === 0 ? (
-             <div className="p-4 bg-amber-50 text-amber-800 rounded-[12px] border border-amber-200 text-sm font-medium">
+             <div className="ops-chip-warning w-full justify-start p-4 text-sm">
                Er zijn nog geen medewerkers geregistreerd. Medewerkers moeten eerst een account aanmaken.
              </div>
           ) : (
@@ -328,7 +328,7 @@ function PlanningTab({ users, assignments, customers }: { users: User[], assignm
                   <label className="block text-sm font-bold text-zinc-700 mb-1.5">Medewerker</label>
                   <select 
                     value={userId} onChange={e => setUserId(e.target.value)} required
-                    className="w-full border border-zinc-200 rounded-[16px] p-3.5 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none bg-[#FAFAFA] transition-all font-medium"
+                    className="ops-input w-full p-3.5 font-medium"
                   >
                     <option value="">Selecteer medewerker...</option>
                     {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
@@ -338,21 +338,21 @@ function PlanningTab({ users, assignments, customers }: { users: User[], assignm
                   <label className="block text-sm font-bold text-zinc-700 mb-1.5">Datum</label>
                   <input 
                     type="date" value={date} onChange={e => setDate(e.target.value)} required
-                    className="w-full border border-zinc-200 rounded-[16px] p-3.5 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none bg-[#FAFAFA] transition-all font-medium"
+                    className="ops-input w-full p-3.5 font-medium"
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-bold text-zinc-700 mb-1.5">Starttijd</label>
                   <input 
                     type="time" value={startTime} onChange={e => setStartTime(e.target.value)} required
-                    className="w-full border border-zinc-200 rounded-[16px] p-3.5 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none bg-[#FAFAFA] transition-all font-medium"
+                    className="ops-input w-full p-3.5 font-medium"
                   />
                 </div>
                 <div className="md:col-span-3">
                   <label className="block text-sm font-bold text-zinc-700 mb-1.5">Klant / Locatie</label>
                   <select 
                     value={customerId} onChange={e => setCustomerId(e.target.value)} required
-                    className="w-full border border-zinc-200 rounded-[16px] p-3.5 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none bg-[#FAFAFA] transition-all font-medium"
+                    className="ops-input w-full p-3.5 font-medium"
                   >
                     <option value="">Selecteer klant...</option>
                     {customers.map(c => <option key={c.id} value={c.id}>{c.name} - {c.address}</option>)}
@@ -363,14 +363,14 @@ function PlanningTab({ users, assignments, customers }: { users: User[], assignm
                   <textarea 
                     value={description} onChange={e => setDescription(e.target.value)}
                     placeholder="Leveren koelaanhangwagen en aansluiten..."
-                    className="w-full border border-zinc-200 rounded-[16px] p-3.5 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none bg-[#FAFAFA] transition-all font-medium resize-none h-28"
+                    className="ops-input w-full p-3.5 font-medium resize-none h-28"
                   />
                 </div>
               </div>
               
               <div className="pt-2 flex justify-end space-x-3">
-                <button type="button" onClick={() => setIsAdding(false)} className="px-5 py-3 text-zinc-600 font-bold hover:bg-zinc-100/50 rounded-[12px] transition-colors">Annuleren</button>
-                <button type="submit" disabled={isSubmitting} className="px-8 py-3 bg-zinc-900 text-white font-bold rounded-[12px] hover:bg-zinc-800 transition-colors disabled:opacity-50 flex items-center space-x-2 shadow-md">
+                <button type="button" onClick={() => setIsAdding(false)} className="ops-btn-secondary px-5">Annuleren</button>
+                <button type="submit" disabled={isSubmitting} className="ops-btn-primary px-8 space-x-2">
                   {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
                   <span>Inplannen</span>
                 </button>
@@ -380,7 +380,7 @@ function PlanningTab({ users, assignments, customers }: { users: User[], assignm
         </form>
       )}
 
-      <div className="bg-white rounded-[24px] shadow-[0_4px_14px_0_rgb(0,0,0,0.03)] border border-zinc-200/60 divide-y divide-slate-100 overflow-hidden">
+      <div className="ops-card divide-y divide-white/10 overflow-hidden">
         {sortedAssignments.length === 0 ? (
           <div className="p-12 text-center text-zinc-500 flex flex-col items-center">
             <ListTodo className="w-12 h-12 text-zinc-500 mb-4" />

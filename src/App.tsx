@@ -84,7 +84,7 @@ function AppContent() {
   if (!user) {
     return (
       <div className="login-shell min-h-screen flex items-center justify-center p-4 relative"><div className="login-language absolute top-4 right-4"><LanguageSwitch /></div>
-        <div className="auth-card max-w-md w-full p-7 sm:p-9 space-y-8">
+        <div className="auth-card ops-card max-w-md w-full p-7 sm:p-9 space-y-8">
           <div className="text-center space-y-3">
             <div className="brand-mark brand-mark-large flex items-center justify-center mx-auto mb-6">
               <Truck className="w-8 h-8" />
@@ -108,21 +108,21 @@ function AppContent() {
               <label className="block text-sm font-bold text-zinc-700 mb-1.5">{fr ? 'Adresse e-mail' : 'E-mailadres'}</label>
               <input 
                 type="email" value={email} onChange={e => setEmail(e.target.value)} required
-                className="w-full border border-zinc-200 rounded-[16px] p-3.5 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none bg-[#FAFAFA] transition-all font-medium"
+                className="ops-input p-3.5 font-medium"
               />
             </div>
             <div>
               <label className="block text-sm font-bold text-zinc-700 mb-1.5">{fr ? 'Mot de passe' : 'Wachtwoord'}</label>
               <input 
                 type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={6}
-                className="w-full border border-zinc-200 rounded-[16px] p-3.5 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none bg-[#FAFAFA] transition-all font-medium"
+                className="ops-input p-3.5 font-medium"
               />
             </div>
             
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full bg-zinc-900 hover:bg-zinc-900 text-white font-bold py-4 rounded-[16px] flex items-center justify-center space-x-2 transition-all shadow-lg shadow-[0_4px_14px_0_rgb(0,0,0,0.1)] disabled:opacity-50 mt-2"
+              className="ops-btn-primary w-full py-4 disabled:opacity-50 mt-2"
             >
               {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
               <span>{fr ? 'Se connecter' : 'Inloggen'}</span>
@@ -142,7 +142,7 @@ function AppContent() {
             type="button"
             onClick={handleGoogleAuth}
             disabled={isSubmitting}
-            className="w-full border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-900 font-bold py-4 rounded-[16px] transition-all disabled:opacity-50"
+            className="ops-btn-secondary w-full py-4 disabled:opacity-50"
           >
             {fr ? 'Continuer avec Google' : 'Verder met Google'}
           </button>
@@ -173,7 +173,7 @@ function AppContent() {
               <LanguageSwitch />
               <PWAInstallButton />
               <div className="user-pill flex items-center gap-3 pl-2 pr-3 py-1.5">
-                <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center border border-zinc-200">
+                <div className="ops-panel w-8 h-8 rounded-full flex items-center justify-center">
                   <UserCircle className="w-5 h-5 text-zinc-500" />
                 </div>
                 <div className="user-pill-copy flex flex-col pr-3 border-r border-zinc-200">
