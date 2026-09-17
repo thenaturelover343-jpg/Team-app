@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import EmployeeView from './EmployeeView';
 import AdminView from './AdminView';
-import { UserCircle, Truck, Loader2, LogOut } from 'lucide-react';
+import { UserCircle, Loader2, LogOut } from 'lucide-react';
 import { PWAInstallButton } from './components/PWAInstallButton';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { loginWithEmail, loginWithGoogle, logout, resetPassword } from './lib/firebase';
@@ -87,7 +87,7 @@ function AppContent() {
         <div className="auth-card ops-card max-w-md w-full p-7 sm:p-9 space-y-8">
           <div className="text-center space-y-3">
             <div className="brand-mark brand-mark-large flex items-center justify-center mx-auto mb-6">
-              <Truck className="w-8 h-8" />
+              <img src="/brand-logo.png" alt="Barlicious Operations" className="w-full h-full object-contain rounded-[inherit]" />
             </div>
             <div className="eyebrow">FIELD OPERATIONS</div>
             <h1 className="text-2xl font-bold text-zinc-900 tracking-tight">Barlicious & Koelverhuur</h1>
@@ -161,7 +161,7 @@ function AppContent() {
           <div className="h-[72px] flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <div className="brand-mark flex items-center justify-center font-bold">
-                <Truck className="w-5 h-5" />
+                <img src="/brand-logo.png" alt="Barlicious Operations" className="w-full h-full object-contain rounded-[inherit]" />
               </div>
               <div>
                 <span className="font-bold text-xl hidden sm:block tracking-tight text-zinc-900">Barlicious <span className="brand-subtitle">Operations</span></span>
