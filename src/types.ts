@@ -9,7 +9,16 @@ export interface User {
   createdAt: number;
   phone?: string;
   availability?: string;
+  availabilitySchedule?: WeeklyAvailability;
 }
+
+export interface AvailabilityDay {
+  enabled: boolean;
+  start: string;
+  end: string;
+}
+
+export type WeeklyAvailability = Record<string, AvailabilityDay>;
 
 export interface GeoLocation {
   lat: number;
@@ -51,6 +60,31 @@ export interface Customer {
   phone: string;
   email: string;
   createdAt: number;
+  latitude?: number;
+  longitude?: number;
+}
+
+export type ShiftConfirmation = 'pending' | 'confirmed' | 'declined';
+
+export interface PlannedShift {
+  id: string;
+  title: string;
+  customerId?: string;
+  customerName?: string;
+  customerAddress?: string;
+  customerLatitude?: number;
+  customerLongitude?: number;
+  date: string;
+  startTime: string;
+  endTime: string;
+  breakMinutes: number;
+  notes?: string;
+  status: 'draft' | 'published';
+  recurrenceGroupId?: string;
+  publishedAt?: number;
+  createdAt: number;
+  memberIds: string[];
+  confirmations: Record<string, ShiftConfirmation>;
 }
 
 export interface AssignmentTask {

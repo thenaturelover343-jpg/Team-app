@@ -1,9 +1,9 @@
-import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(), email: text("email").notNull(), name: text("name").notNull(),
   phone: text("phone"), role: text("role").notNull(), active: integer("active").notNull().default(1),
-  availability: text("availability"), createdAt: integer("created_at").notNull(),
+  availability: text("availability"), availabilityJson: text("availability_json").notNull().default("{}"), createdAt: integer("created_at").notNull(),
 }, table => [uniqueIndex("idx_users_email").on(table.email)]);
 
 export const invites = sqliteTable("invites", {
@@ -14,8 +14,29 @@ export const invites = sqliteTable("invites", {
 
 export const customers = sqliteTable("customers", {
   id: text("id").primaryKey(), name: text("name").notNull(), address: text("address").notNull(),
-  phone: text("phone"), email: text("email"), createdAt: integer("created_at").notNull(), updatedAt: integer("updated_at").notNull(),
+  phone: text("phone"), email: text("email"), latitude: real("latitude"), longitude: real("longitude"),
+  createdAt: integer("created_at").notNull(), updatedAt: integer("updated_at").notNull(),
 });
+
+export const plannedShifts = sqliteTable("planned_shifts", {
+  id: text("id").primaryKey(), title: text("title").notNull(), customerId: text("customer_id"),
+  date: text("date").notNull(), startTime: text("start_time").notNull(), endTime: text("end_time").notNull(),
+  breakMinutes: integer("break_minutes").notNull().default(0), notes: text("notes"),
+  status: text("status").notNull().default("draft"), recurrenceGroupId: text("recurrence_group_id"),
+  createdBy: text("created_by").notNull(), publishedAt: integer("published_at"),
+  createdAt: integer("created_at").notNull(), updatedAt: integer("updated_at").notNull(),
+}, table => [
+  index("idx_planned_shifts_date_status").on(table.date, table.status),
+  index("idx_planned_shifts_recurrence").on(table.recurrenceGroupId),
+]);
+
+export const plannedShiftMembers = sqliteTable("planned_shift_members", {
+  shiftId: text("shift_id").notNull(), userId: text("user_id").notNull(),
+  confirmationStatus: text("confirmation_status").notNull().default("pending"), confirmedAt: integer("confirmed_at"),
+}, table => [
+  primaryKey({ columns: [table.shiftId, table.userId] }),
+  index("idx_planned_shift_members_user").on(table.userId),
+]);
 
 export const assignments = sqliteTable("assignments", {
   id: text("id").primaryKey(), userId: text("user_id").notNull(), customerId: text("customer_id").notNull(),

@@ -1,5 +1,6 @@
 import { env } from "cloudflare:workers";
 import { cleanText as clean, isAllowedTransition, normalizeEmail as email, validateLocation as location } from "../../../server/policy";
+import { addWeeks, availabilityConflict, isValidDate, isValidTime, overlaps, parseAvailability, validateShiftWindow } from "../../../server/planning";
 
 export const dynamic = "force-dynamic";
 
@@ -128,7 +129,11 @@ function requireAdmin(user: AppUser) {
 }
 
 function mapUser(row: Json) {
-  return { id: row.id, email: row.email, name: row.name, phone: row.phone || "", role: row.role, active: Number(row.active) === 1, availability: row.availability || "", createdAt: Number(row.created_at) };
+  return {
+    id: row.id, email: row.email, name: row.name, phone: row.phone || "", role: row.role,
+    active: Number(row.active) === 1, availability: row.availability || "",
+    availabilitySchedule: parseAvailability(row.availability_json), createdAt: Number(row.created_at),
+  };
 }
 
 function mapShift(row: Json) {
@@ -151,6 +156,42 @@ function mapAssignment(row: Json) {
   };
 }
 
+function mapPlannedShifts(rows: Json[]) {
+  const grouped = new Map<string, Json>();
+  for (const row of rows) {
+    const shiftId = String(row.id);
+    const current = grouped.get(shiftId) || {
+      id: shiftId, title: row.title, customerId: row.customer_id || "", customerName: row.customer_name || "",
+      customerAddress: row.customer_address || "", customerLatitude: row.customer_latitude ?? undefined,
+      customerLongitude: row.customer_longitude ?? undefined, date: row.date, startTime: row.start_time,
+      endTime: row.end_time, breakMinutes: Number(row.break_minutes), notes: row.notes || "", status: row.status,
+      recurrenceGroupId: row.recurrence_group_id || undefined, publishedAt: row.published_at ? Number(row.published_at) : undefined,
+      createdAt: Number(row.created_at), memberIds: [], confirmations: {},
+    };
+    if (row.member_user_id) {
+      (current.memberIds as string[]).push(String(row.member_user_id));
+      (current.confirmations as Record<string, string>)[String(row.member_user_id)] = String(row.confirmation_status || "pending");
+    }
+    grouped.set(shiftId, current);
+  }
+  return [...grouped.values()];
+}
+
+function cleanAvailability(input: unknown) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return {};
+  const result: Record<string, { enabled: boolean; start: string; end: string }> = {};
+  for (let day = 0; day < 7; day += 1) {
+    const item = (input as Record<string, unknown>)[String(day)];
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const enabled = (item as Json).enabled === true;
+    const start = clean((item as Json).start, 5);
+    const end = clean((item as Json).end, 5);
+    if (enabled && (!isValidTime(start) || !isValidTime(end) || start >= end)) throw new Error("Controleer de beschikbaarheidsuren.");
+    result[String(day)] = { enabled, start: isValidTime(start) ? start : "09:00", end: isValidTime(end) ? end : "17:00" };
+  }
+  return result;
+}
+
 async function snapshot(user: AppUser) {
   const db = database();
   const usersQuery = user.role === "admin"
@@ -162,9 +203,20 @@ async function snapshot(user: AppUser) {
   const assignmentsQuery = user.role === "admin"
     ? db.prepare(`SELECT a.*, c.name AS customer_name FROM assignments a LEFT JOIN customers c ON c.id = a.customer_id ORDER BY a.date DESC, a.start_time DESC LIMIT 1000`)
     : db.prepare(`SELECT a.*, c.name AS customer_name FROM assignments a LEFT JOIN customers c ON c.id = a.customer_id WHERE a.user_id = ? ORDER BY a.date DESC, a.start_time DESC LIMIT 500`).bind(user.uid);
-  const [usersResult, shiftsResult, assignmentsResult, customersResult] = await Promise.all([
+  const plannedQuery = user.role === "admin"
+    ? db.prepare(`SELECT ps.*, c.name AS customer_name, c.address AS customer_address, c.latitude AS customer_latitude,
+        c.longitude AS customer_longitude, psm.user_id AS member_user_id, psm.confirmation_status
+        FROM planned_shifts ps LEFT JOIN customers c ON c.id = ps.customer_id
+        LEFT JOIN planned_shift_members psm ON psm.shift_id = ps.id ORDER BY ps.date, ps.start_time LIMIT 3000`)
+    : db.prepare(`SELECT ps.*, c.name AS customer_name, c.address AS customer_address, c.latitude AS customer_latitude,
+        c.longitude AS customer_longitude, psm.user_id AS member_user_id, psm.confirmation_status
+        FROM planned_shifts ps LEFT JOIN customers c ON c.id = ps.customer_id
+        JOIN planned_shift_members psm ON psm.shift_id = ps.id
+        WHERE psm.user_id = ? AND ps.status = 'published' ORDER BY ps.date, ps.start_time LIMIT 1000`).bind(user.uid);
+  const [usersResult, shiftsResult, assignmentsResult, customersResult, plannedResult] = await Promise.all([
     usersQuery.all<Json>(), shiftsQuery.all<Json>(), assignmentsQuery.all<Json>(),
     db.prepare("SELECT * FROM customers ORDER BY name").all<Json>(),
+    plannedQuery.all<Json>(),
   ]);
   return {
     user: mapUser((usersResult.results as Json[]).find(item => item.id === user.uid) || {}),
@@ -172,8 +224,10 @@ async function snapshot(user: AppUser) {
     shifts: (shiftsResult.results as Json[]).map(mapShift),
     assignments: (assignmentsResult.results as Json[]).map(mapAssignment),
     customers: (customersResult.results as Json[]).map(row => ({
-      id: row.id, name: row.name, address: row.address, phone: row.phone || "", email: row.email || "", createdAt: Number(row.created_at),
+      id: row.id, name: row.name, address: row.address, phone: row.phone || "", email: row.email || "",
+      latitude: row.latitude ?? undefined, longitude: row.longitude ?? undefined, createdAt: Number(row.created_at),
     })),
+    plannedShifts: mapPlannedShifts(plannedResult.results as Json[]),
   };
 }
 
@@ -214,11 +268,110 @@ async function act(user: AppUser, action: string, input: Json) {
     const name = clean(input.name, 200);
     const address = clean(input.address, 500);
     if (!name || !address) throw new Error("Naam en adres zijn verplicht.");
-    await db.prepare(`INSERT INTO customers (id, name, address, phone, email, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET name=excluded.name, address=excluded.address, phone=excluded.phone, email=excluded.email, updated_at=excluded.updated_at`)
-      .bind(customerId, name, address, clean(input.phone, 80) || null, email(input.email) || null, now, now).run();
+    const hasLatitude = input.latitude !== "" && input.latitude !== null && input.latitude !== undefined;
+    const hasLongitude = input.longitude !== "" && input.longitude !== null && input.longitude !== undefined;
+    if (hasLatitude !== hasLongitude) throw new Error("Vul zowel breedte- als lengtegraad in.");
+    const latitude = hasLatitude ? Number(input.latitude) : null;
+    const longitude = hasLongitude ? Number(input.longitude) : null;
+    if (latitude !== null && (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude! < -180 || longitude! > 180)) {
+      throw new Error("De coördinaten zijn ongeldig.");
+    }
+    await db.prepare(`INSERT INTO customers (id, name, address, phone, email, latitude, longitude, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET name=excluded.name, address=excluded.address, phone=excluded.phone, email=excluded.email,
+        latitude=excluded.latitude, longitude=excluded.longitude, updated_at=excluded.updated_at`)
+      .bind(customerId, name, address, clean(input.phone, 80) || null, email(input.email) || null, latitude, longitude, now, now).run();
     await audit(db, user.uid, "customer.saved", "customer", customerId);
     return { id: customerId };
+  }
+
+  if (action === "savePlannedShift") {
+    requireAdmin(user);
+    const title = clean(input.title, 200);
+    const customerId = clean(input.customerId, 160) || null;
+    const date = clean(input.date, 10);
+    const window = validateShiftWindow(clean(input.startTime, 5), clean(input.endTime, 5), Number(input.breakMinutes));
+    const memberIds = [...new Set((Array.isArray(input.memberIds) ? input.memberIds : []).map(value => clean(value, 160)).filter(Boolean))];
+    const repeatWeeks = Math.max(1, Math.min(12, Number(input.repeatWeeks) || 1));
+    if (!title || !isValidDate(date) || memberIds.length === 0) throw new Error("Titel, datum en minstens één medewerker zijn verplicht.");
+    const placeholders = memberIds.map(() => "?").join(",");
+    const membersResult = await db.prepare(`SELECT id, name, active, availability_json FROM users WHERE id IN (${placeholders}) AND role IN ('employee','admin')`)
+      .bind(...memberIds).all<Json>();
+    const members = membersResult.results as Json[];
+    if (members.length !== memberIds.length || members.some(member => Number(member.active) !== 1)) throw new Error("Een geselecteerde medewerker is niet actief.");
+    const conflicts: string[] = [];
+    for (let week = 0; week < repeatWeeks; week += 1) {
+      const occurrenceDate = addWeeks(date, week);
+      for (const member of members) {
+        if (availabilityConflict(parseAvailability(member.availability_json), occurrenceDate, window.startTime, window.endTime)) {
+          conflicts.push(`${String(member.name)} is niet beschikbaar op ${occurrenceDate}`);
+        }
+        const existing = await db.prepare(`SELECT ps.start_time, ps.end_time FROM planned_shifts ps
+          JOIN planned_shift_members psm ON psm.shift_id = ps.id
+          WHERE psm.user_id = ? AND ps.date = ? AND ps.status IN ('draft','published')`)
+          .bind(String(member.id), occurrenceDate).all<Json>();
+        if ((existing.results as Json[]).some(shift => overlaps(window.startTime, window.endTime, String(shift.start_time), String(shift.end_time)))) {
+          conflicts.push(`${String(member.name)} heeft al een overlappende dienst op ${occurrenceDate}`);
+        }
+      }
+    }
+    if (conflicts.length) throw new Error(`Planningsconflict: ${[...new Set(conflicts)].slice(0, 4).join("; ")}`);
+    const recurrenceGroupId = repeatWeeks > 1 ? id() : null;
+    const statements: D1PreparedStatement[] = [];
+    const createdIds: string[] = [];
+    for (let week = 0; week < repeatWeeks; week += 1) {
+      const shiftId = id();
+      createdIds.push(shiftId);
+      statements.push(db.prepare(`INSERT INTO planned_shifts
+        (id, title, customer_id, date, start_time, end_time, break_minutes, notes, status, recurrence_group_id, created_by, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?)`)
+        .bind(shiftId, title, customerId, addWeeks(date, week), window.startTime, window.endTime, window.breakMinutes,
+          clean(input.notes, 2000) || null, recurrenceGroupId, user.uid, now, now));
+      for (const memberId of memberIds) {
+        statements.push(db.prepare("INSERT INTO planned_shift_members (shift_id, user_id, confirmation_status) VALUES (?, ?, 'pending')")
+          .bind(shiftId, memberId));
+      }
+    }
+    await db.batch(statements);
+    await audit(db, user.uid, "planning.shift_created", "planned_shift", createdIds[0], { createdIds, repeatWeeks, memberIds });
+    return { ids: createdIds };
+  }
+
+  if (action === "publishPlannedShifts") {
+    requireAdmin(user);
+    const shiftIds = [...new Set((Array.isArray(input.shiftIds) ? input.shiftIds : []).map(value => clean(value, 160)).filter(Boolean))];
+    if (!shiftIds.length || shiftIds.length > 100) throw new Error("Selecteer minstens één dienst om te publiceren.");
+    const placeholders = shiftIds.map(() => "?").join(",");
+    const result = await db.prepare(`UPDATE planned_shifts SET status='published', published_at=?, updated_at=? WHERE id IN (${placeholders}) AND status='draft'`)
+      .bind(now, now, ...shiftIds).run();
+    if (!result.meta.changes) throw new Error("Er zijn geen conceptdiensten om te publiceren.");
+    await audit(db, user.uid, "planning.published", "planned_shift", shiftIds[0], { shiftIds, count: result.meta.changes });
+    return { count: result.meta.changes };
+  }
+
+  if (action === "deletePlannedShift") {
+    requireAdmin(user);
+    const shiftId = clean(input.id, 160);
+    const row = await db.prepare("SELECT status FROM planned_shifts WHERE id=?").bind(shiftId).first<Json>();
+    if (!row) throw new Error("Dienst niet gevonden.");
+    if (row.status !== "draft") throw new Error("Een gepubliceerde dienst kan niet verwijderd worden.");
+    await db.batch([
+      db.prepare("DELETE FROM planned_shift_members WHERE shift_id=?").bind(shiftId),
+      db.prepare("DELETE FROM planned_shifts WHERE id=?").bind(shiftId),
+    ]);
+    await audit(db, user.uid, "planning.shift_deleted", "planned_shift", shiftId);
+    return { ok: true };
+  }
+
+  if (action === "confirmPlannedShift") {
+    const shiftId = clean(input.shiftId, 160);
+    const confirmation = input.status === "declined" ? "declined" : input.status === "confirmed" ? "confirmed" : "";
+    if (!confirmation) throw new Error("Ongeldige bevestiging.");
+    const result = await db.prepare(`UPDATE planned_shift_members SET confirmation_status=?, confirmed_at=?
+      WHERE shift_id=? AND user_id=? AND EXISTS (SELECT 1 FROM planned_shifts WHERE id=? AND status='published')`)
+      .bind(confirmation, now, shiftId, user.uid, shiftId).run();
+    if (!result.meta.changes) throw new Error("Deze dienst kan niet bevestigd worden.");
+    await audit(db, user.uid, `planning.${confirmation}`, "planned_shift", shiftId);
+    return { ok: true };
   }
 
   if (action === "saveAssignment") {
@@ -306,8 +459,9 @@ async function act(user: AppUser, action: string, input: Json) {
   }
 
   if (action === "updateProfile") {
-    await db.prepare("UPDATE users SET name=?, phone=?, availability=? WHERE id=?")
-      .bind(clean(input.name, 160), clean(input.phone, 80), clean(input.availability, 1000), user.uid).run();
+    const availabilitySchedule = cleanAvailability(input.availabilitySchedule);
+    await db.prepare("UPDATE users SET name=?, phone=?, availability=?, availability_json=? WHERE id=?")
+      .bind(clean(input.name, 160), clean(input.phone, 80), clean(input.availability, 1000), JSON.stringify(availabilitySchedule), user.uid).run();
     await audit(db, user.uid, "profile.updated", "user", user.uid);
     return { ok: true };
   }

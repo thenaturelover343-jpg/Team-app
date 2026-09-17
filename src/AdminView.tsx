@@ -1,30 +1,37 @@
 import React, { useState, useEffect } from 'react';
-import { User, Assignment, Shift, Customer, formatDate, formatTime, localDateKey } from './types';
-import { Calendar, Clock, MapPin, Plus, User as UserIcon, ListTodo, Loader2, Users, CheckSquare, Square, Download, BarChart2 } from 'lucide-react';
+import { User, Assignment, Shift, Customer, PlannedShift, formatDate, formatTime, localDateKey } from './types';
+import { Calendar, Clock, MapPin, Plus, User as UserIcon, ListTodo, Loader2, Users, CheckSquare, Square, Download, BarChart2, CalendarDays } from 'lucide-react';
 import { handleFirestoreError, OperationType } from './lib/firebase';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { secureApi } from './lib/secureApi';
+import WeekPlanner from './components/WeekPlanner';
 
 export default function AdminView() {
-  const [activeTab, setActiveTab] = useState<'planning' | 'timesheets' | 'customers' | 'team'>('planning');
+  const [activeTab, setActiveTab] = useState<'week' | 'planning' | 'timesheets' | 'customers' | 'team'>('week');
   
   const [users, setUsers] = useState<User[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [plannedShifts, setPlannedShifts] = useState<PlannedShift[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const loadData = React.useCallback(async () => {
+    const { data } = await secureApi.snapshot();
+    setUsers(data.users);
+    setShifts(data.shifts);
+    setAssignments(data.assignments);
+    setCustomers(data.customers);
+    setPlannedShifts(data.plannedShifts);
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
     let active = true;
     const load = async () => {
       try {
-        const { data } = await secureApi.snapshot();
         if (!active) return;
-        setUsers(data.users);
-        setShifts(data.shifts);
-        setAssignments(data.assignments);
-        setCustomers(data.customers);
-        setLoading(false);
+        await loadData();
       } catch (error) {
         console.error(error);
         if (active) setLoading(false);
@@ -33,7 +40,7 @@ export default function AdminView() {
     void load();
     const timer = window.setInterval(load, 5000);
     return () => { active = false; window.clearInterval(timer); };
-  }, []);
+  }, [loadData]);
 
   if (loading) {
     return <div className="flex justify-center p-8"><Loader2 className="w-6 h-6 animate-spin text-zinc-900" /></div>;
@@ -43,11 +50,18 @@ export default function AdminView() {
     <div className="max-w-4xl mx-auto w-full space-y-8 pb-12">
       <div className="bg-white rounded-[16px] shadow-[0_4px_14px_0_rgb(0,0,0,0.03)] border border-zinc-200/60 p-1.5 flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-1.5">
         <button
+          onClick={() => setActiveTab('week')}
+          className={`flex-1 py-3 px-4 rounded-[12px] font-bold text-sm flex items-center justify-center space-x-2 transition-all ${activeTab === 'week' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600 hover:bg-zinc-100/50'}`}
+        >
+          <CalendarDays className="w-4 h-4" />
+          <span>Weekplanner</span>
+        </button>
+        <button
           onClick={() => setActiveTab('planning')}
           className={`flex-1 py-3 px-4 rounded-[12px] font-bold text-sm flex items-center justify-center space-x-2 transition-all ${activeTab === 'planning' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600 hover:bg-zinc-100/50'}`}
         >
           <Calendar className="w-4 h-4" />
-          <span>Planning & Opdrachten</span>
+          <span>Opdrachten</span>
         </button>
         <button
           onClick={() => setActiveTab('timesheets')}
@@ -72,6 +86,7 @@ export default function AdminView() {
         </button>
       </div>
 
+      {activeTab === 'week' && <WeekPlanner users={users} customers={customers} shifts={plannedShifts} onChanged={loadData} />}
       {activeTab === 'planning' && <PlanningTab users={users} assignments={assignments} customers={customers} />}
       {activeTab === 'timesheets' && <TimesheetsTab users={users} shifts={shifts} assignments={assignments} />}
       {activeTab === 'customers' && <CustomersTab customers={customers} />}
@@ -88,6 +103,8 @@ function CustomersTab({ customers }: { customers: Customer[] }) {
   const [address, setAddress] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  const [latitude, setLatitude] = useState('');
+  const [longitude, setLongitude] = useState('');
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,11 +112,13 @@ function CustomersTab({ customers }: { customers: Customer[] }) {
     
     setIsSubmitting(true);
     try {
-      await secureApi.saveCustomer({ name, address, phone, email });
+      await secureApi.saveCustomer({ name, address, phone, email, latitude: latitude === '' ? '' : Number(latitude), longitude: longitude === '' ? '' : Number(longitude) });
       setName('');
       setAddress('');
       setPhone('');
       setEmail('');
+      setLatitude('');
+      setLongitude('');
       setIsAdding(false);
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, 'customers');
@@ -157,6 +176,14 @@ function CustomersTab({ customers }: { customers: Customer[] }) {
                 className="w-full border border-zinc-200 rounded-[16px] p-3.5 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none bg-[#FAFAFA] transition-all font-medium"
               />
             </div>
+            <div>
+              <label className="block text-sm font-bold text-zinc-700 mb-1.5">Breedtegraad (GPS)</label>
+              <input type="number" step="any" min="-90" max="90" value={latitude} onChange={e => setLatitude(e.target.value)} placeholder="50.8503" className="w-full border border-zinc-200 rounded-[16px] p-3.5 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none bg-[#FAFAFA] transition-all font-medium" />
+            </div>
+            <div>
+              <label className="block text-sm font-bold text-zinc-700 mb-1.5">Lengtegraad (GPS)</label>
+              <input type="number" step="any" min="-180" max="180" value={longitude} onChange={e => setLongitude(e.target.value)} placeholder="4.3517" className="w-full border border-zinc-200 rounded-[16px] p-3.5 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none bg-[#FAFAFA] transition-all font-medium" />
+            </div>
           </div>
           
           <div className="pt-2 flex justify-end space-x-3">
@@ -188,6 +215,7 @@ function CustomersTab({ customers }: { customers: Customer[] }) {
               <div className="flex flex-col md:items-end text-sm text-zinc-600 font-medium space-y-1">
                 {c.phone && <div>Tel: {c.phone}</div>}
                 {c.email && <div>E-mail: {c.email}</div>}
+                {c.latitude !== undefined && c.longitude !== undefined && <div>GPS: {c.latitude.toFixed(5)}, {c.longitude.toFixed(5)}</div>}
               </div>
             </div>
           ))

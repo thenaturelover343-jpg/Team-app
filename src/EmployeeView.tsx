@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
-import { User, Shift, Assignment, getCurrentLocation, formatTime, formatDate, AssignmentTask, localDateKey } from './types';
-import { MapPin, Clock, CheckCircle, Play, Square, Navigation2, FileText, Loader2, User as UserIcon, Calendar, History, Save, Plus, Trash2, CheckSquare } from 'lucide-react';
+import { User, Shift, Assignment, PlannedShift, WeeklyAvailability, getCurrentLocation, formatTime, formatDate, AssignmentTask, localDateKey } from './types';
+import { MapPin, Clock, CheckCircle, Play, Square, Navigation2, FileText, Loader2, User as UserIcon, Calendar, History, Save, Plus, Trash2, CheckSquare, CalendarDays, XCircle } from 'lucide-react';
 import { useAuth } from './hooks/useAuth';
 import { handleFirestoreError, OperationType } from './lib/firebase';
 import { secureApi } from './lib/secureApi';
@@ -10,10 +10,11 @@ const LiveLocationMap = dynamic(() => import('./components/LiveLocationMap'), { 
 
 export default function EmployeeView() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'profile'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'planning' | 'profile'>('dashboard');
 
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [plannedShifts, setPlannedShifts] = useState<PlannedShift[]>([]);
   const [loading, setLoading] = useState(true);
   const alertedAssignments = useRef<Set<string>>(new Set());
 
@@ -51,25 +52,25 @@ export default function EmployeeView() {
     return () => clearInterval(intervalId);
   }, [assignments]);
 
+  const loadData = React.useCallback(async () => {
+    const { data } = await secureApi.snapshot();
+    setShifts(data.shifts);
+    setAssignments(data.assignments.filter(item => item.date === localDateKey()));
+    setPlannedShifts(data.plannedShifts);
+    setLoading(false);
+  }, []);
+
   useEffect(() => {
     if (!user) return;
     let active = true;
     const load = async () => {
-      try {
-        const { data } = await secureApi.snapshot();
-        if (!active) return;
-        setShifts(data.shifts);
-        setAssignments(data.assignments.filter(item => item.date === localDateKey()));
-        setLoading(false);
-      } catch (error) {
-        console.error(error);
-        if (active) setLoading(false);
-      }
+      try { if (active) await loadData(); }
+      catch (error) { console.error(error); if (active) setLoading(false); }
     };
     void load();
     const timer = window.setInterval(load, 5000);
     return () => { active = false; window.clearInterval(timer); };
-  }, [user]);
+  }, [user, loadData]);
 
   if (!user) return null;
 
@@ -91,6 +92,13 @@ export default function EmployeeView() {
           )}
         </button>
         <button
+          onClick={() => setActiveTab('planning')}
+          className={`flex-1 py-3 px-2 rounded-[12px] font-bold text-sm flex items-center justify-center space-x-2 transition-all ${activeTab === 'planning' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600 hover:bg-zinc-100/50'}`}
+        >
+          <CalendarDays className="w-4 h-4" />
+          <span>Planning</span>
+        </button>
+        <button
           onClick={() => setActiveTab('profile')}
           className={`flex-1 py-3 px-4 rounded-[12px] font-bold text-sm flex items-center justify-center space-x-2 transition-all ${activeTab === 'profile' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600 hover:bg-zinc-100/50'}`}
         >
@@ -99,7 +107,9 @@ export default function EmployeeView() {
         </button>
       </div>
 
-      {activeTab === 'dashboard' ? <DashboardTab shifts={shifts} assignments={assignments} loading={loading} /> : <ProfileTab user={user} />}
+      {activeTab === 'dashboard' && <DashboardTab shifts={shifts} assignments={assignments} loading={loading} />}
+      {activeTab === 'planning' && <EmployeePlanningTab userId={user.id} shifts={plannedShifts} onChanged={loadData} />}
+      {activeTab === 'profile' && <ProfileTab user={user} />}
     </div>
   );
 }
@@ -334,10 +344,46 @@ function DashboardTab({ shifts, assignments, loading }: { shifts: Shift[], assig
   );
 }
 
+function EmployeePlanningTab({ userId, shifts, onChanged }: { userId: string; shifts: PlannedShift[]; onChanged: () => Promise<void> }) {
+  const [busyId, setBusyId] = useState('');
+  const [error, setError] = useState('');
+  const upcoming = [...shifts].filter(shift => shift.date >= localDateKey()).sort((a, b) => `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`));
+  const respond = async (shiftId: string, status: 'confirmed' | 'declined') => {
+    setBusyId(shiftId); setError('');
+    try { await secureApi.confirmPlannedShift(shiftId, status); await onChanged(); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : 'Uw antwoord kon niet worden opgeslagen.'); }
+    finally { setBusyId(''); }
+  };
+  return <div className="space-y-4">
+    <div className="px-1"><h2 className="text-2xl font-bold text-zinc-900">Mijn planning</h2><p className="text-sm text-zinc-500 mt-1">Bevestig of weiger elke gepubliceerde dienst.</p></div>
+    {error && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</div>}
+    {!upcoming.length && <div className="bg-white border border-zinc-200 rounded-2xl p-8 text-center text-zinc-500">Er staan nog geen gepubliceerde diensten klaar.</div>}
+    {upcoming.map(shift => {
+      const confirmation = shift.confirmations[userId] || 'pending';
+      return <article key={shift.id} className="bg-white border border-zinc-200 rounded-[24px] p-5 shadow-sm space-y-4">
+        <div className="flex items-start justify-between gap-3"><div><div className="text-xs uppercase tracking-wide font-bold text-zinc-400">{formatDate(shift.date)}</div><h3 className="text-lg font-extrabold text-zinc-900 mt-1">{shift.title}</h3></div><span className={`text-xs font-bold px-3 py-1.5 rounded-full ${confirmation === 'confirmed' ? 'bg-emerald-100 text-emerald-700' : confirmation === 'declined' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'}`}>{confirmation === 'confirmed' ? 'Bevestigd' : confirmation === 'declined' ? 'Geweigerd' : 'Antwoord nodig'}</span></div>
+        <div className="grid grid-cols-2 gap-3 text-sm"><div className="bg-zinc-50 rounded-xl p-3"><span className="block text-xs text-zinc-400 font-bold uppercase mb-1">Uren</span><span className="font-bold">{shift.startTime}–{shift.endTime}</span></div><div className="bg-zinc-50 rounded-xl p-3"><span className="block text-xs text-zinc-400 font-bold uppercase mb-1">Pauze</span><span className="font-bold">{shift.breakMinutes} min.</span></div></div>
+        {shift.customerName && <div className="flex items-start gap-2 text-sm text-zinc-600"><MapPin className="w-4 h-4 mt-0.5 shrink-0" /><div><div className="font-bold text-zinc-800">{shift.customerName}</div><div>{shift.customerAddress}</div>{shift.customerLatitude !== undefined && shift.customerLongitude !== undefined && <a className="text-zinc-900 underline font-semibold" target="_blank" rel="noreferrer" href={`https://www.google.com/maps/search/?api=1&query=${shift.customerLatitude},${shift.customerLongitude}`}>Open locatie</a>}</div></div>}
+        {shift.notes && <p className="text-sm text-zinc-600 bg-zinc-50 rounded-xl p-3">{shift.notes}</p>}
+        <div className="grid grid-cols-2 gap-3"><button disabled={busyId === shift.id} onClick={() => respond(shift.id, 'declined')} className="py-3 rounded-xl border border-red-200 text-red-700 font-bold flex items-center justify-center gap-2 disabled:opacity-40"><XCircle className="w-4 h-4" />Weigeren</button><button disabled={busyId === shift.id} onClick={() => respond(shift.id, 'confirmed')} className="py-3 rounded-xl bg-zinc-900 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-40">{busyId === shift.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}Bevestigen</button></div>
+      </article>;
+    })}
+  </div>;
+}
+
 function ProfileTab({ user }: { user: User }) {
   const [name, setName] = useState(user.name || '');
   const [phone, setPhone] = useState(user.phone || '');
   const [availability, setAvailability] = useState(user.availability || '');
+  const [availabilitySchedule, setAvailabilitySchedule] = useState<WeeklyAvailability>(() => user.availabilitySchedule || {
+    '0': { enabled: false, start: '09:00', end: '17:00' },
+    '1': { enabled: true, start: '09:00', end: '17:00' },
+    '2': { enabled: true, start: '09:00', end: '17:00' },
+    '3': { enabled: true, start: '09:00', end: '17:00' },
+    '4': { enabled: true, start: '09:00', end: '17:00' },
+    '5': { enabled: true, start: '09:00', end: '17:00' },
+    '6': { enabled: false, start: '09:00', end: '17:00' },
+  });
   const [isUpdating, setIsUpdating] = useState(false);
   const [msg, setMsg] = useState({ text: '', type: '' });
 
@@ -369,7 +415,7 @@ function ProfileTab({ user }: { user: User }) {
     setIsUpdating(true);
     setMsg({ text: '', type: '' });
     try {
-      await secureApi.updateProfile({ name, phone, availability });
+      await secureApi.updateProfile({ name, phone, availability, availabilitySchedule });
       setMsg({ text: 'Profiel succesvol bijgewerkt!', type: 'success' });
     } catch (err) {
       console.error(err);
@@ -403,6 +449,17 @@ function ProfileTab({ user }: { user: User }) {
             <div>
               <label className="block text-sm font-bold text-zinc-700 mb-1.5">Mijn Beschikbaarheid</label>
               <textarea value={availability} onChange={e => setAvailability(e.target.value)} placeholder="Bijv. Ma-Vr beschikbaar, in het weekend in overleg..." rows={3} className="w-full border border-zinc-200 rounded-[24px] p-3.5 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none bg-[#FAFAFA] transition-all font-medium resize-none"></textarea>
+            </div>
+            <div className="space-y-2">
+              <div className="text-sm font-bold text-zinc-700">Vaste weekuren voor conflictcontrole</div>
+              {[['1','Ma'],['2','Di'],['3','Wo'],['4','Do'],['5','Vr'],['6','Za'],['0','Zo']].map(([key, label]) => {
+                const day = availabilitySchedule[key] || { enabled: false, start: '09:00', end: '17:00' };
+                return <div key={key} className="grid grid-cols-[48px_1fr_1fr] gap-2 items-center bg-zinc-50 border border-zinc-200 rounded-xl p-2.5">
+                  <label className="font-bold text-sm flex items-center gap-2"><input type="checkbox" checked={day.enabled} onChange={e => setAvailabilitySchedule(current => ({ ...current, [key]: { ...day, enabled: e.target.checked } }))} className="accent-zinc-900" />{label}</label>
+                  <input aria-label={`Start ${label}`} type="time" disabled={!day.enabled} value={day.start} onChange={e => setAvailabilitySchedule(current => ({ ...current, [key]: { ...day, start: e.target.value } }))} className="border border-zinc-200 rounded-lg p-2 text-sm disabled:opacity-40" />
+                  <input aria-label={`Einde ${label}`} type="time" disabled={!day.enabled} value={day.end} onChange={e => setAvailabilitySchedule(current => ({ ...current, [key]: { ...day, end: e.target.value } }))} className="border border-zinc-200 rounded-lg p-2 text-sm disabled:opacity-40" />
+                </div>;
+              })}
             </div>
             <button type="submit" disabled={isUpdating} className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-bold py-4 rounded-[24px] flex items-center justify-center space-x-2 transition-all shadow-lg shadow-[0_4px_14px_0_rgb(0,0,0,0.1)] disabled:opacity-50">
               {isUpdating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
