@@ -62,8 +62,8 @@ export default function AdminView() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto w-full space-y-8 pb-12">
-      <div className="bg-white rounded-[16px] shadow-[0_4px_14px_0_rgb(0,0,0,0.03)] border border-zinc-200/60 p-1.5 flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-1.5">
+    <div className="admin-shell max-w-6xl mx-auto w-full space-y-7 pb-12">
+      <div className="admin-nav bg-white border border-zinc-200/60 p-1.5">
         <button onClick={() => setActiveTab('control')} className={`flex-1 py-3 px-4 rounded-[12px] font-bold text-sm flex items-center justify-center space-x-2 transition-all relative ${activeTab === 'control' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600 hover:bg-zinc-100/50'}`}><ShieldCheck className="w-4 h-4" /><span>Controle</span>{notifications.some(item => !item.readAt) && <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full" />}</button>
         <button
           onClick={() => setActiveTab('week')}

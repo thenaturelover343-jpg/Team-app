@@ -77,9 +77,9 @@ export default function EmployeeView() {
   const unacknowledgedCount = assignments.filter(a => a.status === 'pending' && a.acknowledged === false).length;
 
   return (
-    <div className="max-w-lg mx-auto w-full space-y-6 pb-28">
+    <div className="employee-shell max-w-lg mx-auto w-full space-y-6 pb-28">
       {queueCount > 0 && <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm font-semibold text-amber-800 flex items-center gap-2"><WifiOff className="w-4 h-4" />{queueCount} actie{queueCount === 1 ? '' : 's'} wachten op internet.</div>}
-      <div className="fixed bottom-3 left-3 right-3 z-50 max-w-lg mx-auto bg-white/95 backdrop-blur rounded-2xl shadow-xl border border-zinc-200 p-1.5 grid grid-cols-5 gap-1">
+      <div className="employee-nav fixed bottom-3 left-3 right-3 z-50 max-w-lg mx-auto p-1.5 grid grid-cols-5 gap-1">
         <button
           onClick={() => setActiveTab('dashboard')}
           className={`py-3 px-1 rounded-[12px] font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all relative ${activeTab === 'dashboard' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600'}`}
@@ -87,7 +87,7 @@ export default function EmployeeView() {
           <Calendar className="w-4 h-4" />
           <span>{fr ? "Aujourd'hui" : 'Vandaag'}</span>
           {unacknowledgedCount > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white shadow-[0_4px_14px_0_rgb(0,0,0,0.03)] ring-2 ring-white animate-bounce">
+            <span className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white ring-2 ring-white">
               {unacknowledgedCount}
             </span>
           )}
