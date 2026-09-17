@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { User, Assignment, Shift, Customer, formatDate, formatTime, localDateKey, normalizeAssignment, normalizeShift, timestampToMillis } from './types';
+import { User, Assignment, Shift, Customer, formatDate, formatTime, localDateKey } from './types';
 import { Calendar, Clock, MapPin, Plus, User as UserIcon, ListTodo, Loader2, Users, CheckSquare, Square, Download, BarChart2 } from 'lucide-react';
-import { db, handleFirestoreError, OperationType } from './lib/firebase';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { handleFirestoreError, OperationType } from './lib/firebase';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { secureApi } from './lib/secureApi';
 
@@ -16,32 +15,24 @@ export default function AdminView() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unSubUsers = onSnapshot(collection(db, 'users'), (snap) => {
-      setUsers(snap.docs.map(d => {
-        const data = d.data();
-        return { id: d.id, ...data, createdAt: timestampToMillis(data.createdAt) } as User;
-      }));
-    }, err => handleFirestoreError(err, OperationType.LIST, 'users'));
-
-    const unSubShifts = onSnapshot(collection(db, 'shifts'), (snap) => {
-      setShifts(snap.docs.map(d => normalizeShift(d.id, d.data())));
-    }, err => handleFirestoreError(err, OperationType.LIST, 'shifts'));
-
-    const unSubAssignments = onSnapshot(collection(db, 'assignments'), (snap) => {
-      setAssignments(snap.docs.map(d => normalizeAssignment(d.id, d.data())));
-    }, err => handleFirestoreError(err, OperationType.LIST, 'assignments'));
-    
-    const unSubCustomers = onSnapshot(collection(db, 'customers'), (snap) => {
-      setCustomers(snap.docs.map(d => ({ id: d.id, ...d.data() } as Customer)));
-      setLoading(false);
-    }, err => handleFirestoreError(err, OperationType.LIST, 'customers'));
-
-    return () => {
-      unSubUsers();
-      unSubShifts();
-      unSubAssignments();
-      unSubCustomers();
+    let active = true;
+    const load = async () => {
+      try {
+        const { data } = await secureApi.snapshot();
+        if (!active) return;
+        setUsers(data.users);
+        setShifts(data.shifts);
+        setAssignments(data.assignments);
+        setCustomers(data.customers);
+        setLoading(false);
+      } catch (error) {
+        console.error(error);
+        if (active) setLoading(false);
+      }
     };
+    void load();
+    const timer = window.setInterval(load, 5000);
+    return () => { active = false; window.clearInterval(timer); };
   }, []);
 
   if (loading) {
@@ -261,7 +252,7 @@ function PlanningTab({ users, assignments, customers }: { users: User[], assignm
           
           {customers.length === 0 ? (
              <div className="p-4 bg-amber-50 text-amber-800 rounded-[12px] border border-amber-200 text-sm font-medium">
-               Voeg eerst een klant toe in het tabblad 'Klantenbeheer' voordat je een opdracht kunt inplannen.
+               Voeg eerst een klant toe in het tabblad “Klantenbeheer” voordat je een opdracht kunt inplannen.
              </div>
           ) : employees.length === 0 ? (
              <div className="p-4 bg-amber-50 text-amber-800 rounded-[12px] border border-amber-200 text-sm font-medium">
@@ -532,7 +523,7 @@ function AdminAssignmentCard({ assignment, users, customers }: { assignment: Ass
 
           <div className="text-zinc-600 leading-relaxed relative group">
             <span className="font-bold text-zinc-400 block text-xs uppercase tracking-wider mb-1">Notities</span>
-            "{assignment.workNotes}"
+            “{assignment.workNotes}”
           </div>
         </div>
       )}
@@ -542,9 +533,10 @@ function AdminAssignmentCard({ assignment, users, customers }: { assignment: Ass
 
 function TimesheetsTab({ users, shifts, assignments = [] }: { users: User[], shifts: Shift[], assignments?: Assignment[] }) {
   const sortedShifts = [...shifts].sort((a, b) => b.clockIn - a.clockIn);
+  const [chartReferenceTime] = useState(() => Date.now());
 
   // Chart data for last 30 days
-  const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const thirtyDaysAgo = chartReferenceTime - 30 * 24 * 60 * 60 * 1000;
   const chartDataMap = new Map<string, { name: string, uren: number }>();
   
   users.forEach(u => {
@@ -831,7 +823,7 @@ function TeamTab({ users }: { users: User[] }) {
     setIsSubmitting(true);
     try {
       const result = await secureApi.inviteEmployee({ name, email, phone });
-      setInviteLink(result.data.resetLink);
+      setInviteLink(result.data.resetLink || 'uitgenodigd');
       setName('');
       setEmail('');
       setPhone('');
@@ -874,7 +866,7 @@ function TeamTab({ users }: { users: User[] }) {
       </form>
       {inviteLink && (
         <div className="p-4 bg-green-50 text-green-800 rounded-[12px] border border-green-200 text-sm break-all">
-          Deel deze eenmalige activatielink veilig met de medewerker: <a className="font-bold underline" href={inviteLink}>{inviteLink}</a>
+          De medewerker is uitgenodigd en kan nu met dit Google-e-mailadres aanmelden.
         </div>
       )}
       {errorMsg && (

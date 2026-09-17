@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { User, Shift, Assignment, getCurrentLocation, formatTime, formatDate, AssignmentTask, localDateKey, normalizeAssignment, normalizeShift } from './types';
+import dynamic from 'next/dynamic';
+import { User, Shift, Assignment, getCurrentLocation, formatTime, formatDate, AssignmentTask, localDateKey } from './types';
 import { MapPin, Clock, CheckCircle, Play, Square, Navigation2, FileText, Loader2, User as UserIcon, Calendar, History, Save, Plus, Trash2, CheckSquare } from 'lucide-react';
 import { useAuth } from './hooks/useAuth';
-import { db, handleFirestoreError, OperationType } from './lib/firebase';
-import { collection, query, where, onSnapshot, doc, updateDoc } from 'firebase/firestore';
-import LiveLocationMap from './components/LiveLocationMap';
+import { handleFirestoreError, OperationType } from './lib/firebase';
 import { secureApi } from './lib/secureApi';
+
+const LiveLocationMap = dynamic(() => import('./components/LiveLocationMap'), { ssr: false });
 
 export default function EmployeeView() {
   const { user } = useAuth();
@@ -52,32 +53,22 @@ export default function EmployeeView() {
 
   useEffect(() => {
     if (!user) return;
-    
-    const qShifts = query(
-      collection(db, 'shifts'),
-      where('userId', '==', user.id)
-    );
-
-    const unSubShifts = onSnapshot(qShifts, (snap) => {
-      setShifts(snap.docs.map(d => normalizeShift(d.id, d.data())));
-    }, (err) => handleFirestoreError(err, OperationType.GET, 'shifts'));
-
-    const todayStr = localDateKey();
-    const qAssignments = query(
-      collection(db, 'assignments'),
-      where('userId', '==', user.id),
-      where('date', '==', todayStr)
-    );
-
-    const unSubAssignments = onSnapshot(qAssignments, (snap) => {
-      setAssignments(snap.docs.map(d => normalizeAssignment(d.id, d.data())));
-      setLoading(false);
-    }, (err) => handleFirestoreError(err, OperationType.GET, 'assignments'));
-
-    return () => {
-      unSubShifts();
-      unSubAssignments();
+    let active = true;
+    const load = async () => {
+      try {
+        const { data } = await secureApi.snapshot();
+        if (!active) return;
+        setShifts(data.shifts);
+        setAssignments(data.assignments.filter(item => item.date === localDateKey()));
+        setLoading(false);
+      } catch (error) {
+        console.error(error);
+        if (active) setLoading(false);
+      }
     };
+    void load();
+    const timer = window.setInterval(load, 5000);
+    return () => { active = false; window.clearInterval(timer); };
   }, [user]);
 
   if (!user) return null;
@@ -119,18 +110,19 @@ function DashboardTab({ shifts, assignments, loading }: { shifts: Shift[], assig
   const [shiftNotes, setShiftNotes] = useState('');
   const [shiftStatus, setShiftStatus] = useState<'Normaal' | 'Vertraagd' | 'Gedeeltelijk afgerond' | 'Probleem gemeld'>('Normaal');
   const [notificationPermission, setNotificationPermission] = useState(
-    'Notification' in window ? Notification.permission : 'denied'
+    typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'denied'
   );
 
   const activeShift = shifts.find(s => !s.clockOut);
 
   // Sync state if active shift already has notes (though usually set at clock out)
   useEffect(() => {
-    if (activeShift) {
-      if (activeShift.notes && !shiftNotes) setShiftNotes(activeShift.notes);
-      if (activeShift.statusTag && shiftStatus === 'Normaal') setShiftStatus(activeShift.statusTag);
-    }
-  }, [activeShift]);
+    const timer = window.setTimeout(() => {
+      if (activeShift?.notes && !shiftNotes) setShiftNotes(activeShift.notes);
+      if (activeShift?.statusTag && shiftStatus === 'Normaal') setShiftStatus(activeShift.statusTag);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [activeShift, shiftNotes, shiftStatus]);
 
   const unacknowledgedAssignments = assignments.filter(a => a.status === 'pending' && a.acknowledged === false);
   const myAssignments = [...assignments].filter(a => a.acknowledged !== false).sort((a, b) => {
@@ -354,30 +346,22 @@ function ProfileTab({ user }: { user: User }) {
   const [loadingHistory, setLoadingHistory] = useState(true);
 
   useEffect(() => {
-    // Fetch completed assignments for history
-    const qAssignments = query(
-      collection(db, 'assignments'),
-      where('userId', '==', user.id),
-      where('status', '==', 'completed')
-    );
-    const unSubA = onSnapshot(qAssignments, (snap) => {
-      setHistoryAssignments(snap.docs.map(d => normalizeAssignment(d.id, d.data())));
-    });
-
-    // Fetch shifts for history
-    const qShifts = query(
-      collection(db, 'shifts'),
-      where('userId', '==', user.id)
-    );
-    const unSubS = onSnapshot(qShifts, (snap) => {
-      setHistoryShifts(snap.docs.map(d => normalizeShift(d.id, d.data())));
-      setLoadingHistory(false);
-    });
-
-    return () => {
-      unSubA();
-      unSubS();
+    let active = true;
+    const load = async () => {
+      try {
+        const { data } = await secureApi.snapshot();
+        if (!active) return;
+        setHistoryAssignments(data.assignments.filter(item => item.status === 'completed'));
+        setHistoryShifts(data.shifts);
+        setLoadingHistory(false);
+      } catch (error) {
+        console.error(error);
+        if (active) setLoadingHistory(false);
+      }
     };
+    void load();
+    const timer = window.setInterval(load, 10000);
+    return () => { active = false; window.clearInterval(timer); };
   }, [user.id]);
 
   const handleSave = async (e: React.FormEvent) => {
@@ -385,14 +369,10 @@ function ProfileTab({ user }: { user: User }) {
     setIsUpdating(true);
     setMsg({ text: '', type: '' });
     try {
-      await updateDoc(doc(db, 'users', user.id), {
-        name,
-        phone,
-        availability
-      });
+      await secureApi.updateProfile({ name, phone, availability });
       setMsg({ text: 'Profiel succesvol bijgewerkt!', type: 'success' });
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `users/${user.id}`);
+      console.error(err);
       setMsg({ text: 'Er is een fout opgetreden bij het opslaan.', type: 'error' });
     } finally {
       setIsUpdating(false);
@@ -550,15 +530,20 @@ function AssignmentCard({ assignment }: { assignment: Assignment; key?: string |
   const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
-    setTasks(assignment.tasks || []);
+    const timer = window.setTimeout(() => setTasks(assignment.tasks || []), 0);
+    return () => window.clearTimeout(timer);
   }, [assignment.tasks]);
 
   const handleUpdate = async (updates: Partial<Assignment>) => {
     setIsUpdating(true);
     try {
-      await updateDoc(doc(db, 'assignments', assignment.id), updates);
+      await secureApi.updateAssignmentDetails(
+        assignment.id,
+        (updates.tasks as AssignmentTask[] | undefined) || tasks,
+        typeof updates.workNotes === 'string' ? updates.workNotes : notes,
+      );
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `assignments/${assignment.id}`);
+      console.error(err);
     } finally {
       setIsUpdating(false);
     }

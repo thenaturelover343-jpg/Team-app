@@ -1,0 +1,20 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1789603592913,
+      "tag": "0000_kind_mephisto",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1789603617126,
+      "tag": "0001_round_blue_shield",
+      "breakpoints": true
+    }
+  ]
+}
