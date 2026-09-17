@@ -31,7 +31,7 @@ export interface Shift {
   id: string;
   userId: string;
   clockIn: number;
-  clockInLoc: GeoLocation;
+  clockInLoc?: GeoLocation;
   clockOut?: number;
   clockOutLoc?: GeoLocation;
   statusTag?: 'Normaal' | 'Vertraagd' | 'Gedeeltelijk afgerond' | 'Probleem gemeld';
@@ -39,7 +39,8 @@ export interface Shift {
   plannedShiftId?: string;
   clockInDistance?: number;
   clockOutDistance?: number;
-  geofenceStatus?: 'inside' | 'unverified';
+  geofenceStatus?: 'inside' | 'unverified' | 'anonymized';
+  locationAnonymizedAt?: number;
   approvalStatus?: 'pending' | 'approved' | 'rejected';
   approvedBy?: string;
   approvedAt?: number;
@@ -49,7 +50,7 @@ export interface Shift {
 export interface TeamNotification {
   id: string;
   userId: string;
-  type: 'planning_published' | 'planning_confirmation' | 'reminder' | 'late' | 'no_show' | 'incident' | 'correction' | 'correction_reviewed' | 'timesheet_reviewed' | 'test';
+  type: 'planning_published' | 'planning_confirmation' | 'reminder' | 'late' | 'no_show' | 'incident' | 'correction' | 'correction_reviewed' | 'timesheet_reviewed' | 'test' | 'pilot';
   title: string;
   body: string;
   entityType?: string;
@@ -58,6 +59,14 @@ export interface TeamNotification {
   pushStatus: 'pending' | 'sent' | 'failed' | 'no_subscription' | 'unavailable';
   createdAt: number;
 }
+
+export interface PrivacySettings { controllerName: string; contactEmail: string; locationDays: number; notificationDays: number; auditDays: number; errorDays: number; backupDays: number; lastCleanupAt?: number }
+export interface AuditEvent { id: string; actorId: string; action: string; targetType: string; targetId: string; createdAt: number }
+export interface AccessEvent { id: string; userId: string; accessDate: string; userAgent: string; createdAt: number }
+export interface BackupRun { id: string; status: string; checksum: string; rowCounts: Record<string, number>; createdAt: number; testedAt?: number; testStatus?: 'passed' | 'failed'; testDetails?: string }
+export interface ErrorEvent { id: string; actorId?: string; action?: string; message: string; severity: string; createdAt: number }
+export interface PilotProgram { id: string; status: string; startedAt: number; endsAt: number; members: { userId: string; name: string }[] }
+export interface PilotFeedback { id: string; pilotId: string; userId: string; rating: number; category: string; message: string; createdAt: number }
 
 export interface PushState {
   supported: boolean;

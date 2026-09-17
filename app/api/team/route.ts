@@ -3,6 +3,7 @@ import { buildPushPayload, type PushSubscription } from "@block65/webcrypto-web-
 import { cleanText as clean, isAllowedTransition, normalizeEmail as email, validateGeofence, validateLocation as location } from "../../../server/policy";
 import { addWeeks, availabilityConflict, isValidDate, isValidTime, overlaps, parseAvailability, validateShiftWindow } from "../../../server/planning";
 import { attendanceEvents, csv, workedMinutes, type PlannedAttendance } from "../../../server/phase4";
+import { cutoff, normalizeRetention, safeErrorMessage, sha256, shouldRunDaily, type RetentionSettings } from "../../../server/privacy";
 
 export const dynamic = "force-dynamic";
 
@@ -135,6 +136,97 @@ function requireAdmin(user: AppUser) {
   if (user.role !== "admin") throw new Error("Alleen een beheerder mag dit uitvoeren.");
 }
 
+async function recordAccess(db: D1Database, user: AppUser, request: Request) {
+  const accessDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Brussels" }).format(new Date());
+  await db.prepare(`INSERT OR IGNORE INTO access_events (id, user_id, access_date, user_agent, created_at)
+    VALUES (?, ?, ?, ?, ?)`).bind(id(), user.uid, accessDate, clean(request.headers.get("User-Agent"), 500) || null, Date.now()).run();
+}
+
+async function privacySettings(db: D1Database) {
+  await db.prepare(`INSERT OR IGNORE INTO privacy_settings
+    (id, controller_name, location_days, notification_days, audit_days, error_days, backup_days, updated_at)
+    VALUES ('default', 'Barlicious & Koelverhuur', 90, 180, 730, 180, 365, ?)`).bind(Date.now()).run();
+  return db.prepare("SELECT * FROM privacy_settings WHERE id='default'").first<Json>();
+}
+
+function mappedPrivacy(row: Json | null) {
+  return {
+    controllerName: String(row?.controller_name || "Barlicious & Koelverhuur"),
+    contactEmail: row?.contact_email ? String(row.contact_email) : "",
+    locationDays: Number(row?.location_days || 90), notificationDays: Number(row?.notification_days || 180),
+    auditDays: Number(row?.audit_days || 730), errorDays: Number(row?.error_days || 180),
+    backupDays: Number(row?.backup_days || 365), lastCleanupAt: row?.last_cleanup_at ? Number(row.last_cleanup_at) : undefined,
+  };
+}
+
+async function runPrivacyCleanup(db: D1Database, actorId: string, force = false) {
+  const row = await privacySettings(db);
+  const now = Date.now();
+  if (!force && !shouldRunDaily(row?.last_cleanup_at, now)) return { skipped: true, counts: {} };
+  const retention = normalizeRetention(mappedPrivacy(row));
+  const counts: Record<string, number> = {};
+  const locationCutoff = cutoff(now, retention.locationDays);
+  const results = await db.batch([
+    db.prepare(`UPDATE shifts SET clock_in_lat=0, clock_in_lng=0, clock_in_accuracy=NULL, clock_in_distance=NULL,
+      clock_out_lat=NULL, clock_out_lng=NULL, clock_out_accuracy=NULL, clock_out_distance=NULL,
+      geofence_status='anonymized', location_anonymized_at=? WHERE clock_in<? AND location_anonymized_at IS NULL`).bind(now, locationCutoff),
+    db.prepare("UPDATE assignments SET arrival_lat=NULL, arrival_lng=NULL, departure_lat=NULL, departure_lng=NULL WHERE created_at<?").bind(locationCutoff),
+    db.prepare("UPDATE incidents SET latitude=NULL, longitude=NULL, accuracy=NULL WHERE created_at<?").bind(locationCutoff),
+    db.prepare("DELETE FROM notifications WHERE created_at<?").bind(cutoff(now, retention.notificationDays)),
+    db.prepare("DELETE FROM error_events WHERE created_at<?").bind(cutoff(now, retention.errorDays)),
+    db.prepare("DELETE FROM access_events WHERE created_at<?").bind(cutoff(now, retention.auditDays)),
+    db.prepare("DELETE FROM audit_events WHERE created_at<?").bind(cutoff(now, retention.auditDays)),
+  ]);
+  ["locations", "assignmentLocations", "incidentLocations", "notifications", "errors", "access", "audit"].forEach((key, index) => {
+    counts[key] = Number(results[index]?.meta.changes || 0);
+  });
+  const expired = await db.prepare("SELECT id, object_key FROM backup_runs WHERE created_at<?").bind(cutoff(now, retention.backupDays)).all<Json>();
+  for (const backup of expired.results as Json[]) {
+    await bucket().delete(String(backup.object_key));
+    await db.prepare("DELETE FROM backup_runs WHERE id=?").bind(String(backup.id)).run();
+  }
+  counts.backups = expired.results.length;
+  await db.prepare("UPDATE privacy_settings SET last_cleanup_at=?, updated_by=?, updated_at=? WHERE id='default'").bind(now, actorId, now).run();
+  await audit(db, actorId, "privacy.cleanup", "privacy_settings", "default", counts);
+  return { skipped: false, counts };
+}
+
+const BACKUP_TABLES = ["users", "invites", "customers", "planned_shifts", "planned_shift_members", "assignments", "shifts", "timesheet_approvals", "shift_breaks", "incidents", "correction_requests", "attachments", "notifications", "audit_events", "access_events", "privacy_settings", "pilot_programs", "pilot_members", "pilot_feedback"] as const;
+
+async function createBackup(db: D1Database, actorId: string) {
+  const backupId = id();
+  const tables: Record<string, Json[]> = {};
+  for (const table of BACKUP_TABLES) {
+    const result = await db.prepare(`SELECT * FROM ${table} LIMIT 20000`).all<Json>();
+    tables[table] = result.results as Json[];
+  }
+  const payload = JSON.stringify({ format: 1, createdAt: Date.now(), tables });
+  const checksum = await sha256(payload);
+  const objectKey = `backups/${new Date().toISOString().slice(0, 10)}/${backupId}.json`;
+  await bucket().put(objectKey, payload, { httpMetadata: { contentType: "application/json" } });
+  const rowCounts = Object.fromEntries(Object.entries(tables).map(([name, rows]) => [name, rows.length]));
+  await db.prepare(`INSERT INTO backup_runs (id, object_key, checksum, row_counts_json, status, created_by, created_at)
+    VALUES (?, ?, ?, ?, 'completed', ?, ?)`).bind(backupId, objectKey, checksum, JSON.stringify(rowCounts), actorId, Date.now()).run();
+  await audit(db, actorId, "backup.created", "backup", backupId, { rowCounts });
+  return { id: backupId, checksum, rowCounts };
+}
+
+async function testBackup(db: D1Database, actorId: string) {
+  const backup = await db.prepare("SELECT * FROM backup_runs WHERE status='completed' ORDER BY created_at DESC LIMIT 1").first<Json>();
+  if (!backup) throw new Error("Er is nog geen back-up om te testen.");
+  const object = await bucket().get(String(backup.object_key));
+  if (!object) throw new Error("Het back-upbestand ontbreekt.");
+  const text = await object.text();
+  const parsed = JSON.parse(text) as { format?: number; tables?: Record<string, unknown[]> };
+  const valid = parsed.format === 1 && parsed.tables && BACKUP_TABLES.every(table => Array.isArray(parsed.tables?.[table])) && await sha256(text) === backup.checksum;
+  const now = Date.now();
+  await db.prepare("UPDATE backup_runs SET tested_at=?, test_status=?, test_details=? WHERE id=?")
+    .bind(now, valid ? "passed" : "failed", valid ? "Checksum, JSON-formaat en alle tabellen gecontroleerd." : "Integriteitscontrole mislukt.", String(backup.id)).run();
+  await audit(db, actorId, "backup.restore_tested", "backup", String(backup.id), { valid });
+  if (!valid) throw new Error("De hersteltest is mislukt.");
+  return { ok: true, id: backup.id };
+}
+
 async function pushToUser(db: D1Database, userId: string, message: { title: string; body: string; url?: string }) {
   if (!env.VAPID_SUBJECT || !env.VAPID_SERVER_PUBLIC_KEY || !env.VAPID_SERVER_PRIVATE_KEY) return "unavailable";
   const subscriptions = await db.prepare("SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id=?").bind(userId).all<Json>();
@@ -201,11 +293,12 @@ function mapUser(row: Json) {
 }
 
 function mapShift(row: Json) {
+  const anonymized = Boolean(row.location_anonymized_at);
   return {
     id: row.id, userId: row.user_id, plannedShiftId: row.planned_shift_id || undefined, clockIn: Number(row.clock_in),
-    clockInLoc: { lat: Number(row.clock_in_lat), lng: Number(row.clock_in_lng), accuracy: Number(row.clock_in_accuracy || 0), capturedAt: Number(row.clock_in_client_at || row.clock_in) },
-    clockInDistance: row.clock_in_distance === null || row.clock_in_distance === undefined ? undefined : Number(row.clock_in_distance),
-    ...(row.clock_out ? { clockOut: Number(row.clock_out), clockOutLoc: { lat: Number(row.clock_out_lat), lng: Number(row.clock_out_lng), accuracy: Number(row.clock_out_accuracy || 0), capturedAt: Number(row.clock_out_client_at || row.clock_out) }, clockOutDistance: row.clock_out_distance === null || row.clock_out_distance === undefined ? undefined : Number(row.clock_out_distance) } : {}),
+    ...(!anonymized ? { clockInLoc: { lat: Number(row.clock_in_lat), lng: Number(row.clock_in_lng), accuracy: Number(row.clock_in_accuracy || 0), capturedAt: Number(row.clock_in_client_at || row.clock_in) }, clockInDistance: row.clock_in_distance === null || row.clock_in_distance === undefined ? undefined : Number(row.clock_in_distance) } : {}),
+    ...(row.clock_out ? { clockOut: Number(row.clock_out), ...(!anonymized ? { clockOutLoc: { lat: Number(row.clock_out_lat), lng: Number(row.clock_out_lng), accuracy: Number(row.clock_out_accuracy || 0), capturedAt: Number(row.clock_out_client_at || row.clock_out) }, clockOutDistance: row.clock_out_distance === null || row.clock_out_distance === undefined ? undefined : Number(row.clock_out_distance) } : {}) } : {}),
+    locationAnonymizedAt: anonymized ? Number(row.location_anonymized_at) : undefined,
     geofenceStatus: row.geofence_status || undefined, statusTag: row.status_tag || undefined, notes: row.notes || undefined,
     approvalStatus: row.approval_status || "pending", approvedBy: row.reviewed_by || undefined,
     approvedAt: row.reviewed_at ? Number(row.reviewed_at) : undefined, approvalNote: row.admin_note || undefined,
@@ -262,6 +355,12 @@ function cleanAvailability(input: unknown) {
 
 async function snapshot(user: AppUser) {
   const db = database();
+  const settings = await privacySettings(db);
+  await runPrivacyCleanup(db, user.uid).catch(() => undefined);
+  if (user.role === "admin") {
+    const latest = await db.prepare("SELECT created_at FROM backup_runs WHERE status='completed' ORDER BY created_at DESC LIMIT 1").first<Json>();
+    if (shouldRunDaily(latest?.created_at, Date.now())) await createBackup(db, user.uid).catch(() => undefined);
+  }
   await runAttendanceSweep(db);
   const usersQuery = user.role === "admin"
     ? db.prepare("SELECT * FROM users ORDER BY name")
@@ -303,11 +402,21 @@ async function snapshot(user: AppUser) {
   const notificationsQuery = user.role === "admin"
     ? db.prepare("SELECT * FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 500").bind(user.uid)
     : db.prepare("SELECT * FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 300").bind(user.uid);
-  const [usersResult, shiftsResult, assignmentsResult, customersResult, plannedResult, breaksResult, incidentsResult, correctionsResult, attachmentsResult, notificationsResult, pushCount] = await Promise.all([
+  const auditQuery = user.role === "admin" ? db.prepare("SELECT * FROM audit_events ORDER BY created_at DESC LIMIT 150") : db.prepare("SELECT * FROM audit_events WHERE actor_id=? ORDER BY created_at DESC LIMIT 50").bind(user.uid);
+  const accessQuery = user.role === "admin" ? db.prepare("SELECT * FROM access_events ORDER BY created_at DESC LIMIT 150") : db.prepare("SELECT * FROM access_events WHERE user_id=? ORDER BY created_at DESC LIMIT 50").bind(user.uid);
+  const pilotQuery = user.role === "admin"
+    ? db.prepare(`SELECT pp.*, pm.user_id, u.name AS user_name FROM pilot_programs pp LEFT JOIN pilot_members pm ON pm.pilot_id=pp.id LEFT JOIN users u ON u.id=pm.user_id WHERE pp.status='active' ORDER BY pp.started_at DESC`)
+    : db.prepare(`SELECT pp.*, pm.user_id, u.name AS user_name FROM pilot_programs pp JOIN pilot_members pm ON pm.pilot_id=pp.id LEFT JOIN users u ON u.id=pm.user_id WHERE pp.status='active' AND pm.user_id=?`).bind(user.uid);
+  const [usersResult, shiftsResult, assignmentsResult, customersResult, plannedResult, breaksResult, incidentsResult, correctionsResult, attachmentsResult, notificationsResult, pushCount, auditResult, accessResult, backupResult, errorsResult, pilotResult, feedbackResult] = await Promise.all([
     usersQuery.all<Json>(), shiftsQuery.all<Json>(), assignmentsQuery.all<Json>(),
     db.prepare("SELECT * FROM customers ORDER BY name").all<Json>(),
     plannedQuery.all<Json>(), breaksQuery.all<Json>(), incidentsQuery.all<Json>(), correctionsQuery.all<Json>(), attachmentsQuery.all<Json>(),
     notificationsQuery.all<Json>(), db.prepare("SELECT COUNT(*) AS total FROM push_subscriptions WHERE user_id=?").bind(user.uid).first<{ total: number }>(),
+    auditQuery.all<Json>(), accessQuery.all<Json>(),
+    user.role === "admin" ? db.prepare("SELECT * FROM backup_runs ORDER BY created_at DESC LIMIT 30").all<Json>() : Promise.resolve({ results: [] }),
+    user.role === "admin" ? db.prepare("SELECT * FROM error_events ORDER BY created_at DESC LIMIT 100").all<Json>() : Promise.resolve({ results: [] }),
+    pilotQuery.all<Json>(),
+    user.role === "admin" ? db.prepare("SELECT * FROM pilot_feedback ORDER BY created_at DESC LIMIT 100").all<Json>() : db.prepare("SELECT * FROM pilot_feedback WHERE user_id=? ORDER BY created_at DESC LIMIT 20").bind(user.uid).all<Json>(),
   ]);
   return {
     user: mapUser((usersResult.results as Json[]).find(item => item.id === user.uid) || {}),
@@ -329,6 +438,13 @@ async function snapshot(user: AppUser) {
       readAt: row.read_at ? Number(row.read_at) : undefined, pushStatus: row.push_status, createdAt: Number(row.created_at),
     })),
     push: { supported: Boolean(env.VAPID_SERVER_PUBLIC_KEY), enabled: Number(pushCount?.total || 0) > 0, publicKey: env.VAPID_SERVER_PUBLIC_KEY || "" },
+    privacy: mappedPrivacy(settings),
+    auditEvents: (auditResult.results as Json[]).map(row => ({ id: row.id, actorId: row.actor_id, action: row.action, targetType: row.target_type, targetId: row.target_id, createdAt: Number(row.created_at) })),
+    accessEvents: (accessResult.results as Json[]).map(row => ({ id: row.id, userId: row.user_id, accessDate: row.access_date, userAgent: row.user_agent || "", createdAt: Number(row.created_at) })),
+    backups: (backupResult.results as Json[]).map(row => ({ id: row.id, status: row.status, checksum: row.checksum, rowCounts: JSON.parse(String(row.row_counts_json || "{}")), createdAt: Number(row.created_at), testedAt: row.tested_at ? Number(row.tested_at) : undefined, testStatus: row.test_status || undefined, testDetails: row.test_details || undefined })),
+    errors: (errorsResult.results as Json[]).map(row => ({ id: row.id, actorId: row.actor_id || undefined, action: row.action || undefined, message: row.message, severity: row.severity, createdAt: Number(row.created_at) })),
+    pilot: (() => { const rows = pilotResult.results as Json[]; if (!rows.length) return null; const first = rows[0]; return { id: first.id, status: first.status, startedAt: Number(first.started_at), endsAt: Number(first.ends_at), members: rows.filter(row => row.user_id).map(row => ({ userId: String(row.user_id), name: String(row.user_name || "") })) }; })(),
+    pilotFeedback: (feedbackResult.results as Json[]).map(row => ({ id: row.id, pilotId: row.pilot_id, userId: row.user_id, rating: Number(row.rating), category: row.category, message: row.message, createdAt: Number(row.created_at) })),
   };
 }
 
@@ -336,6 +452,77 @@ async function act(user: AppUser, action: string, input: Json) {
   const db = database();
   const now = Date.now();
   if (action === "snapshot") return snapshot(user);
+
+  if (action === "updatePrivacySettings") {
+    requireAdmin(user);
+    const controllerName = clean(input.controllerName, 200);
+    const contactEmail = email(input.contactEmail) || null;
+    if (!controllerName) throw new Error("Naam van de verwerkingsverantwoordelijke is verplicht.");
+    const retention = normalizeRetention(input as Partial<Record<keyof RetentionSettings, unknown>>);
+    await db.prepare(`UPDATE privacy_settings SET controller_name=?, contact_email=?, location_days=?, notification_days=?,
+      audit_days=?, error_days=?, backup_days=?, updated_by=?, updated_at=? WHERE id='default'`)
+      .bind(controllerName, contactEmail, retention.locationDays, retention.notificationDays, retention.auditDays, retention.errorDays, retention.backupDays, user.uid, now).run();
+    await audit(db, user.uid, "privacy.settings_updated", "privacy_settings", "default", retention);
+    return { ok: true };
+  }
+
+  if (action === "runPrivacyCleanup") {
+    requireAdmin(user);
+    return runPrivacyCleanup(db, user.uid, true);
+  }
+
+  if (action === "createBackup") {
+    requireAdmin(user);
+    return createBackup(db, user.uid);
+  }
+
+  if (action === "testLatestBackup") {
+    requireAdmin(user);
+    return testBackup(db, user.uid);
+  }
+
+  if (action === "startPilot") {
+    requireAdmin(user);
+    const memberIds = [...new Set((Array.isArray(input.memberIds) ? input.memberIds : []).map(value => clean(value, 160)).filter(Boolean))];
+    const durationDays = Math.max(7, Math.min(30, Math.trunc(Number(input.durationDays) || 14)));
+    if (memberIds.length < 2 || memberIds.length > 5) throw new Error("Kies 2 tot 5 actieve werknemers voor de pilot.");
+    if (await db.prepare("SELECT 1 FROM pilot_programs WHERE status='active'").first()) throw new Error("Er loopt al een pilot.");
+    const placeholders = memberIds.map(() => "?").join(",");
+    const activeMembers = await db.prepare(`SELECT id FROM users WHERE active=1 AND id IN (${placeholders})`).bind(...memberIds).all<Json>();
+    if (activeMembers.results.length !== memberIds.length) throw new Error("Een geselecteerde werknemer is niet actief.");
+    const pilotId = id();
+    await db.batch([
+      db.prepare("INSERT INTO pilot_programs (id, status, created_by, started_at, ends_at) VALUES (?, 'active', ?, ?, ?)").bind(pilotId, user.uid, now, now + durationDays * 86400000),
+      ...memberIds.map(memberId => db.prepare("INSERT INTO pilot_members (pilot_id, user_id, invited_at) VALUES (?, ?, ?)").bind(pilotId, memberId, now)),
+    ]);
+    await Promise.all(memberIds.map(memberId => notify(db, { userId: memberId, type: "pilot", title: "U neemt deel aan de app-pilot", body: `Test de app ${durationDays} dagen en geef feedback via uw profiel.`, dedupeKey: `pilot:${pilotId}:${memberId}`, entityType: "pilot", entityId: pilotId })));
+    await audit(db, user.uid, "pilot.started", "pilot", pilotId, { memberIds, durationDays });
+    return { id: pilotId };
+  }
+
+  if (action === "closePilot") {
+    requireAdmin(user);
+    const pilotId = clean(input.id, 160);
+    const result = await db.prepare("UPDATE pilot_programs SET status='closed', closed_at=? WHERE id=? AND status='active'").bind(now, pilotId).run();
+    if (!result.meta.changes) throw new Error("Actieve pilot niet gevonden.");
+    await audit(db, user.uid, "pilot.closed", "pilot", pilotId);
+    return { ok: true };
+  }
+
+  if (action === "submitPilotFeedback") {
+    const pilotId = clean(input.pilotId, 160);
+    const rating = Math.trunc(Number(input.rating));
+    const category = clean(input.category, 80);
+    const message = clean(input.message, 2000);
+    const member = await db.prepare(`SELECT 1 FROM pilot_members pm JOIN pilot_programs pp ON pp.id=pm.pilot_id
+      WHERE pm.pilot_id=? AND pm.user_id=? AND pp.status='active'`).bind(pilotId, user.uid).first();
+    if (!member || rating < 1 || rating > 5 || !category || !message) throw new Error("Vul geldige pilotfeedback in.");
+    const feedbackId = id();
+    await db.prepare("INSERT INTO pilot_feedback (id, pilot_id, user_id, rating, category, message, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+      .bind(feedbackId, pilotId, user.uid, rating, category, message, now).run();
+    await audit(db, user.uid, "pilot.feedback_submitted", "pilot", pilotId, { rating, category });
+    return { id: feedbackId };
+  }
 
   if (action === "savePushSubscription") {
     const subscription = input.subscription && typeof input.subscription === "object" ? input.subscription as Json : {};
@@ -857,21 +1044,32 @@ async function downloadAttachment(user: AppUser, attachmentId: string) {
 }
 
 export async function POST(request: Request) {
+  let actorId: string | null = null;
+  let actionName = "request";
   try {
     const origin = request.headers.get("Origin");
     if (!origin || origin !== new URL(request.url).origin) return json({ error: "Ongeldige aanvraag." }, 403);
     const identity = await verifyFirebaseToken(request);
     const user = await session(identity);
+    actorId = user.uid;
+    await recordAccess(database(), user, request);
     if ((request.headers.get("Content-Type") || "").includes("multipart/form-data")) {
       return json({ data: await uploadAttachment(user, request) });
     }
     const payload = await request.json() as { action?: unknown; input?: unknown };
     const action = clean(payload.action, 80);
+    actionName = action || "unknown";
     const input = payload.input && typeof payload.input === "object" ? payload.input as Json : {};
     if (action === "downloadAttachment") return downloadAttachment(user, clean(input.id, 160));
     return json({ data: await act(user, action, input) });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "De bewerking is mislukt.";
+    const message = safeErrorMessage(error);
+    if (actorId) {
+      try {
+        await database().prepare("INSERT INTO error_events (id, actor_id, action, message, severity, created_at) VALUES (?, ?, ?, ?, 'error', ?)")
+          .bind(id(), actorId, actionName, message, Date.now()).run();
+      } catch { /* Error logging must never hide the original response. */ }
+    }
     const status = /niet aangemeld|aanmelding|uitgenodigd|niet actief|Alleen/.test(message) ? 403 : 400;
     return json({ error: message }, status);
   }

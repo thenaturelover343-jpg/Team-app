@@ -1,4 +1,4 @@
-import type { Assignment, AssignmentTask, Attachment, CorrectionRequest, Customer, GeoLocation, Incident, PlannedShift, PushState, Shift, ShiftBreak, TeamNotification, User, WeeklyAvailability } from '../types';
+import type { AccessEvent, Assignment, AssignmentTask, Attachment, AuditEvent, BackupRun, CorrectionRequest, Customer, ErrorEvent, GeoLocation, Incident, PilotFeedback, PilotProgram, PlannedShift, PrivacySettings, PushState, Shift, ShiftBreak, TeamNotification, User, WeeklyAvailability } from '../types';
 import { auth } from './firebase';
 import { enqueueOfflineAction, flushOfflineQueue } from './offlineQueue';
 
@@ -10,7 +10,7 @@ type AssignmentTransitionInput = { assignmentId: string; status: 'arrived' | 'co
 type CustomerInput = { id?: string; name: string; address: string; phone?: string; email?: string; latitude?: number | ''; longitude?: number | '' };
 type AssignmentInput = { id?: string; userId: string; customerId: string; date: string; startTime: string; description: string };
 type PlannedShiftInput = { title: string; customerId?: string; date: string; startTime: string; endTime: string; breakMinutes: number; notes?: string; memberIds: string[]; repeatWeeks: number; checklist: string[] };
-export type TeamSnapshot = { user: User; users: User[]; shifts: Shift[]; assignments: Assignment[]; customers: Customer[]; plannedShifts: PlannedShift[]; breaks: ShiftBreak[]; incidents: Incident[]; correctionRequests: CorrectionRequest[]; attachments: Attachment[]; notifications: TeamNotification[]; push: PushState };
+export type TeamSnapshot = { user: User; users: User[]; shifts: Shift[]; assignments: Assignment[]; customers: Customer[]; plannedShifts: PlannedShift[]; breaks: ShiftBreak[]; incidents: Incident[]; correctionRequests: CorrectionRequest[]; attachments: Attachment[]; notifications: TeamNotification[]; push: PushState; privacy: PrivacySettings; auditEvents: AuditEvent[]; accessEvents: AccessEvent[]; backups: BackupRun[]; errors: ErrorEvent[]; pilot: PilotProgram | null; pilotFeedback: PilotFeedback[] };
 
 async function call<T>(action: string, input: Record<string, unknown> = {}): Promise<{ data: T }> {
   const current = auth.currentUser;
@@ -94,6 +94,13 @@ export const secureApi = {
   markNotificationRead: (id: string) => call<{ ok: boolean }>('markNotificationRead', { id }),
   markAllNotificationsRead: () => call<{ ok: boolean }>('markAllNotificationsRead'),
   runNotificationSweep: () => call<{ ok: boolean }>('runNotificationSweep'),
+  updatePrivacySettings: (input: PrivacySettings) => call<{ ok: boolean }>('updatePrivacySettings', input),
+  runPrivacyCleanup: () => call<{ skipped: boolean; counts: Record<string, number> }>('runPrivacyCleanup'),
+  createBackup: () => call<{ id: string }>('createBackup'),
+  testLatestBackup: () => call<{ ok: boolean; id: string }>('testLatestBackup'),
+  startPilot: (memberIds: string[], durationDays: number) => call<{ id: string }>('startPilot', { memberIds, durationDays }),
+  closePilot: (id: string) => call<{ ok: boolean }>('closePilot', { id }),
+  submitPilotFeedback: (pilotId: string, rating: number, category: string, message: string) => call<{ id: string }>('submitPilotFeedback', { pilotId, rating, category, message }),
   exportHours: (kind: 'payroll' | 'invoice', startDate: string, endDate: string) => call<{ filename: string; csv: string; rows: number }>('exportHours', { kind, startDate, endDate }),
   uploadAttachment,
   downloadAttachment,

@@ -55,7 +55,7 @@ export const shifts = sqliteTable("shifts", {
   clockInAccuracy: real("clock_in_accuracy"), clockInDistance: real("clock_in_distance"), clockInClientAt: integer("clock_in_client_at"),
   clockOut: integer("clock_out"), clockOutLat: real("clock_out_lat"), clockOutLng: real("clock_out_lng"),
   clockOutAccuracy: real("clock_out_accuracy"), clockOutDistance: real("clock_out_distance"), clockOutClientAt: integer("clock_out_client_at"),
-  geofenceStatus: text("geofence_status"), statusTag: text("status_tag"), notes: text("notes"),
+  geofenceStatus: text("geofence_status"), locationAnonymizedAt: integer("location_anonymized_at"), statusTag: text("status_tag"), notes: text("notes"),
 }, table => [index("idx_shifts_user_clock").on(table.userId, table.clockIn)]);
 
 export const timesheetApprovals = sqliteTable("timesheet_approvals", {
@@ -119,3 +119,41 @@ export const auditEvents = sqliteTable("audit_events", {
   targetType: text("target_type").notNull(), targetId: text("target_id").notNull(), detailsJson: text("details_json").notNull().default("{}"),
   createdAt: integer("created_at").notNull(),
 }, table => [index("idx_audit_events_created").on(table.createdAt), index("idx_audit_events_actor").on(table.actorId)]);
+
+export const accessEvents = sqliteTable("access_events", {
+  id: text("id").primaryKey(), userId: text("user_id").notNull(), accessDate: text("access_date").notNull(),
+  userAgent: text("user_agent"), createdAt: integer("created_at").notNull(),
+}, table => [uniqueIndex("idx_access_events_user_date").on(table.userId, table.accessDate), index("idx_access_events_created").on(table.createdAt)]);
+
+export const privacySettings = sqliteTable("privacy_settings", {
+  id: text("id").primaryKey(), controllerName: text("controller_name").notNull().default("Barlicious & Koelverhuur"),
+  contactEmail: text("contact_email"), locationDays: integer("location_days").notNull().default(90),
+  notificationDays: integer("notification_days").notNull().default(180), auditDays: integer("audit_days").notNull().default(730),
+  errorDays: integer("error_days").notNull().default(180), backupDays: integer("backup_days").notNull().default(365),
+  lastCleanupAt: integer("last_cleanup_at"), updatedBy: text("updated_by"), updatedAt: integer("updated_at").notNull(),
+});
+
+export const backupRuns = sqliteTable("backup_runs", {
+  id: text("id").primaryKey(), objectKey: text("object_key").notNull(), checksum: text("checksum").notNull(),
+  rowCountsJson: text("row_counts_json").notNull(), status: text("status").notNull(), createdBy: text("created_by").notNull(),
+  createdAt: integer("created_at").notNull(), testedAt: integer("tested_at"), testStatus: text("test_status"), testDetails: text("test_details"),
+}, table => [index("idx_backup_runs_created").on(table.createdAt)]);
+
+export const errorEvents = sqliteTable("error_events", {
+  id: text("id").primaryKey(), actorId: text("actor_id"), action: text("action"), message: text("message").notNull(),
+  severity: text("severity").notNull().default("error"), createdAt: integer("created_at").notNull(),
+}, table => [index("idx_error_events_created").on(table.createdAt), index("idx_error_events_action").on(table.action)]);
+
+export const pilotPrograms = sqliteTable("pilot_programs", {
+  id: text("id").primaryKey(), status: text("status").notNull().default("active"), createdBy: text("created_by").notNull(),
+  startedAt: integer("started_at").notNull(), endsAt: integer("ends_at").notNull(), closedAt: integer("closed_at"),
+}, table => [index("idx_pilot_programs_status").on(table.status)]);
+
+export const pilotMembers = sqliteTable("pilot_members", {
+  pilotId: text("pilot_id").notNull(), userId: text("user_id").notNull(), invitedAt: integer("invited_at").notNull(),
+}, table => [primaryKey({ columns: [table.pilotId, table.userId] }), index("idx_pilot_members_user").on(table.userId)]);
+
+export const pilotFeedback = sqliteTable("pilot_feedback", {
+  id: text("id").primaryKey(), pilotId: text("pilot_id").notNull(), userId: text("user_id").notNull(),
+  rating: integer("rating").notNull(), category: text("category").notNull(), message: text("message").notNull(), createdAt: integer("created_at").notNull(),
+}, table => [index("idx_pilot_feedback_pilot").on(table.pilotId, table.createdAt), index("idx_pilot_feedback_user").on(table.userId)]);

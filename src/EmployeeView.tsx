@@ -1,17 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
-import { User, Shift, ShiftBreak, Assignment, Attachment, CorrectionRequest, Incident, PlannedShift, PushState, TeamNotification, WeeklyAvailability, getCurrentLocation, formatTime, formatDate, AssignmentTask, localDateKey } from './types';
+import { User, Shift, ShiftBreak, Assignment, Attachment, CorrectionRequest, Incident, PlannedShift, PushState, TeamNotification, WeeklyAvailability, PrivacySettings, AccessEvent, PilotProgram, PilotFeedback, getCurrentLocation, formatTime, formatDate, AssignmentTask, localDateKey } from './types';
 import { MapPin, Clock, CheckCircle, Play, Square, Navigation2, FileText, Loader2, User as UserIcon, Calendar, History, Save, Plus, Trash2, CheckSquare, CalendarDays, XCircle, AlertTriangle, ClipboardList, WifiOff, Coffee, Upload, Download, Bell } from 'lucide-react';
 import { useAuth } from './hooks/useAuth';
 import { handleFirestoreError, OperationType } from './lib/firebase';
 import { secureApi } from './lib/secureApi';
 import { readOfflineQueue } from './lib/offlineQueue';
 import NotificationCenter from './components/NotificationCenter';
+import PrivacyPanel from './components/PrivacyPanel';
+import { useLanguage } from './i18n';
 
 const LiveLocationMap = dynamic(() => import('./components/LiveLocationMap'), { ssr: false });
 
 export default function EmployeeView() {
   const { user } = useAuth();
+  const { locale } = useLanguage(); const fr = locale === 'fr';
   const [activeTab, setActiveTab] = useState<'dashboard' | 'planning' | 'reports' | 'notifications' | 'profile'>('dashboard');
 
   const [shifts, setShifts] = useState<Shift[]>([]);
@@ -25,6 +28,8 @@ export default function EmployeeView() {
   const [push, setPush] = useState<PushState>({ supported: false, enabled: false, publicKey: '' });
   const [queueCount, setQueueCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [privacy, setPrivacy] = useState<PrivacySettings>({ controllerName: 'Barlicious & Koelverhuur', contactEmail: '', locationDays: 90, notificationDays: 180, auditDays: 730, errorDays: 180, backupDays: 365 });
+  const [accessEvents, setAccessEvents] = useState<AccessEvent[]>([]); const [pilot, setPilot] = useState<PilotProgram | null>(null); const [pilotFeedback, setPilotFeedback] = useState<PilotFeedback[]>([]);
   const loadData = React.useCallback(async () => {
     const { data } = await secureApi.snapshot();
     setShifts(data.shifts);
@@ -36,6 +41,7 @@ export default function EmployeeView() {
     setCorrectionRequests(data.correctionRequests);
     setNotifications(data.notifications);
     setPush(data.push);
+    setPrivacy(data.privacy); setAccessEvents(data.accessEvents); setPilot(data.pilot); setPilotFeedback(data.pilotFeedback);
     setLoading(false);
   }, []);
 
@@ -79,7 +85,7 @@ export default function EmployeeView() {
           className={`py-3 px-1 rounded-[12px] font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all relative ${activeTab === 'dashboard' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600'}`}
         >
           <Calendar className="w-4 h-4" />
-          <span>Vandaag</span>
+          <span>{fr ? "Aujourd'hui" : 'Vandaag'}</span>
           {unacknowledgedCount > 0 && (
             <span className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white shadow-[0_4px_14px_0_rgb(0,0,0,0.03)] ring-2 ring-white animate-bounce">
               {unacknowledgedCount}
@@ -93,14 +99,14 @@ export default function EmployeeView() {
           <CalendarDays className="w-4 h-4" />
           <span>Planning</span>
         </button>
-        <button onClick={() => setActiveTab('reports')} className={`py-3 px-1 rounded-[12px] font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all ${activeTab === 'reports' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600'}`}><AlertTriangle className="w-4 h-4" /><span>Melden</span></button>
-        <button onClick={() => setActiveTab('notifications')} className={`py-3 px-1 rounded-[12px] font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all relative ${activeTab === 'notifications' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600'}`}><Bell className="w-4 h-4" /><span>Berichten</span>{notifications.some(item => !item.readAt) && <span className="absolute top-1.5 right-2 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-white" />}</button>
+        <button onClick={() => setActiveTab('reports')} className={`py-3 px-1 rounded-[12px] font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all ${activeTab === 'reports' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600'}`}><AlertTriangle className="w-4 h-4" /><span>{fr ? 'Signaler' : 'Melden'}</span></button>
+        <button onClick={() => setActiveTab('notifications')} className={`py-3 px-1 rounded-[12px] font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all relative ${activeTab === 'notifications' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600'}`}><Bell className="w-4 h-4" /><span>{fr ? 'Messages' : 'Berichten'}</span>{notifications.some(item => !item.readAt) && <span className="absolute top-1.5 right-2 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-white" />}</button>
         <button
           onClick={() => setActiveTab('profile')}
           className={`py-3 px-1 rounded-[12px] font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all ${activeTab === 'profile' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600'}`}
         >
           <UserIcon className="w-4 h-4" />
-          <span>Mijn Profiel</span>
+          <span>{fr ? 'Profil' : 'Mijn Profiel'}</span>
         </button>
       </div>
 
@@ -108,7 +114,7 @@ export default function EmployeeView() {
       {activeTab === 'planning' && <EmployeePlanningTab userId={user.id} shifts={plannedShifts} attachments={attachments} onChanged={loadData} />}
       {activeTab === 'reports' && <ReportsTab shifts={shifts} plannedShifts={plannedShifts} incidents={incidents} corrections={correctionRequests} onChanged={loadData} />}
       {activeTab === 'notifications' && <NotificationCenter notifications={notifications} push={push} onChanged={loadData} />}
-      {activeTab === 'profile' && <ProfileTab user={user} />}
+      {activeTab === 'profile' && <div className="space-y-6"><ProfileTab user={user} /><PrivacyPanel privacy={privacy} accessEvents={accessEvents} pilot={pilot} feedback={pilotFeedback} onChanged={loadData} /></div>}
     </div>
   );
 }

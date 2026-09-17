@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { User, Assignment, Shift, Customer, CorrectionRequest, Incident, PlannedShift, PushState, TeamNotification, formatDate, formatTime, localDateKey } from './types';
-import { Calendar, Clock, MapPin, Plus, User as UserIcon, ListTodo, Loader2, Users, CheckSquare, Square, Download, BarChart2, CalendarDays, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { User, Assignment, Shift, Customer, CorrectionRequest, Incident, PlannedShift, PushState, TeamNotification, PrivacySettings, AuditEvent, AccessEvent, BackupRun, ErrorEvent, PilotProgram, PilotFeedback, formatDate, formatTime, localDateKey } from './types';
+import { Calendar, Clock, MapPin, Plus, User as UserIcon, ListTodo, Loader2, Users, CheckSquare, Square, Download, BarChart2, CalendarDays, AlertTriangle, ShieldCheck, Settings } from 'lucide-react';
 import { handleFirestoreError, OperationType } from './lib/firebase';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { secureApi } from './lib/secureApi';
 import WeekPlanner from './components/WeekPlanner';
 import ControlCenter from './components/ControlCenter';
+import QualityCenter from './components/QualityCenter';
+import { useLanguage } from './i18n';
 
 export default function AdminView() {
-  const [activeTab, setActiveTab] = useState<'control' | 'week' | 'planning' | 'timesheets' | 'reports' | 'customers' | 'team'>('control');
+  const { locale } = useLanguage(); const fr = locale === 'fr';
+  const [activeTab, setActiveTab] = useState<'control' | 'week' | 'planning' | 'timesheets' | 'reports' | 'customers' | 'team' | 'quality'>('control');
   
   const [users, setUsers] = useState<User[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
@@ -20,6 +23,8 @@ export default function AdminView() {
   const [notifications, setNotifications] = useState<TeamNotification[]>([]);
   const [push, setPush] = useState<PushState>({ supported: false, enabled: false, publicKey: '' });
   const [loading, setLoading] = useState(true);
+  const [privacy, setPrivacy] = useState<PrivacySettings>({ controllerName: 'Barlicious & Koelverhuur', contactEmail: '', locationDays: 90, notificationDays: 180, auditDays: 730, errorDays: 180, backupDays: 365 });
+  const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]); const [accessEvents, setAccessEvents] = useState<AccessEvent[]>([]); const [backups, setBackups] = useState<BackupRun[]>([]); const [errors, setErrors] = useState<ErrorEvent[]>([]); const [pilot, setPilot] = useState<PilotProgram | null>(null); const [pilotFeedback, setPilotFeedback] = useState<PilotFeedback[]>([]);
 
   const loadData = React.useCallback(async () => {
     const { data } = await secureApi.snapshot();
@@ -32,6 +37,7 @@ export default function AdminView() {
     setCorrectionRequests(data.correctionRequests);
     setNotifications(data.notifications);
     setPush(data.push);
+    setPrivacy(data.privacy); setAuditEvents(data.auditEvents); setAccessEvents(data.accessEvents); setBackups(data.backups); setErrors(data.errors); setPilot(data.pilot); setPilotFeedback(data.pilotFeedback);
     setLoading(false);
   }, []);
 
@@ -66,6 +72,7 @@ export default function AdminView() {
           <CalendarDays className="w-4 h-4" />
           <span>Weekplanner</span>
         </button>
+        <button onClick={() => setActiveTab('quality')} className={`flex-1 py-3 px-4 rounded-[12px] font-bold text-sm flex items-center justify-center space-x-2 transition-all ${activeTab === 'quality' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600 hover:bg-zinc-100/50'}`}><Settings className="w-4 h-4"/><span>{fr ? 'Qualité' : 'Kwaliteit'}</span></button>
         <button
           onClick={() => setActiveTab('planning')}
           className={`flex-1 py-3 px-4 rounded-[12px] font-bold text-sm flex items-center justify-center space-x-2 transition-all ${activeTab === 'planning' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600 hover:bg-zinc-100/50'}`}
@@ -104,6 +111,7 @@ export default function AdminView() {
       {activeTab === 'reports' && <AdminReportsTab users={users} incidents={incidents} corrections={correctionRequests} onChanged={loadData} />}
       {activeTab === 'customers' && <CustomersTab customers={customers} />}
       {activeTab === 'team' && <TeamTab users={users} />}
+      {activeTab === 'quality' && <QualityCenter users={users} privacy={privacy} auditEvents={auditEvents} accessEvents={accessEvents} backups={backups} errors={errors} pilot={pilot} feedback={pilotFeedback} onChanged={loadData} />}
     </div>
   );
 }

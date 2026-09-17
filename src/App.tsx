@@ -6,9 +6,11 @@ import { motion, AnimatePresence } from 'motion/react';
 import { PWAInstallButton } from './components/PWAInstallButton';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { loginWithEmail, loginWithGoogle, logout, resetPassword } from './lib/firebase';
+import { LanguageProvider, LanguageSwitch, useLanguage } from './i18n';
 
 function AppContent() {
   const { user, loading, accessError } = useAuth();
+  const { locale } = useLanguage(); const fr = locale === 'fr';
   
   // Auth Form State
   const [email, setEmail] = useState('');
@@ -75,14 +77,14 @@ function AppContent() {
     return (
       <div className="min-h-screen bg-[#FAFAFA] flex flex-col items-center justify-center space-y-4">
         <Loader2 className="w-8 h-8 animate-spin text-zinc-900" />
-        <p className="text-zinc-500 font-medium tracking-wide">Bezig met laden...</p>
+        <p className="text-zinc-500 font-medium tracking-wide">{fr ? 'Chargement…' : 'Bezig met laden...'}</p>
       </div>
     );
   }
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-zinc-900 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-zinc-900 flex items-center justify-center p-4 relative"><div className="absolute top-4 right-4"><LanguageSwitch /></div>
         <motion.div 
           initial={{ opacity: 0, y: 20 }} 
           animate={{ opacity: 1, y: 0 }}
@@ -93,7 +95,7 @@ function AppContent() {
               <Truck className="w-8 h-8" />
             </div>
             <h1 className="text-2xl font-bold text-zinc-900 tracking-tight">Barlicious & Koelverhuur</h1>
-            <p className="text-zinc-500">Log in met uw uitgenodigde account</p>
+            <p className="text-zinc-500">{fr ? 'Connectez-vous avec votre compte invité' : 'Log in met uw uitgenodigde account'}</p>
           </div>
 
           {(authError || accessError) && (
@@ -107,14 +109,14 @@ function AppContent() {
 
           <form onSubmit={handleEmailAuth} className="space-y-4">
             <div>
-              <label className="block text-sm font-bold text-zinc-700 mb-1.5">E-mailadres</label>
+              <label className="block text-sm font-bold text-zinc-700 mb-1.5">{fr ? 'Adresse e-mail' : 'E-mailadres'}</label>
               <input 
                 type="email" value={email} onChange={e => setEmail(e.target.value)} required
                 className="w-full border border-zinc-200 rounded-[16px] p-3.5 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none bg-[#FAFAFA] transition-all font-medium"
               />
             </div>
             <div>
-              <label className="block text-sm font-bold text-zinc-700 mb-1.5">Wachtwoord</label>
+              <label className="block text-sm font-bold text-zinc-700 mb-1.5">{fr ? 'Mot de passe' : 'Wachtwoord'}</label>
               <input 
                 type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={6}
                 className="w-full border border-zinc-200 rounded-[16px] p-3.5 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none bg-[#FAFAFA] transition-all font-medium"
@@ -127,11 +129,11 @@ function AppContent() {
               className="w-full bg-zinc-900 hover:bg-zinc-900 text-white font-bold py-4 rounded-[16px] flex items-center justify-center space-x-2 transition-all shadow-lg shadow-[0_4px_14px_0_rgb(0,0,0,0.1)] disabled:opacity-50 mt-2"
             >
               {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
-              <span>Inloggen</span>
+              <span>{fr ? 'Se connecter' : 'Inloggen'}</span>
             </button>
           </form>
           <button type="button" onClick={handlePasswordReset} className="w-full text-sm font-bold text-zinc-600 hover:text-zinc-900">
-            Wachtwoord vergeten?
+            {fr ? 'Mot de passe oublié ?' : 'Wachtwoord vergeten?'}
           </button>
 
           <div className="flex items-center gap-3 text-zinc-400 text-sm">
@@ -146,10 +148,10 @@ function AppContent() {
             disabled={isSubmitting}
             className="w-full border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-900 font-bold py-4 rounded-[16px] transition-all disabled:opacity-50"
           >
-            Verder met Google
+            {fr ? 'Continuer avec Google' : 'Verder met Google'}
           </button>
 
-          <p className="text-center text-xs text-zinc-500">Nieuwe accounts worden uitsluitend door een beheerder aangemaakt.</p>
+          <p className="text-center text-xs text-zinc-500">{fr ? 'Les nouveaux comptes sont créés uniquement par un administrateur.' : 'Nieuwe accounts worden uitsluitend door een beheerder aangemaakt.'}</p>
         </motion.div>
       </div>
     );
@@ -157,6 +159,7 @@ function AppContent() {
 
   return (
     <div className="min-h-screen bg-[#FAFAFA] font-sans selection:bg-zinc-900">
+      <a href="#main-content" className="skip-link">{fr ? 'Aller au contenu' : 'Ga naar inhoud'}</a>
       <header className="bg-white border-b border-zinc-200 sticky top-0 z-50 text-zinc-900">
         <div className="max-w-6xl mx-auto px-4 md:px-8">
           <div className="h-[72px] flex items-center justify-between">
@@ -171,6 +174,7 @@ function AppContent() {
             </div>
             
             <div className="flex items-center space-x-4">
+              <LanguageSwitch />
               <PWAInstallButton />
               <div className="flex items-center space-x-4 bg-zinc-50 pl-2 pr-4 py-1.5 rounded-full border border-zinc-200">
                 <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center border border-zinc-200">
@@ -180,7 +184,7 @@ function AppContent() {
                   <span className="text-sm font-bold text-zinc-900 leading-tight truncate max-w-[100px]">{user.name}</span>
                   <span className="text-xs text-zinc-400 leading-tight capitalize">{user.role}</span>
                 </div>
-                <button onClick={logout} className="text-zinc-400 hover:text-zinc-900 transition-colors" title="Uitloggen">
+                <button onClick={logout} aria-label={fr ? 'Se déconnecter' : 'Uitloggen'} className="text-zinc-400 hover:text-zinc-900 transition-colors" title={fr ? 'Se déconnecter' : 'Uitloggen'}>
                   <LogOut className="w-4 h-4" />
                 </button>
               </div>
@@ -189,7 +193,7 @@ function AppContent() {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 md:px-8 py-8">
+      <main id="main-content" tabIndex={-1} className="max-w-6xl mx-auto px-4 sm:px-6 md:px-8 py-8">
         <AnimatePresence mode="wait">
           <motion.div
             key={user.role}
@@ -212,8 +216,6 @@ function AppContent() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <LanguageProvider><AuthProvider><AppContent /></AuthProvider></LanguageProvider>
   );
 }
