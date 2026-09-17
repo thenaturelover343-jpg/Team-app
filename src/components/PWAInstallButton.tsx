@@ -16,7 +16,7 @@ export const PWAInstallButton: React.FC = () => {
     return (
       <button
         onClick={install}
-        className="flex items-center gap-2 rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-bold text-white shadow-sm hover:bg-zinc-800 transition"
+        className="ops-btn-primary gap-2 px-3 text-sm"
       >
         <Download className="w-4 h-4" />
         <span className="hidden sm:inline">Installeer App</span>
@@ -30,7 +30,7 @@ export const PWAInstallButton: React.FC = () => {
       <>
         <button
           onClick={() => setShowIOSGuide(true)}
-          className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-bold text-zinc-700 hover:bg-zinc-50 transition"
+          className="ops-btn-secondary gap-2 px-3 text-sm"
         >
           <Download className="w-4 h-4" />
           <span className="hidden sm:inline">Installeer App</span>
@@ -38,7 +38,7 @@ export const PWAInstallButton: React.FC = () => {
 
         {showIOSGuide && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-            <div className="w-full max-w-sm rounded-[24px] bg-white p-6 shadow-xl space-y-4">
+            <div className="ops-card w-full max-w-sm p-6 space-y-4">
               <h3 className="text-xl font-bold text-zinc-900">App installeren op iPhone</h3>
               <p className="text-zinc-600 font-medium">
                 Om deze app vast te zetten op uw telefoon:
@@ -49,7 +49,7 @@ export const PWAInstallButton: React.FC = () => {
               </ul>
               <button
                 onClick={() => setShowIOSGuide(false)}
-                className="mt-6 w-full rounded-[16px] bg-zinc-100 py-3 text-sm font-bold text-zinc-900 hover:bg-zinc-200 transition-colors"
+                className="ops-btn-secondary mt-6 w-full text-sm"
               >
                 Sluiten
               </button>

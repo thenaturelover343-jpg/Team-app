@@ -77,33 +77,33 @@ export default function EmployeeView() {
   const unacknowledgedCount = assignments.filter(a => a.status === 'pending' && a.acknowledged === false).length;
 
   return (
-    <div className="max-w-lg mx-auto w-full space-y-6 pb-28">
-      {queueCount > 0 && <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm font-semibold text-amber-800 flex items-center gap-2"><WifiOff className="w-4 h-4" />{queueCount} actie{queueCount === 1 ? '' : 's'} wachten op internet.</div>}
-      <div className="fixed bottom-3 left-3 right-3 z-50 max-w-lg mx-auto bg-white/95 backdrop-blur rounded-2xl shadow-xl border border-zinc-200 p-1.5 grid grid-cols-5 gap-1">
+    <div className="employee-shell max-w-lg mx-auto w-full space-y-6 pb-28">
+      {queueCount > 0 && <div className="ops-chip-warning w-full justify-start p-3"><WifiOff className="w-4 h-4" />{queueCount} actie{queueCount === 1 ? '' : 's'} wachten op internet.</div>}
+      <div className="employee-nav ops-nav fixed bottom-3 left-3 right-3 z-50 max-w-lg mx-auto p-1.5">
         <button
           onClick={() => setActiveTab('dashboard')}
-          className={`py-3 px-1 rounded-[12px] font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all relative ${activeTab === 'dashboard' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600'}`}
+          className={`ops-nav-btn flex-col gap-1 relative ${activeTab === 'dashboard' ? 'ops-nav-btn-active' : ''}`}
         >
           <Calendar className="w-4 h-4" />
           <span>{fr ? "Aujourd'hui" : 'Vandaag'}</span>
           {unacknowledgedCount > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white shadow-[0_4px_14px_0_rgb(0,0,0,0.03)] ring-2 ring-white animate-bounce">
+            <span className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white ring-2 ring-white">
               {unacknowledgedCount}
             </span>
           )}
         </button>
         <button
           onClick={() => setActiveTab('planning')}
-          className={`py-3 px-1 rounded-[12px] font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all ${activeTab === 'planning' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600'}`}
+          className={`ops-nav-btn flex-col gap-1 ${activeTab === 'planning' ? 'ops-nav-btn-active' : ''}`}
         >
           <CalendarDays className="w-4 h-4" />
           <span>Planning</span>
         </button>
-        <button onClick={() => setActiveTab('reports')} className={`py-3 px-1 rounded-[12px] font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all ${activeTab === 'reports' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600'}`}><AlertTriangle className="w-4 h-4" /><span>{fr ? 'Signaler' : 'Melden'}</span></button>
-        <button onClick={() => setActiveTab('notifications')} className={`py-3 px-1 rounded-[12px] font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all relative ${activeTab === 'notifications' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600'}`}><Bell className="w-4 h-4" /><span>{fr ? 'Messages' : 'Berichten'}</span>{notifications.some(item => !item.readAt) && <span className="absolute top-1.5 right-2 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-white" />}</button>
+        <button onClick={() => setActiveTab('reports')} className={`ops-nav-btn flex-col gap-1 ${activeTab === 'reports' ? 'ops-nav-btn-active' : ''}`}><AlertTriangle className="w-4 h-4" /><span>{fr ? 'Signaler' : 'Melden'}</span></button>
+        <button onClick={() => setActiveTab('notifications')} className={`ops-nav-btn flex-col gap-1 relative ${activeTab === 'notifications' ? 'ops-nav-btn-active' : ''}`}><Bell className="w-4 h-4" /><span>{fr ? 'Messages' : 'Berichten'}</span>{notifications.some(item => !item.readAt) && <span className="absolute top-1.5 right-2 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-white" />}</button>
         <button
           onClick={() => setActiveTab('profile')}
-          className={`py-3 px-1 rounded-[12px] font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all ${activeTab === 'profile' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600'}`}
+          className={`ops-nav-btn flex-col gap-1 ${activeTab === 'profile' ? 'ops-nav-btn-active' : ''}`}
         >
           <UserIcon className="w-4 h-4" />
           <span>{fr ? 'Profil' : 'Mijn Profiel'}</span>
@@ -241,7 +241,7 @@ function DashboardTab({ userId, shifts, breaks, assignments, plannedShifts, load
           </div>
           <div className="space-y-3">
             {unacknowledgedAssignments.map(a => (
-               <div key={a.id} className="flex flex-col sm:flex-row sm:items-center justify-between bg-white p-4 rounded-[12px] border border-amber-100 shadow-[0_4px_14px_0_rgb(0,0,0,0.03)] gap-3">
+               <div key={a.id} className="ops-panel flex flex-col sm:flex-row sm:items-center justify-between p-4 gap-3">
                   <div>
                     <div className="font-bold text-zinc-800">{a.customerName}</div>
                     <div className="text-sm text-zinc-500 line-clamp-1">{a.description}</div>
@@ -258,31 +258,31 @@ function DashboardTab({ userId, shifts, breaks, assignments, plannedShifts, load
         </div>
       )}
 
-      {todaysPlanned.length > 0 && <div className="bg-white rounded-[24px] border border-zinc-200 p-5 space-y-3">
+      {todaysPlanned.length > 0 && <div className="ops-card p-5 space-y-3">
         <h2 className="font-bold text-zinc-900">Vandaag gepland</h2>
-        {todaysPlanned.map(item => <div key={item.id} className="bg-zinc-50 border border-zinc-200 rounded-xl p-3 flex justify-between gap-3"><div><div className="font-bold">{item.title}</div><div className="text-sm text-zinc-500">{item.startTime}–{item.endTime}{item.customerName ? ` · ${item.customerName}` : ''}</div></div>{item.customerLatitude !== undefined && item.customerLongitude !== undefined && <a target="_blank" rel="noreferrer" href={`https://www.google.com/maps/dir/?api=1&destination=${item.customerLatitude},${item.customerLongitude}`} className="shrink-0 bg-zinc-900 text-white rounded-lg px-3 py-2 text-xs font-bold flex items-center gap-1"><Navigation2 className="w-3.5 h-3.5" />Route</a>}</div>)}
+        {todaysPlanned.map(item => <div key={item.id} className="ops-panel p-3 flex justify-between gap-3"><div><div className="font-bold">{item.title}</div><div className="text-sm text-zinc-500">{item.startTime}–{item.endTime}{item.customerName ? ` · ${item.customerName}` : ''}</div></div>{item.customerLatitude !== undefined && item.customerLongitude !== undefined && <a target="_blank" rel="noreferrer" href={`https://www.google.com/maps/dir/?api=1&destination=${item.customerLatitude},${item.customerLongitude}`} className="ops-btn-primary shrink-0 px-3 text-xs gap-1"><Navigation2 className="w-3.5 h-3.5" />Route</a>}</div>)}
       </div>}
 
       {/* Time Tracking Card */}
-      <div className="bg-white rounded-[24px] shadow-[0_4px_14px_0_rgb(0,0,0,0.03)] border border-zinc-200/60 overflow-hidden">
+      <div className="ops-card overflow-hidden">
         <div className="p-8 text-center space-y-6">
           <h2 className="text-xl font-bold text-zinc-800">Urenregistratie</h2>
           
           {activeShift ? (
             <div className="space-y-6">
-              <div className="inline-flex items-center justify-center space-x-2 bg-green-50 text-green-700 px-5 py-2.5 rounded-full font-semibold border border-green-200/50">
+              <div className="ops-chip-success px-5 py-2.5">
                 <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse" />
                 <span>Ingeklokt sinds {formatTime(activeShift.clockIn)}</span>
               </div>
               {activeShift.clockInLoc?.accuracy > 0 && <div className="text-xs font-semibold text-zinc-500">GPS-nauwkeurigheid: ±{Math.round(activeShift.clockInLoc.accuracy)} m{activeShift.clockInDistance !== undefined ? ` · afstand locatie: ${Math.round(activeShift.clockInDistance)} m` : ''}</div>}
               
-              <div className="text-left space-y-4 bg-[#FAFAFA] p-5 rounded-[24px] border border-zinc-200">
+              <div className="ops-panel text-left space-y-4 p-5">
                 <div>
                   <label className="block text-sm font-bold text-zinc-700 mb-1.5">Dienst Status</label>
                   <select 
                     value={shiftStatus} 
                     onChange={e => setShiftStatus(e.target.value as typeof shiftStatus)}
-                    className="w-full border border-zinc-200 rounded-[12px] p-3 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none bg-white transition-all font-medium text-sm"
+                    className="ops-input w-full p-3 font-medium text-sm"
                   >
                     <option value="Normaal">Normaal</option>
                     <option value="Vertraagd">Vertraagd</option>
@@ -296,17 +296,17 @@ function DashboardTab({ userId, shifts, breaks, assignments, plannedShifts, load
                     value={shiftNotes} 
                     onChange={e => setShiftNotes(e.target.value)}
                     placeholder="Bijzonderheden over deze werkdag..."
-                    className="w-full border border-zinc-200 rounded-[12px] p-3 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none bg-white transition-all font-medium resize-none h-20 text-sm"
+                    className="ops-input w-full p-3 font-medium resize-none h-20 text-sm"
                   />
                 </div>
               </div>
 
-              <button onClick={toggleBreak} disabled={isLocating} className={`w-full flex items-center justify-center gap-2 py-4 rounded-[18px] font-bold border ${activeBreak ? 'bg-amber-100 border-amber-300 text-amber-900' : 'bg-white border-zinc-300 text-zinc-800'}`}><Coffee className="w-5 h-5" />{activeBreak ? `Pauze beëindigen · sinds ${formatTime(activeBreak.startedAt)}` : 'Pauze starten'}</button>
+              <button onClick={toggleBreak} disabled={isLocating} className={`w-full gap-2 py-4 ${activeBreak ? 'ops-chip-warning' : 'ops-btn-secondary'}`}><Coffee className="w-5 h-5" />{activeBreak ? `Pauze beëindigen · sinds ${formatTime(activeBreak.startedAt)}` : 'Pauze starten'}</button>
 
               <button
                 onClick={handleClockOut}
                 disabled={isLocating}
-                className="w-full flex items-center justify-center space-x-3 bg-zinc-900 hover:bg-zinc-800 text-white py-5 rounded-[24px] font-bold text-lg transition-colors disabled:opacity-50 shadow-lg shadow-[0_4px_14px_0_rgb(0,0,0,0.1)]"
+                className="ops-btn-primary w-full space-x-3 py-5 text-lg"
               >
                 {isLocating ? <Loader2 className="animate-spin w-6 h-6" /> : <Square className="w-6 h-6" />}
                 <span>{isLocating ? 'Locatie zoeken...' : 'Uitklokken'}</span>
@@ -315,11 +315,11 @@ function DashboardTab({ userId, shifts, breaks, assignments, plannedShifts, load
           ) : (
             <div className="space-y-6">
               <p className="text-zinc-500 font-medium">Je bent momenteel niet ingeklokt.</p>
-              {todaysPlanned.length > 0 && <select value={selectedPlannedShiftId} onChange={e => setPlannedShiftId(e.target.value)} className="w-full border border-zinc-200 rounded-xl p-3 bg-white font-semibold text-sm"><option value="">Algemene werkdag</option>{todaysPlanned.map(item => <option key={item.id} value={item.id}>{item.startTime} — {item.title}</option>)}</select>}
+              {todaysPlanned.length > 0 && <select value={selectedPlannedShiftId} onChange={e => setPlannedShiftId(e.target.value)} className="ops-input w-full p-3 font-semibold text-sm"><option value="">Algemene werkdag</option>{todaysPlanned.map(item => <option key={item.id} value={item.id}>{item.startTime} — {item.title}</option>)}</select>}
               <button
                 onClick={handleClockIn}
                 disabled={isLocating}
-                className="w-full flex items-center justify-center space-x-3 bg-zinc-900 hover:bg-zinc-900 text-white py-5 rounded-[24px] font-bold text-lg transition-colors disabled:opacity-50 shadow-lg shadow-[0_4px_14px_0_rgb(0,0,0,0.1)]"
+                className="ops-btn-primary w-full space-x-3 py-5 text-lg"
               >
                 {isLocating ? <Loader2 className="animate-spin w-6 h-6" /> : <Play className="w-6 h-6" />}
                 <span>{isLocating ? 'Locatie zoeken...' : 'Start Werkdag (Inklokken)'}</span>
@@ -732,7 +732,7 @@ function AssignmentCard({ assignment }: { assignment: Assignment; key?: string |
   };
 
   return (
-    <div className={`bg-white rounded-[24px] shadow-[0_4px_14px_0_rgb(0,0,0,0.03)] border overflow-hidden transition-all ${assignment.status === 'completed' ? 'border-green-200 bg-green-50/10' : 'border-zinc-200/60'}`}>
+    <div className={`ops-card overflow-hidden transition-all ${assignment.status === 'completed' ? 'border-emerald-400/60' : ''}`}>
       <div className="p-6 space-y-5">
         <div className="flex justify-between items-start">
           <div>
@@ -763,7 +763,7 @@ function AssignmentCard({ assignment }: { assignment: Assignment; key?: string |
             <button
               onClick={handleArrive}
               disabled={isUpdating}
-              className="w-full flex items-center justify-center space-x-2 bg-zinc-100/50 hover:bg-zinc-100 text-zinc-900 py-4 rounded-[24px] font-bold transition-colors disabled:opacity-50"
+              className="ops-btn-secondary w-full space-x-2 py-4"
             >
               {isUpdating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Navigation2 className="w-5 h-5" />}
               <span>Markeer als aangekomen</span>
@@ -773,7 +773,7 @@ function AssignmentCard({ assignment }: { assignment: Assignment; key?: string |
 
         {assignment.status === 'arrived' && (
           <div className="space-y-5 pt-4 border-t border-zinc-200">
-            <div className="flex items-center space-x-2 text-sm font-medium text-zinc-900 bg-zinc-900/50 border border-zinc-200 p-3.5 rounded-[12px]">
+            <div className="ops-panel flex items-center space-x-2 text-sm font-medium p-3.5">
               <Clock className="w-4 h-4 text-zinc-900" />
               <span>Aangekomen om {formatTime(assignment.arrivalTime!)}</span>
             </div>
@@ -787,7 +787,7 @@ function AssignmentCard({ assignment }: { assignment: Assignment; key?: string |
               {tasks.length > 0 && (
                 <div className="space-y-2 mb-3">
                   {tasks.map(task => (
-                    <div key={task.id} className="flex items-center justify-between p-3 bg-[#FAFAFA] border border-zinc-200/60 rounded-[12px]">
+                    <div key={task.id} className="ops-panel flex items-center justify-between p-3">
                       <label className="flex items-center space-x-3 cursor-pointer flex-1">
                         <input 
                           type="checkbox" 
@@ -813,9 +813,9 @@ function AssignmentCard({ assignment }: { assignment: Assignment; key?: string |
                   value={newTaskText} 
                   onChange={e => setNewTaskText(e.target.value)}
                   placeholder="Nieuwe taak toevoegen..."
-                  className="flex-1 border border-zinc-200 rounded-[12px] p-3 text-sm focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none transition-all"
+                  className="ops-input flex-1 p-3 text-sm"
                 />
-                <button type="submit" disabled={!newTaskText.trim() || isUpdating} className="bg-zinc-900 text-white p-3 rounded-[12px] hover:bg-zinc-800 transition-colors disabled:opacity-50">
+                <button type="submit" disabled={!newTaskText.trim() || isUpdating} className="ops-btn-primary min-w-11 p-3">
                   <Plus className="w-5 h-5" />
                 </button>
               </form>
@@ -829,7 +829,7 @@ function AssignmentCard({ assignment }: { assignment: Assignment; key?: string |
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                className="w-full border border-zinc-200 rounded-[24px] p-4 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none resize-none transition-all"
+                className="ops-input w-full p-4 resize-none"
                 rows={3}
                 placeholder="Details over levering, opmerkingen klant..."
               />
@@ -843,7 +843,7 @@ function AssignmentCard({ assignment }: { assignment: Assignment; key?: string |
             <button
               onClick={handleComplete}
               disabled={isUpdating}
-              className="w-full flex items-center justify-center space-x-2 bg-zinc-900 hover:bg-zinc-900 text-white py-4 rounded-[24px] font-bold transition-all disabled:opacity-50 disabled:scale-[0.98] shadow-lg shadow-[0_4px_14px_0_rgb(0,0,0,0.1)] mt-4"
+              className="ops-btn-primary w-full space-x-2 py-4 mt-4"
             >
               {isUpdating ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle className="w-5 h-5" />}
               <span>Opdracht Afronden & Vertrekken</span>
@@ -854,18 +854,18 @@ function AssignmentCard({ assignment }: { assignment: Assignment; key?: string |
         {assignment.status === 'completed' && (
           <div className="pt-4 border-t border-green-100/50 space-y-3 text-sm">
             <div className="grid grid-cols-2 gap-4">
-              <div className="bg-[#FAFAFA] p-3 rounded-[12px] border border-zinc-200">
+              <div className="ops-panel p-3">
                 <span className="text-zinc-500 block text-xs font-medium mb-1 uppercase tracking-wider">Aankomst</span>
                 <span className="font-bold text-zinc-900">{formatTime(assignment.arrivalTime!)}</span>
               </div>
-              <div className="bg-[#FAFAFA] p-3 rounded-[12px] border border-zinc-200">
+              <div className="ops-panel p-3">
                 <span className="text-zinc-500 block text-xs font-medium mb-1 uppercase tracking-wider">Vertrek</span>
                 <span className="font-bold text-zinc-900">{formatTime(assignment.departureTime!)}</span>
               </div>
             </div>
             
             {assignment.tasks && assignment.tasks.length > 0 && (
-              <div className="mt-4 bg-white p-4 rounded-[12px] border-2 border-zinc-200">
+              <div className="ops-panel mt-4 p-4">
                 <span className="text-xs font-bold text-zinc-400 block mb-3 uppercase tracking-wider">Uitgevoerde Taken</span>
                 <ul className="space-y-2">
                   {assignment.tasks.map(t => (
@@ -879,7 +879,7 @@ function AssignmentCard({ assignment }: { assignment: Assignment; key?: string |
             )}
 
             {assignment.workNotes && (
-              <div className="mt-3 bg-white p-4 rounded-[12px] border-2 border-zinc-200 text-zinc-700 leading-relaxed">
+              <div className="ops-panel mt-3 p-4 text-zinc-700 leading-relaxed">
                 <span className="text-xs font-bold text-zinc-400 block mb-2 uppercase tracking-wider">Notities</span>
                 {assignment.workNotes}
               </div>
