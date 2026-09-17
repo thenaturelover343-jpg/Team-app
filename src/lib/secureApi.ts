@@ -1,5 +1,6 @@
-import type { Assignment, AssignmentTask, Customer, GeoLocation, PlannedShift, Shift, User, WeeklyAvailability } from '../types';
+import type { Assignment, AssignmentTask, Attachment, CorrectionRequest, Customer, GeoLocation, Incident, PlannedShift, Shift, ShiftBreak, User, WeeklyAvailability } from '../types';
 import { auth } from './firebase';
+import { enqueueOfflineAction, flushOfflineQueue } from './offlineQueue';
 
 type InviteInput = { email: string; name: string; phone?: string };
 type InviteResult = { uid: string; resetLink: string };
@@ -8,8 +9,8 @@ type ClockOutInput = { location: GeoLocation; notes: string; statusTag: string }
 type AssignmentTransitionInput = { assignmentId: string; status: 'arrived' | 'completed'; location: GeoLocation; notes?: string };
 type CustomerInput = { id?: string; name: string; address: string; phone?: string; email?: string; latitude?: number | ''; longitude?: number | '' };
 type AssignmentInput = { id?: string; userId: string; customerId: string; date: string; startTime: string; description: string };
-type PlannedShiftInput = { title: string; customerId?: string; date: string; startTime: string; endTime: string; breakMinutes: number; notes?: string; memberIds: string[]; repeatWeeks: number };
-export type TeamSnapshot = { user: User; users: User[]; shifts: Shift[]; assignments: Assignment[]; customers: Customer[]; plannedShifts: PlannedShift[] };
+type PlannedShiftInput = { title: string; customerId?: string; date: string; startTime: string; endTime: string; breakMinutes: number; notes?: string; memberIds: string[]; repeatWeeks: number; checklist: string[] };
+export type TeamSnapshot = { user: User; users: User[]; shifts: Shift[]; assignments: Assignment[]; customers: Customer[]; plannedShifts: PlannedShift[]; breaks: ShiftBreak[]; incidents: Incident[]; correctionRequests: CorrectionRequest[]; attachments: Attachment[] };
 
 async function call<T>(action: string, input: Record<string, unknown> = {}): Promise<{ data: T }> {
   const current = auth.currentUser;
@@ -25,6 +26,47 @@ async function call<T>(action: string, input: Record<string, unknown> = {}): Pro
   return { data: payload.data };
 }
 
+async function queueable(action: string, input: Record<string, unknown>) {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    enqueueOfflineAction(action, input);
+    return { queued: true };
+  }
+  try {
+    await call(action, input);
+    return { queued: false };
+  } catch (error) {
+    if (error instanceof TypeError) {
+      enqueueOfflineAction(action, input);
+      return { queued: true };
+    }
+    throw error;
+  }
+}
+
+async function uploadAttachment(entityType: 'planned_shift' | 'incident', entityId: string, file: File) {
+  const current = auth.currentUser;
+  if (!current) throw new Error('U bent niet aangemeld.');
+  const form = new FormData();
+  form.set('entityType', entityType);
+  form.set('entityId', entityId);
+  form.set('file', file);
+  const response = await fetch('/api/team', { method: 'POST', headers: { Authorization: `Bearer ${await current.getIdToken()}` }, body: form });
+  const payload = await response.json() as { data?: Attachment; error?: string };
+  if (!response.ok || !payload.data) throw new Error(payload.error || 'Uploaden is mislukt.');
+  return payload.data;
+}
+
+async function downloadAttachment(id: string) {
+  const current = auth.currentUser;
+  if (!current) throw new Error('U bent niet aangemeld.');
+  const response = await fetch('/api/team', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await current.getIdToken()}` }, body: JSON.stringify({ action: 'downloadAttachment', input: { id } }) });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({})) as { error?: string };
+    throw new Error(payload.error || 'Downloaden is mislukt.');
+  }
+  return response.blob();
+}
+
 export const secureApi = {
   snapshot: () => call<TeamSnapshot>('snapshot'),
   inviteEmployee: (input: InviteInput) => call<InviteResult>('inviteEmployee', input),
@@ -36,8 +78,18 @@ export const secureApi = {
   confirmPlannedShift: (shiftId: string, status: 'confirmed' | 'declined') => call<{ ok: boolean }>('confirmPlannedShift', { shiftId, status }),
   saveAssignment: (input: AssignmentInput) => call<{ id: string }>('saveAssignment', input),
   deleteAssignment: (id: string) => call<{ ok: boolean }>('deleteAssignment', { id }),
-  clockIn: (location: GeoLocation) => call<{ shiftId: string }>('clockIn', { location }),
+  clockIn: (location: GeoLocation, plannedShiftId?: string) => queueable('clockIn', { location, plannedShiftId }),
   clockOut: (input: ClockOutInput) => call<{ ok: boolean }>('clockOut', input),
+  queueClockOut: (input: ClockOutInput) => queueable('clockOut', input),
+  startBreak: () => queueable('startBreak', {}),
+  endBreak: () => queueable('endBreak', {}),
+  updatePlannedShiftChecklist: (plannedShiftId: string, completed: string[]) => queueable('updatePlannedShiftChecklist', { plannedShiftId, completed }),
+  createIncident: (input: { plannedShiftId?: string; category: string; severity: 'low' | 'medium' | 'high'; description: string; location?: GeoLocation; occurredAt: number }) => call<{ id: string }>('createIncident', input),
+  createCorrectionRequest: (input: { shiftId: string; requestedClockIn?: number; requestedClockOut?: number; reason: string }) => queueable('createCorrectionRequest', input),
+  reviewCorrectionRequest: (id: string, status: 'approved' | 'rejected') => call<{ ok: boolean }>('reviewCorrectionRequest', { id, status }),
+  uploadAttachment,
+  downloadAttachment,
+  flushOfflineQueue: () => flushOfflineQueue((action, input) => call(action, input)),
   acknowledgeAssignment: (assignmentId: string) => call<{ ok: boolean }>('acknowledgeAssignment', { assignmentId }),
   transitionAssignment: (input: AssignmentTransitionInput) => call<{ ok: boolean }>('transitionAssignment', input),
   updateProfile: (input: { name: string; phone: string; availability: string; availabilitySchedule: WeeklyAvailability }) => call<{ ok: boolean }>('updateProfile', input),

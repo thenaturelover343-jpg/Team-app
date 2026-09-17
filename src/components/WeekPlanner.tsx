@@ -128,12 +128,13 @@ function ShiftForm({ employees, customers, initialDate, onCancel, onSaved }: { e
   const [memberIds, setMemberIds] = useState<string[]>([]);
   const [repeatWeeks, setRepeatWeeks] = useState(1);
   const [notes, setNotes] = useState('');
+  const [checklistText, setChecklistText] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const toggle = (id: string) => setMemberIds(current => current.includes(id) ? current.filter(value => value !== id) : [...current, id]);
   const submit = async (event: React.FormEvent) => {
     event.preventDefault(); setBusy(true); setError('');
-    try { await secureApi.savePlannedShift({ title, customerId, date, startTime, endTime, breakMinutes, memberIds, repeatWeeks, notes }); await onSaved(); }
+    try { await secureApi.savePlannedShift({ title, customerId, date, startTime, endTime, breakMinutes, memberIds, repeatWeeks, notes, checklist: checklistText.split('\n').map(item => item.trim()).filter(Boolean) }); await onSaved(); }
     catch (reason) { setError(reason instanceof Error ? reason.message : 'De dienst kon niet worden opgeslagen.'); }
     finally { setBusy(false); }
   };
@@ -150,6 +151,7 @@ function ShiftForm({ employees, customers, initialDate, onCancel, onSaved }: { e
         <label className="text-sm font-bold text-zinc-700">Pauze (min.)<input type="number" min="0" max="240" value={breakMinutes} onChange={event => setBreakMinutes(Number(event.target.value))} className="mt-1.5 w-full border border-zinc-200 rounded-xl p-3 font-medium" /></label>
         <label className="text-sm font-bold text-zinc-700">Herhalen<select value={repeatWeeks} onChange={event => setRepeatWeeks(Number(event.target.value))} className="mt-1.5 w-full border border-zinc-200 rounded-xl p-3 bg-white font-medium">{[1,2,3,4,6,8,12].map(count => <option key={count} value={count}>{count === 1 ? 'Eenmalig' : `${count} weken`}</option>)}</select></label>
         <label className="md:col-span-3 text-sm font-bold text-zinc-700">Notities<textarea value={notes} onChange={event => setNotes(event.target.value)} className="mt-1.5 w-full border border-zinc-200 rounded-xl p-3 font-medium h-20 resize-none" /></label>
+        <label className="md:col-span-4 text-sm font-bold text-zinc-700">Checklist — één taak per regel<textarea value={checklistText} onChange={event => setChecklistText(event.target.value)} placeholder={'Materiaal controleren\nLocatie netjes achterlaten'} className="mt-1.5 w-full border border-zinc-200 rounded-xl p-3 font-medium h-24 resize-none" /></label>
       </div>
       <fieldset><legend className="text-sm font-bold text-zinc-700 mb-2">Medewerkers</legend><div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">{employees.map(employee => <label key={employee.id} className={`flex items-center gap-3 border rounded-xl p-3 cursor-pointer ${memberIds.includes(employee.id) ? 'border-zinc-900 bg-zinc-50' : 'border-zinc-200'}`}><input type="checkbox" checked={memberIds.includes(employee.id)} onChange={() => toggle(employee.id)} className="w-4 h-4 accent-zinc-900" /><span className="font-semibold text-sm">{employee.name}</span></label>)}</div></fieldset>
       <div className="flex justify-end gap-3"><button type="button" onClick={onCancel} className="px-5 py-3 rounded-xl font-bold text-zinc-600">Annuleren</button><button type="submit" disabled={busy || !memberIds.length} className="px-6 py-3 rounded-xl bg-zinc-900 text-white font-bold flex items-center gap-2 disabled:opacity-40">{busy && <Loader2 className="w-4 h-4 animate-spin" />}Concept opslaan</button></div>

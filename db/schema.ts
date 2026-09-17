@@ -24,6 +24,7 @@ export const plannedShifts = sqliteTable("planned_shifts", {
   breakMinutes: integer("break_minutes").notNull().default(0), notes: text("notes"),
   status: text("status").notNull().default("draft"), recurrenceGroupId: text("recurrence_group_id"),
   createdBy: text("created_by").notNull(), publishedAt: integer("published_at"),
+  checklistJson: text("checklist_json").notNull().default("[]"),
   createdAt: integer("created_at").notNull(), updatedAt: integer("updated_at").notNull(),
 }, table => [
   index("idx_planned_shifts_date_status").on(table.date, table.status),
@@ -33,6 +34,7 @@ export const plannedShifts = sqliteTable("planned_shifts", {
 export const plannedShiftMembers = sqliteTable("planned_shift_members", {
   shiftId: text("shift_id").notNull(), userId: text("user_id").notNull(),
   confirmationStatus: text("confirmation_status").notNull().default("pending"), confirmedAt: integer("confirmed_at"),
+  checklistStateJson: text("checklist_state_json").notNull().default("[]"),
 }, table => [
   primaryKey({ columns: [table.shiftId, table.userId] }),
   index("idx_planned_shift_members_user").on(table.userId),
@@ -49,13 +51,45 @@ export const assignments = sqliteTable("assignments", {
 
 export const shifts = sqliteTable("shifts", {
   id: text("id").primaryKey(), userId: text("user_id").notNull(), clockIn: integer("clock_in").notNull(),
-  clockInLat: real("clock_in_lat").notNull(), clockInLng: real("clock_in_lng").notNull(), clockOut: integer("clock_out"),
-  clockOutLat: real("clock_out_lat"), clockOutLng: real("clock_out_lng"), statusTag: text("status_tag"), notes: text("notes"),
+  plannedShiftId: text("planned_shift_id"), clockInLat: real("clock_in_lat").notNull(), clockInLng: real("clock_in_lng").notNull(),
+  clockInAccuracy: real("clock_in_accuracy"), clockInDistance: real("clock_in_distance"), clockInClientAt: integer("clock_in_client_at"),
+  clockOut: integer("clock_out"), clockOutLat: real("clock_out_lat"), clockOutLng: real("clock_out_lng"),
+  clockOutAccuracy: real("clock_out_accuracy"), clockOutDistance: real("clock_out_distance"), clockOutClientAt: integer("clock_out_client_at"),
+  geofenceStatus: text("geofence_status"), statusTag: text("status_tag"), notes: text("notes"),
 }, table => [index("idx_shifts_user_clock").on(table.userId, table.clockIn)]);
 
 export const activeShifts = sqliteTable("active_shifts", {
   userId: text("user_id").primaryKey(), shiftId: text("shift_id").notNull(),
 });
+
+export const shiftBreaks = sqliteTable("shift_breaks", {
+  id: text("id").primaryKey(), shiftId: text("shift_id").notNull(), userId: text("user_id").notNull(),
+  startedAt: integer("started_at").notNull(), endedAt: integer("ended_at"), createdAt: integer("created_at").notNull(),
+}, table => [index("idx_shift_breaks_shift").on(table.shiftId), index("idx_shift_breaks_user").on(table.userId)]);
+
+export const activeBreaks = sqliteTable("active_breaks", {
+  userId: text("user_id").primaryKey(), breakId: text("break_id").notNull(), shiftId: text("shift_id").notNull(),
+});
+
+export const incidents = sqliteTable("incidents", {
+  id: text("id").primaryKey(), userId: text("user_id").notNull(), plannedShiftId: text("planned_shift_id"),
+  category: text("category").notNull(), severity: text("severity").notNull(), description: text("description").notNull(),
+  status: text("status").notNull().default("open"), latitude: real("latitude"), longitude: real("longitude"),
+  accuracy: real("accuracy"), occurredAt: integer("occurred_at").notNull(), createdAt: integer("created_at").notNull(),
+}, table => [index("idx_incidents_user_created").on(table.userId, table.createdAt), index("idx_incidents_status").on(table.status)]);
+
+export const correctionRequests = sqliteTable("correction_requests", {
+  id: text("id").primaryKey(), userId: text("user_id").notNull(), shiftId: text("shift_id").notNull(),
+  requestedClockIn: integer("requested_clock_in"), requestedClockOut: integer("requested_clock_out"),
+  reason: text("reason").notNull(), status: text("status").notNull().default("pending"),
+  reviewedBy: text("reviewed_by"), reviewedAt: integer("reviewed_at"), createdAt: integer("created_at").notNull(),
+}, table => [index("idx_correction_requests_user").on(table.userId, table.createdAt), index("idx_correction_requests_status").on(table.status)]);
+
+export const attachments = sqliteTable("attachments", {
+  id: text("id").primaryKey(), userId: text("user_id").notNull(), entityType: text("entity_type").notNull(),
+  entityId: text("entity_id").notNull(), objectKey: text("object_key").notNull(), filename: text("filename").notNull(),
+  mimeType: text("mime_type").notNull(), size: integer("size").notNull(), createdAt: integer("created_at").notNull(),
+}, table => [index("idx_attachments_entity").on(table.entityType, table.entityId), index("idx_attachments_user").on(table.userId)]);
 
 export const auditEvents = sqliteTable("audit_events", {
   id: text("id").primaryKey(), actorId: text("actor_id").notNull(), action: text("action").notNull(),

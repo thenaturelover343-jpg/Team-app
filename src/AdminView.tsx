@@ -1,19 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { User, Assignment, Shift, Customer, PlannedShift, formatDate, formatTime, localDateKey } from './types';
-import { Calendar, Clock, MapPin, Plus, User as UserIcon, ListTodo, Loader2, Users, CheckSquare, Square, Download, BarChart2, CalendarDays } from 'lucide-react';
+import { User, Assignment, Shift, Customer, CorrectionRequest, Incident, PlannedShift, formatDate, formatTime, localDateKey } from './types';
+import { Calendar, Clock, MapPin, Plus, User as UserIcon, ListTodo, Loader2, Users, CheckSquare, Square, Download, BarChart2, CalendarDays, AlertTriangle } from 'lucide-react';
 import { handleFirestoreError, OperationType } from './lib/firebase';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { secureApi } from './lib/secureApi';
 import WeekPlanner from './components/WeekPlanner';
 
 export default function AdminView() {
-  const [activeTab, setActiveTab] = useState<'week' | 'planning' | 'timesheets' | 'customers' | 'team'>('week');
+  const [activeTab, setActiveTab] = useState<'week' | 'planning' | 'timesheets' | 'reports' | 'customers' | 'team'>('week');
   
   const [users, setUsers] = useState<User[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [plannedShifts, setPlannedShifts] = useState<PlannedShift[]>([]);
+  const [incidents, setIncidents] = useState<Incident[]>([]);
+  const [correctionRequests, setCorrectionRequests] = useState<CorrectionRequest[]>([]);
   const [loading, setLoading] = useState(true);
 
   const loadData = React.useCallback(async () => {
@@ -23,6 +25,8 @@ export default function AdminView() {
     setAssignments(data.assignments);
     setCustomers(data.customers);
     setPlannedShifts(data.plannedShifts);
+    setIncidents(data.incidents);
+    setCorrectionRequests(data.correctionRequests);
     setLoading(false);
   }, []);
 
@@ -77,6 +81,7 @@ export default function AdminView() {
           <Users className="w-4 h-4" />
           <span>Klantenbeheer</span>
         </button>
+        <button onClick={() => setActiveTab('reports')} className={`flex-1 py-3 px-4 rounded-[12px] font-bold text-sm flex items-center justify-center space-x-2 transition-all ${activeTab === 'reports' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600 hover:bg-zinc-100/50'}`}><AlertTriangle className="w-4 h-4" /><span>Meldingen</span></button>
         <button
           onClick={() => setActiveTab('team')}
           className={`flex-1 py-3 px-4 rounded-[12px] font-bold text-sm flex items-center justify-center space-x-2 transition-all ${activeTab === 'team' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600 hover:bg-zinc-100/50'}`}
@@ -89,10 +94,25 @@ export default function AdminView() {
       {activeTab === 'week' && <WeekPlanner users={users} customers={customers} shifts={plannedShifts} onChanged={loadData} />}
       {activeTab === 'planning' && <PlanningTab users={users} assignments={assignments} customers={customers} />}
       {activeTab === 'timesheets' && <TimesheetsTab users={users} shifts={shifts} assignments={assignments} />}
+      {activeTab === 'reports' && <AdminReportsTab users={users} incidents={incidents} corrections={correctionRequests} onChanged={loadData} />}
       {activeTab === 'customers' && <CustomersTab customers={customers} />}
       {activeTab === 'team' && <TeamTab users={users} />}
     </div>
   );
+}
+
+function AdminReportsTab({ users, incidents, corrections, onChanged }: { users: User[]; incidents: Incident[]; corrections: CorrectionRequest[]; onChanged: () => Promise<void> }) {
+  const [busyId, setBusyId] = useState('');
+  const review = async (id: string, status: 'approved' | 'rejected') => {
+    setBusyId(id);
+    try { await secureApi.reviewCorrectionRequest(id, status); await onChanged(); } finally { setBusyId(''); }
+  };
+  const userName = (id: string) => users.find(user => user.id === id)?.name || 'Onbekende medewerker';
+  return <div className="space-y-6">
+    <div><h2 className="text-2xl font-bold text-zinc-900">Incidenten en correcties</h2><p className="text-sm text-zinc-500 mt-1">Behandel meldingen van medewerkers.</p></div>
+    <section className="space-y-3"><h3 className="font-bold text-lg">Openstaande tijdcorrecties</h3>{corrections.filter(item => item.status === 'pending').length === 0 && <div className="bg-white border border-zinc-200 rounded-xl p-5 text-zinc-500">Geen openstaande verzoeken.</div>}{corrections.filter(item => item.status === 'pending').map(item => <article key={item.id} className="bg-white border border-zinc-200 rounded-2xl p-5 space-y-3"><div className="flex justify-between gap-3"><div><div className="font-bold">{userName(item.userId)}</div><div className="text-sm text-zinc-500">{formatDate(item.createdAt)}</div></div><span className="text-xs font-bold bg-amber-100 text-amber-800 px-3 py-1.5 rounded-full h-fit">In behandeling</span></div><p className="text-sm text-zinc-700">{item.reason}</p><div className="text-sm bg-zinc-50 rounded-xl p-3">{item.requestedClockIn && <div>Nieuwe start: <strong>{new Date(item.requestedClockIn).toLocaleString('nl-BE')}</strong></div>}{item.requestedClockOut && <div>Nieuwe einde: <strong>{new Date(item.requestedClockOut).toLocaleString('nl-BE')}</strong></div>}</div><div className="grid grid-cols-2 gap-3"><button disabled={busyId === item.id} onClick={() => review(item.id, 'rejected')} className="border border-red-200 text-red-700 rounded-xl py-3 font-bold">Afwijzen</button><button disabled={busyId === item.id} onClick={() => review(item.id, 'approved')} className="bg-zinc-900 text-white rounded-xl py-3 font-bold">Goedkeuren</button></div></article>)}</section>
+    <section className="space-y-3"><h3 className="font-bold text-lg">Incidentmeldingen</h3>{incidents.length === 0 && <div className="bg-white border border-zinc-200 rounded-xl p-5 text-zinc-500">Nog geen incidenten gemeld.</div>}{incidents.map(item => <article key={item.id} className={`bg-white border rounded-2xl p-5 ${item.severity === 'high' ? 'border-red-300' : 'border-zinc-200'}`}><div className="flex justify-between gap-3 mb-2"><div className="font-bold">{item.category} · {userName(item.userId)}</div><span className="text-xs font-bold uppercase">{item.severity}</span></div><p className="text-sm text-zinc-700">{item.description}</p><div className="text-xs text-zinc-400 mt-3">{new Date(item.occurredAt).toLocaleString('nl-BE')}{item.latitude !== undefined ? ` · GPS ${item.latitude.toFixed(5)}, ${item.longitude?.toFixed(5)}` : ''}</div></article>)}</section>
+  </div>;
 }
 
 function CustomersTab({ customers }: { customers: Customer[] }) {

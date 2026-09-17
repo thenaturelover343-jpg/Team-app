@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { cleanText, isAllowedTransition, normalizeEmail, validateLocation } from '../server/policy.ts';
+import { cleanText, distanceMeters, isAllowedTransition, normalizeEmail, validateGeofence, validateLocation } from '../server/policy.ts';
 import { addWeeks, availabilityConflict, overlaps, validateShiftWindow } from '../server/planning.ts';
 
 test('vrije registratie wordt niet als statusovergang geaccepteerd', () => {
@@ -14,9 +14,21 @@ test('alleen de twee toegestane statusovergangen slagen', () => {
 });
 
 test('locaties worden server-side begrensd', () => {
-  assert.deepEqual(validateLocation({ lat: 50.94, lng: 4.04 }), { lat: 50.94, lng: 4.04 });
-  assert.throws(() => validateLocation({ lat: 91, lng: 4 }), /Ongeldige locatie/);
-  assert.throws(() => validateLocation({ lat: 50, lng: 181 }), /Ongeldige locatie/);
+  const capturedAt = Date.now();
+  assert.deepEqual(validateLocation({ lat: 50.94, lng: 4.04, accuracy: 12, capturedAt }), { lat: 50.94, lng: 4.04, accuracy: 12, capturedAt });
+  assert.throws(() => validateLocation({ lat: 91, lng: 4, accuracy: 12, capturedAt }), /Ongeldige locatie/);
+  assert.throws(() => validateLocation({ lat: 50, lng: 181, accuracy: 12, capturedAt }), /Ongeldige locatie/);
+  assert.throws(() => validateLocation({ lat: 50.94, lng: 4.04, accuracy: 6000, capturedAt }), /GPS-nauwkeurigheid/);
+  assert.throws(() => validateLocation({ lat: 50.94, lng: 4.04, accuracy: 12, capturedAt: capturedAt - 25 * 60 * 60 * 1000 }), /verlopen/);
+});
+
+test('geofence controleert afstand en GPS-nauwkeurigheid', () => {
+  const target = { lat: 50.94, lng: 4.04 };
+  assert.ok(distanceMeters(target, { lat: 50.9405, lng: 4.04 }) < 100);
+  assert.equal(validateGeofence({ ...target, accuracy: 10 }, target).status, 'inside');
+  assert.equal(validateGeofence({ ...target, accuracy: 10 }).status, 'unverified');
+  assert.throws(() => validateGeofence({ ...target, accuracy: 101 }, target), /onvoldoende nauwkeurig/);
+  assert.throws(() => validateGeofence({ lat: 51, lng: 4.04, accuracy: 10 }, target), /buiten de toegestane zone/);
 });
 
 test('invoer wordt genormaliseerd en begrensd', () => {

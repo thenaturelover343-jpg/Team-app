@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { cleanText as clean, isAllowedTransition, normalizeEmail as email, validateLocation as location } from "../../../server/policy";
+import { cleanText as clean, isAllowedTransition, normalizeEmail as email, validateGeofence, validateLocation as location } from "../../../server/policy";
 import { addWeeks, availabilityConflict, isValidDate, isValidTime, overlaps, parseAvailability, validateShiftWindow } from "../../../server/planning";
 
 export const dynamic = "force-dynamic";
@@ -85,6 +85,11 @@ function database() {
   return env.DB;
 }
 
+function bucket() {
+  if (!env.BUCKET) throw new Error("Bestandsopslag is tijdelijk niet beschikbaar.");
+  return env.BUCKET;
+}
+
 async function audit(db: D1Database, actorId: string, action: string, targetType: string, targetId: string, details: Json = {}) {
   await db.prepare(`INSERT INTO audit_events (id, actor_id, action, target_type, target_id, details_json, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)`).bind(id(), actorId, action, targetType, targetId, JSON.stringify(details), Date.now()).run();
@@ -138,10 +143,11 @@ function mapUser(row: Json) {
 
 function mapShift(row: Json) {
   return {
-    id: row.id, userId: row.user_id, clockIn: Number(row.clock_in),
-    clockInLoc: { lat: Number(row.clock_in_lat), lng: Number(row.clock_in_lng) },
-    ...(row.clock_out ? { clockOut: Number(row.clock_out), clockOutLoc: { lat: Number(row.clock_out_lat), lng: Number(row.clock_out_lng) } } : {}),
-    statusTag: row.status_tag || undefined, notes: row.notes || undefined,
+    id: row.id, userId: row.user_id, plannedShiftId: row.planned_shift_id || undefined, clockIn: Number(row.clock_in),
+    clockInLoc: { lat: Number(row.clock_in_lat), lng: Number(row.clock_in_lng), accuracy: Number(row.clock_in_accuracy || 0), capturedAt: Number(row.clock_in_client_at || row.clock_in) },
+    clockInDistance: row.clock_in_distance === null || row.clock_in_distance === undefined ? undefined : Number(row.clock_in_distance),
+    ...(row.clock_out ? { clockOut: Number(row.clock_out), clockOutLoc: { lat: Number(row.clock_out_lat), lng: Number(row.clock_out_lng), accuracy: Number(row.clock_out_accuracy || 0), capturedAt: Number(row.clock_out_client_at || row.clock_out) }, clockOutDistance: row.clock_out_distance === null || row.clock_out_distance === undefined ? undefined : Number(row.clock_out_distance) } : {}),
+    geofenceStatus: row.geofence_status || undefined, statusTag: row.status_tag || undefined, notes: row.notes || undefined,
   };
 }
 
@@ -166,11 +172,12 @@ function mapPlannedShifts(rows: Json[]) {
       customerLongitude: row.customer_longitude ?? undefined, date: row.date, startTime: row.start_time,
       endTime: row.end_time, breakMinutes: Number(row.break_minutes), notes: row.notes || "", status: row.status,
       recurrenceGroupId: row.recurrence_group_id || undefined, publishedAt: row.published_at ? Number(row.published_at) : undefined,
-      createdAt: Number(row.created_at), memberIds: [], confirmations: {},
+      createdAt: Number(row.created_at), checklist: JSON.parse(String(row.checklist_json || "[]")), memberIds: [], confirmations: {}, checklistStates: {},
     };
     if (row.member_user_id) {
       (current.memberIds as string[]).push(String(row.member_user_id));
       (current.confirmations as Record<string, string>)[String(row.member_user_id)] = String(row.confirmation_status || "pending");
+      (current.checklistStates as Record<string, string[]>)[String(row.member_user_id)] = JSON.parse(String(row.checklist_state_json || "[]"));
     }
     grouped.set(shiftId, current);
   }
@@ -205,18 +212,34 @@ async function snapshot(user: AppUser) {
     : db.prepare(`SELECT a.*, c.name AS customer_name FROM assignments a LEFT JOIN customers c ON c.id = a.customer_id WHERE a.user_id = ? ORDER BY a.date DESC, a.start_time DESC LIMIT 500`).bind(user.uid);
   const plannedQuery = user.role === "admin"
     ? db.prepare(`SELECT ps.*, c.name AS customer_name, c.address AS customer_address, c.latitude AS customer_latitude,
-        c.longitude AS customer_longitude, psm.user_id AS member_user_id, psm.confirmation_status
+        c.longitude AS customer_longitude, psm.user_id AS member_user_id, psm.confirmation_status, psm.checklist_state_json
         FROM planned_shifts ps LEFT JOIN customers c ON c.id = ps.customer_id
         LEFT JOIN planned_shift_members psm ON psm.shift_id = ps.id ORDER BY ps.date, ps.start_time LIMIT 3000`)
     : db.prepare(`SELECT ps.*, c.name AS customer_name, c.address AS customer_address, c.latitude AS customer_latitude,
-        c.longitude AS customer_longitude, psm.user_id AS member_user_id, psm.confirmation_status
+        c.longitude AS customer_longitude, psm.user_id AS member_user_id, psm.confirmation_status, psm.checklist_state_json
         FROM planned_shifts ps LEFT JOIN customers c ON c.id = ps.customer_id
         JOIN planned_shift_members psm ON psm.shift_id = ps.id
         WHERE psm.user_id = ? AND ps.status = 'published' ORDER BY ps.date, ps.start_time LIMIT 1000`).bind(user.uid);
-  const [usersResult, shiftsResult, assignmentsResult, customersResult, plannedResult] = await Promise.all([
+  const breaksQuery = user.role === "admin"
+    ? db.prepare("SELECT * FROM shift_breaks ORDER BY started_at DESC LIMIT 2000")
+    : db.prepare("SELECT * FROM shift_breaks WHERE user_id=? ORDER BY started_at DESC LIMIT 500").bind(user.uid);
+  const incidentsQuery = user.role === "admin"
+    ? db.prepare("SELECT * FROM incidents ORDER BY created_at DESC LIMIT 1000")
+    : db.prepare("SELECT * FROM incidents WHERE user_id=? ORDER BY created_at DESC LIMIT 500").bind(user.uid);
+  const correctionsQuery = user.role === "admin"
+    ? db.prepare("SELECT * FROM correction_requests ORDER BY created_at DESC LIMIT 1000")
+    : db.prepare("SELECT * FROM correction_requests WHERE user_id=? ORDER BY created_at DESC LIMIT 500").bind(user.uid);
+  const attachmentsQuery = user.role === "admin"
+    ? db.prepare("SELECT * FROM attachments ORDER BY created_at DESC LIMIT 1000")
+    : db.prepare(`SELECT a.* FROM attachments a WHERE a.user_id=? OR (
+        a.entity_type='planned_shift' AND EXISTS (
+          SELECT 1 FROM planned_shift_members psm WHERE psm.shift_id=a.entity_id AND psm.user_id=?
+        )
+      ) ORDER BY a.created_at DESC LIMIT 500`).bind(user.uid, user.uid);
+  const [usersResult, shiftsResult, assignmentsResult, customersResult, plannedResult, breaksResult, incidentsResult, correctionsResult, attachmentsResult] = await Promise.all([
     usersQuery.all<Json>(), shiftsQuery.all<Json>(), assignmentsQuery.all<Json>(),
     db.prepare("SELECT * FROM customers ORDER BY name").all<Json>(),
-    plannedQuery.all<Json>(),
+    plannedQuery.all<Json>(), breaksQuery.all<Json>(), incidentsQuery.all<Json>(), correctionsQuery.all<Json>(), attachmentsQuery.all<Json>(),
   ]);
   return {
     user: mapUser((usersResult.results as Json[]).find(item => item.id === user.uid) || {}),
@@ -228,6 +251,10 @@ async function snapshot(user: AppUser) {
       latitude: row.latitude ?? undefined, longitude: row.longitude ?? undefined, createdAt: Number(row.created_at),
     })),
     plannedShifts: mapPlannedShifts(plannedResult.results as Json[]),
+    breaks: (breaksResult.results as Json[]).map(row => ({ id: row.id, shiftId: row.shift_id, userId: row.user_id, startedAt: Number(row.started_at), endedAt: row.ended_at ? Number(row.ended_at) : undefined })),
+    incidents: (incidentsResult.results as Json[]).map(row => ({ id: row.id, userId: row.user_id, plannedShiftId: row.planned_shift_id || undefined, category: row.category, severity: row.severity, description: row.description, status: row.status, latitude: row.latitude ?? undefined, longitude: row.longitude ?? undefined, accuracy: row.accuracy ?? undefined, occurredAt: Number(row.occurred_at), createdAt: Number(row.created_at) })),
+    correctionRequests: (correctionsResult.results as Json[]).map(row => ({ id: row.id, userId: row.user_id, shiftId: row.shift_id, requestedClockIn: row.requested_clock_in ? Number(row.requested_clock_in) : undefined, requestedClockOut: row.requested_clock_out ? Number(row.requested_clock_out) : undefined, reason: row.reason, status: row.status, reviewedAt: row.reviewed_at ? Number(row.reviewed_at) : undefined, createdAt: Number(row.created_at) })),
+    attachments: (attachmentsResult.results as Json[]).map(row => ({ id: row.id, userId: row.user_id, entityType: row.entity_type, entityId: row.entity_id, filename: row.filename, mimeType: row.mime_type, size: Number(row.size), createdAt: Number(row.created_at) })),
   };
 }
 
@@ -292,6 +319,7 @@ async function act(user: AppUser, action: string, input: Json) {
     const window = validateShiftWindow(clean(input.startTime, 5), clean(input.endTime, 5), Number(input.breakMinutes));
     const memberIds = [...new Set((Array.isArray(input.memberIds) ? input.memberIds : []).map(value => clean(value, 160)).filter(Boolean))];
     const repeatWeeks = Math.max(1, Math.min(12, Number(input.repeatWeeks) || 1));
+    const checklist = (Array.isArray(input.checklist) ? input.checklist : []).map(item => clean(item, 240)).filter(Boolean).slice(0, 50);
     if (!title || !isValidDate(date) || memberIds.length === 0) throw new Error("Titel, datum en minstens één medewerker zijn verplicht.");
     const placeholders = memberIds.map(() => "?").join(",");
     const membersResult = await db.prepare(`SELECT id, name, active, availability_json FROM users WHERE id IN (${placeholders}) AND role IN ('employee','admin')`)
@@ -322,10 +350,10 @@ async function act(user: AppUser, action: string, input: Json) {
       const shiftId = id();
       createdIds.push(shiftId);
       statements.push(db.prepare(`INSERT INTO planned_shifts
-        (id, title, customer_id, date, start_time, end_time, break_minutes, notes, status, recurrence_group_id, created_by, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?)`)
+        (id, title, customer_id, date, start_time, end_time, break_minutes, notes, status, recurrence_group_id, created_by, checklist_json, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?)`)
         .bind(shiftId, title, customerId, addWeeks(date, week), window.startTime, window.endTime, window.breakMinutes,
-          clean(input.notes, 2000) || null, recurrenceGroupId, user.uid, now, now));
+          clean(input.notes, 2000) || null, recurrenceGroupId, user.uid, JSON.stringify(checklist), now, now));
       for (const memberId of memberIds) {
         statements.push(db.prepare("INSERT INTO planned_shift_members (shift_id, user_id, confirmation_status) VALUES (?, ?, 'pending')")
           .bind(shiftId, memberId));
@@ -407,27 +435,144 @@ async function act(user: AppUser, action: string, input: Json) {
     const loc = location(input.location);
     const active = await db.prepare("SELECT shift_id FROM active_shifts WHERE user_id = ?").bind(user.uid).first();
     if (active) throw new Error("U bent al ingeklokt.");
+    const plannedShiftId = clean(input.plannedShiftId, 160) || null;
+    let target: { lat: number; lng: number } | undefined;
+    if (plannedShiftId) {
+      const planned = await db.prepare(`SELECT ps.id, c.latitude, c.longitude FROM planned_shifts ps
+        JOIN planned_shift_members psm ON psm.shift_id=ps.id LEFT JOIN customers c ON c.id=ps.customer_id
+        WHERE ps.id=? AND psm.user_id=? AND ps.status='published'`).bind(plannedShiftId, user.uid).first<Json>();
+      if (!planned) throw new Error("Deze geplande dienst is niet beschikbaar voor uw account.");
+      if (planned.latitude !== null && planned.latitude !== undefined && planned.longitude !== null && planned.longitude !== undefined) {
+        target = { lat: Number(planned.latitude), lng: Number(planned.longitude) };
+      }
+    }
+    const geofence = validateGeofence(loc, target);
     const shiftId = id();
     await db.batch([
-      db.prepare("INSERT INTO shifts (id, user_id, clock_in, clock_in_lat, clock_in_lng) VALUES (?, ?, ?, ?, ?)").bind(shiftId, user.uid, now, loc.lat, loc.lng),
+      db.prepare(`INSERT INTO shifts (id, user_id, planned_shift_id, clock_in, clock_in_lat, clock_in_lng, clock_in_accuracy,
+        clock_in_distance, clock_in_client_at, geofence_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .bind(shiftId, user.uid, plannedShiftId, now, loc.lat, loc.lng, loc.accuracy, geofence.distance, loc.capturedAt, geofence.status),
       db.prepare("INSERT INTO active_shifts (user_id, shift_id) VALUES (?, ?)").bind(user.uid, shiftId),
       db.prepare(`INSERT INTO audit_events (id, actor_id, action, target_type, target_id, details_json, created_at) VALUES (?, ?, 'shift.clock_in', 'shift', ?, '{}', ?)`)
         .bind(id(), user.uid, shiftId, now),
     ]);
-    return { shiftId };
+    return { shiftId, geofenceStatus: geofence.status, distance: geofence.distance };
   }
 
   if (action === "clockOut") {
     const loc = location(input.location);
-    const active = await db.prepare("SELECT shift_id FROM active_shifts WHERE user_id = ?").bind(user.uid).first<{ shift_id: string }>();
+    const active = await db.prepare(`SELECT a.shift_id, s.planned_shift_id, c.latitude, c.longitude FROM active_shifts a
+      JOIN shifts s ON s.id=a.shift_id LEFT JOIN planned_shifts ps ON ps.id=s.planned_shift_id LEFT JOIN customers c ON c.id=ps.customer_id
+      WHERE a.user_id=?`).bind(user.uid).first<Json>();
     if (!active) throw new Error("Er is geen actieve shift.");
+    const openBreak = await db.prepare("SELECT break_id FROM active_breaks WHERE user_id=?").bind(user.uid).first();
+    if (openBreak) throw new Error("Beëindig eerst uw actieve pauze.");
+    const target = active.latitude !== null && active.latitude !== undefined && active.longitude !== null && active.longitude !== undefined
+      ? { lat: Number(active.latitude), lng: Number(active.longitude) } : undefined;
+    const geofence = validateGeofence(loc, target);
     await db.batch([
-      db.prepare("UPDATE shifts SET clock_out=?, clock_out_lat=?, clock_out_lng=?, notes=?, status_tag=? WHERE id=? AND clock_out IS NULL")
-        .bind(now, loc.lat, loc.lng, clean(input.notes), clean(input.statusTag, 80), active.shift_id),
+      db.prepare(`UPDATE shifts SET clock_out=?, clock_out_lat=?, clock_out_lng=?, clock_out_accuracy=?, clock_out_distance=?,
+        clock_out_client_at=?, notes=?, status_tag=? WHERE id=? AND clock_out IS NULL`)
+        .bind(now, loc.lat, loc.lng, loc.accuracy, geofence.distance, loc.capturedAt, clean(input.notes), clean(input.statusTag, 80), active.shift_id),
       db.prepare("DELETE FROM active_shifts WHERE user_id = ? AND shift_id = ?").bind(user.uid, active.shift_id),
       db.prepare(`INSERT INTO audit_events (id, actor_id, action, target_type, target_id, details_json, created_at) VALUES (?, ?, 'shift.clock_out', 'shift', ?, ?, ?)`)
         .bind(id(), user.uid, active.shift_id, JSON.stringify({ statusTag: clean(input.statusTag, 80) }), now),
     ]);
+    return { ok: true };
+  }
+
+  if (action === "startBreak") {
+    const active = await db.prepare("SELECT shift_id FROM active_shifts WHERE user_id=?").bind(user.uid).first<{ shift_id: string }>();
+    if (!active) throw new Error("U moet ingeklokt zijn om een pauze te starten.");
+    if (await db.prepare("SELECT break_id FROM active_breaks WHERE user_id=?").bind(user.uid).first()) throw new Error("Er loopt al een pauze.");
+    const breakId = id();
+    await db.batch([
+      db.prepare("INSERT INTO shift_breaks (id, shift_id, user_id, started_at, created_at) VALUES (?, ?, ?, ?, ?)").bind(breakId, active.shift_id, user.uid, now, now),
+      db.prepare("INSERT INTO active_breaks (user_id, break_id, shift_id) VALUES (?, ?, ?)").bind(user.uid, breakId, active.shift_id),
+    ]);
+    await audit(db, user.uid, "shift.break_started", "shift", active.shift_id, { breakId });
+    return { breakId };
+  }
+
+  if (action === "endBreak") {
+    const active = await db.prepare("SELECT break_id, shift_id FROM active_breaks WHERE user_id=?").bind(user.uid).first<{ break_id: string; shift_id: string }>();
+    if (!active) throw new Error("Er loopt geen actieve pauze.");
+    await db.batch([
+      db.prepare("UPDATE shift_breaks SET ended_at=? WHERE id=? AND ended_at IS NULL").bind(now, active.break_id),
+      db.prepare("DELETE FROM active_breaks WHERE user_id=?").bind(user.uid),
+    ]);
+    await audit(db, user.uid, "shift.break_ended", "shift", active.shift_id, { breakId: active.break_id });
+    return { ok: true };
+  }
+
+  if (action === "updatePlannedShiftChecklist") {
+    const plannedShiftId = clean(input.plannedShiftId, 160);
+    const shift = await db.prepare(`SELECT ps.checklist_json FROM planned_shifts ps JOIN planned_shift_members psm ON psm.shift_id=ps.id
+      WHERE ps.id=? AND psm.user_id=? AND ps.status='published'`).bind(plannedShiftId, user.uid).first<Json>();
+    if (!shift) throw new Error("Dienst niet gevonden.");
+    const allowed = new Set((JSON.parse(String(shift.checklist_json || "[]")) as string[]).map((_, index) => String(index)));
+    const completed = [...new Set((Array.isArray(input.completed) ? input.completed : []).map(value => clean(value, 20)).filter(value => allowed.has(value)))];
+    await db.prepare("UPDATE planned_shift_members SET checklist_state_json=? WHERE shift_id=? AND user_id=?")
+      .bind(JSON.stringify(completed), plannedShiftId, user.uid).run();
+    await audit(db, user.uid, "planning.checklist_updated", "planned_shift", plannedShiftId, { completed });
+    return { ok: true };
+  }
+
+  if (action === "createIncident") {
+    const incidentId = id();
+    const category = clean(input.category, 80);
+    const severity = input.severity === "high" ? "high" : input.severity === "medium" ? "medium" : "low";
+    const description = clean(input.description, 4000);
+    const plannedShiftId = clean(input.plannedShiftId, 160) || null;
+    if (!category || !description) throw new Error("Categorie en beschrijving zijn verplicht.");
+    if (plannedShiftId && user.role !== "admin") {
+      const assigned = await db.prepare("SELECT 1 FROM planned_shift_members WHERE shift_id=? AND user_id=?")
+        .bind(plannedShiftId, user.uid).first();
+      if (!assigned) throw new Error("Deze geplande dienst is niet beschikbaar voor uw account.");
+    }
+    let loc: ReturnType<typeof location> | null = null;
+    if (input.location) loc = location(input.location);
+    const occurredAt = Number(input.occurredAt);
+    const safeOccurredAt = Number.isFinite(occurredAt) && Math.abs(now - occurredAt) <= 24 * 60 * 60 * 1000 ? occurredAt : now;
+    await db.prepare(`INSERT INTO incidents (id, user_id, planned_shift_id, category, severity, description, status,
+      latitude, longitude, accuracy, occurred_at, created_at) VALUES (?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?, ?)`)
+      .bind(incidentId, user.uid, plannedShiftId, category, severity, description, loc?.lat || null, loc?.lng || null, loc?.accuracy || null, safeOccurredAt, now).run();
+    await audit(db, user.uid, "incident.created", "incident", incidentId, { severity, category });
+    return { id: incidentId };
+  }
+
+  if (action === "createCorrectionRequest") {
+    const shiftId = clean(input.shiftId, 160);
+    const reason = clean(input.reason, 2000);
+    const shift = await db.prepare("SELECT id FROM shifts WHERE id=? AND user_id=?").bind(shiftId, user.uid).first();
+    if (!shift || !reason) throw new Error("Kies een eigen tijdregistratie en geef een reden op.");
+    const requestedClockIn = input.requestedClockIn ? Number(input.requestedClockIn) : null;
+    const requestedClockOut = input.requestedClockOut ? Number(input.requestedClockOut) : null;
+    if ((!requestedClockIn && !requestedClockOut) || requestedClockIn && !Number.isFinite(requestedClockIn) || requestedClockOut && !Number.isFinite(requestedClockOut)) throw new Error("Vul minstens één geldige correctietijd in.");
+    const requestId = id();
+    await db.prepare(`INSERT INTO correction_requests (id, user_id, shift_id, requested_clock_in, requested_clock_out, reason, status, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)`)
+      .bind(requestId, user.uid, shiftId, requestedClockIn, requestedClockOut, reason, now).run();
+    await audit(db, user.uid, "correction.requested", "shift", shiftId, { requestId });
+    return { id: requestId };
+  }
+
+  if (action === "reviewCorrectionRequest") {
+    requireAdmin(user);
+    const requestId = clean(input.id, 160);
+    const decision = input.status === "approved" ? "approved" : input.status === "rejected" ? "rejected" : "";
+    const requestRow = await db.prepare("SELECT * FROM correction_requests WHERE id=? AND status='pending'").bind(requestId).first<Json>();
+    if (!requestRow || !decision) throw new Error("Correctieverzoek niet gevonden of al behandeld.");
+    if (decision === "approved") {
+      const shift = await db.prepare("SELECT clock_in, clock_out FROM shifts WHERE id=?").bind(String(requestRow.shift_id)).first<Json>();
+      const nextIn = requestRow.requested_clock_in ? Number(requestRow.requested_clock_in) : Number(shift?.clock_in);
+      const nextOut = requestRow.requested_clock_out ? Number(requestRow.requested_clock_out) : shift?.clock_out ? Number(shift.clock_out) : null;
+      if (nextOut !== null && nextOut <= nextIn) throw new Error("De gecorrigeerde eindtijd moet na de starttijd liggen.");
+      await db.prepare("UPDATE shifts SET clock_in=?, clock_out=? WHERE id=?").bind(nextIn, nextOut, String(requestRow.shift_id)).run();
+    }
+    await db.prepare("UPDATE correction_requests SET status=?, reviewed_by=?, reviewed_at=? WHERE id=?")
+      .bind(decision, user.uid, now, requestId).run();
+    await audit(db, user.uid, `correction.${decision}`, "correction_request", requestId);
     return { ok: true };
   }
 
@@ -479,15 +624,69 @@ async function act(user: AppUser, action: string, input: Json) {
   throw new Error("Onbekende actie.");
 }
 
+async function uploadAttachment(user: AppUser, request: Request) {
+  const form = await request.formData();
+  const file = form.get("file");
+  const entityType = clean(form.get("entityType"), 40);
+  const entityId = clean(form.get("entityId"), 160);
+  if (!(file instanceof File) || !entityId || !["planned_shift", "incident"].includes(entityType)) throw new Error("Ongeldig bestand of doel.");
+  if (file.size <= 0 || file.size > 10 * 1024 * 1024) throw new Error("Een bestand mag maximaal 10 MB groot zijn.");
+  const allowedTypes = new Set(["application/pdf", "text/plain", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]);
+  if (!file.type.startsWith("image/") && !allowedTypes.has(file.type)) throw new Error("Dit bestandstype is niet toegestaan.");
+  const db = database();
+  if (entityType === "planned_shift") {
+    const allowed = user.role === "admin" || Boolean(await db.prepare("SELECT 1 FROM planned_shift_members WHERE shift_id=? AND user_id=?").bind(entityId, user.uid).first());
+    if (!allowed) throw new Error("U mag geen bestanden aan deze dienst toevoegen.");
+  } else {
+    const incident = await db.prepare("SELECT user_id FROM incidents WHERE id=?").bind(entityId).first<Json>();
+    if (!incident || user.role !== "admin" && incident.user_id !== user.uid) throw new Error("Incident niet gevonden.");
+  }
+  const attachmentId = id();
+  const safeName = clean(file.name, 180).replace(/[^a-zA-Z0-9._ -]/g, "_") || "bestand";
+  const objectKey = `${entityType}/${entityId}/${attachmentId}-${safeName}`;
+  await bucket().put(objectKey, file.stream(), { httpMetadata: { contentType: file.type || "application/octet-stream" } });
+  const now = Date.now();
+  await db.prepare(`INSERT INTO attachments (id, user_id, entity_type, entity_id, object_key, filename, mime_type, size, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .bind(attachmentId, user.uid, entityType, entityId, objectKey, safeName, file.type || "application/octet-stream", file.size, now).run();
+  await audit(db, user.uid, "attachment.uploaded", entityType, entityId, { attachmentId, filename: safeName, size: file.size });
+  return { id: attachmentId, filename: safeName, mimeType: file.type, size: file.size, createdAt: now };
+}
+
+async function downloadAttachment(user: AppUser, attachmentId: string) {
+  const db = database();
+  const row = await db.prepare("SELECT * FROM attachments WHERE id=?").bind(attachmentId).first<Json>();
+  if (!row) throw new Error("Bestand niet gevonden.");
+  const ownsFile = row.user_id === user.uid;
+  const isShiftMember = row.entity_type === "planned_shift" && Boolean(await db.prepare(
+    "SELECT 1 FROM planned_shift_members WHERE shift_id=? AND user_id=?"
+  ).bind(String(row.entity_id), user.uid).first());
+  if (user.role !== "admin" && !ownsFile && !isShiftMember) throw new Error("Bestand niet gevonden.");
+  const object = await bucket().get(String(row.object_key));
+  if (!object) throw new Error("Bestand niet gevonden.");
+  return new Response(object.body, {
+    headers: {
+      "Content-Type": String(row.mime_type),
+      "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(String(row.filename))}`,
+      "Cache-Control": "private, no-store",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
+}
+
 export async function POST(request: Request) {
   try {
     const origin = request.headers.get("Origin");
     if (!origin || origin !== new URL(request.url).origin) return json({ error: "Ongeldige aanvraag." }, 403);
     const identity = await verifyFirebaseToken(request);
     const user = await session(identity);
+    if ((request.headers.get("Content-Type") || "").includes("multipart/form-data")) {
+      return json({ data: await uploadAttachment(user, request) });
+    }
     const payload = await request.json() as { action?: unknown; input?: unknown };
     const action = clean(payload.action, 80);
     const input = payload.input && typeof payload.input === "object" ? payload.input as Json : {};
+    if (action === "downloadAttachment") return downloadAttachment(user, clean(input.id, 160));
     return json({ data: await act(user, action, input) });
   } catch (error) {
     const message = error instanceof Error ? error.message : "De bewerking is mislukt.";

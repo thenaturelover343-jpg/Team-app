@@ -1,20 +1,26 @@
 import React, { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
-import { User, Shift, Assignment, PlannedShift, WeeklyAvailability, getCurrentLocation, formatTime, formatDate, AssignmentTask, localDateKey } from './types';
-import { MapPin, Clock, CheckCircle, Play, Square, Navigation2, FileText, Loader2, User as UserIcon, Calendar, History, Save, Plus, Trash2, CheckSquare, CalendarDays, XCircle } from 'lucide-react';
+import { User, Shift, ShiftBreak, Assignment, Attachment, CorrectionRequest, Incident, PlannedShift, WeeklyAvailability, getCurrentLocation, formatTime, formatDate, AssignmentTask, localDateKey } from './types';
+import { MapPin, Clock, CheckCircle, Play, Square, Navigation2, FileText, Loader2, User as UserIcon, Calendar, History, Save, Plus, Trash2, CheckSquare, CalendarDays, XCircle, AlertTriangle, ClipboardList, WifiOff, Coffee, Upload, Download } from 'lucide-react';
 import { useAuth } from './hooks/useAuth';
 import { handleFirestoreError, OperationType } from './lib/firebase';
 import { secureApi } from './lib/secureApi';
+import { readOfflineQueue } from './lib/offlineQueue';
 
 const LiveLocationMap = dynamic(() => import('./components/LiveLocationMap'), { ssr: false });
 
 export default function EmployeeView() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'planning' | 'profile'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'planning' | 'reports' | 'profile'>('dashboard');
 
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [plannedShifts, setPlannedShifts] = useState<PlannedShift[]>([]);
+  const [breaks, setBreaks] = useState<ShiftBreak[]>([]);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [incidents, setIncidents] = useState<Incident[]>([]);
+  const [correctionRequests, setCorrectionRequests] = useState<CorrectionRequest[]>([]);
+  const [queueCount, setQueueCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const alertedAssignments = useRef<Set<string>>(new Set());
 
@@ -57,6 +63,10 @@ export default function EmployeeView() {
     setShifts(data.shifts);
     setAssignments(data.assignments.filter(item => item.date === localDateKey()));
     setPlannedShifts(data.plannedShifts);
+    setBreaks(data.breaks);
+    setAttachments(data.attachments);
+    setIncidents(data.incidents);
+    setCorrectionRequests(data.correctionRequests);
     setLoading(false);
   }, []);
 
@@ -72,16 +82,32 @@ export default function EmployeeView() {
     return () => { active = false; window.clearInterval(timer); };
   }, [user, loadData]);
 
+  useEffect(() => {
+    const updateCount = () => setQueueCount(readOfflineQueue().length);
+    const sync = async () => {
+      if (!navigator.onLine) return updateCount();
+      await secureApi.flushOfflineQueue();
+      updateCount();
+      await loadData().catch(() => undefined);
+    };
+    updateCount();
+    void sync();
+    window.addEventListener('online', sync);
+    window.addEventListener('barlicious-queue-change', updateCount);
+    return () => { window.removeEventListener('online', sync); window.removeEventListener('barlicious-queue-change', updateCount); };
+  }, [loadData]);
+
   if (!user) return null;
 
   const unacknowledgedCount = assignments.filter(a => a.status === 'pending' && a.acknowledged === false).length;
 
   return (
-    <div className="max-w-lg mx-auto w-full space-y-6 pb-12">
-      <div className="bg-white rounded-[24px] shadow-[0_4px_14px_0_rgb(0,0,0,0.03)] border border-zinc-200/60 p-1.5 flex space-x-1.5">
+    <div className="max-w-lg mx-auto w-full space-y-6 pb-28">
+      {queueCount > 0 && <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm font-semibold text-amber-800 flex items-center gap-2"><WifiOff className="w-4 h-4" />{queueCount} actie{queueCount === 1 ? '' : 's'} wachten op internet.</div>}
+      <div className="fixed bottom-3 left-3 right-3 z-50 max-w-lg mx-auto bg-white/95 backdrop-blur rounded-2xl shadow-xl border border-zinc-200 p-1.5 grid grid-cols-4 gap-1">
         <button
           onClick={() => setActiveTab('dashboard')}
-          className={`flex-1 py-3 px-4 rounded-[12px] font-bold text-sm flex items-center justify-center space-x-2 transition-all relative ${activeTab === 'dashboard' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600 hover:bg-zinc-100/50'}`}
+          className={`py-3 px-1 rounded-[12px] font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all relative ${activeTab === 'dashboard' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600'}`}
         >
           <Calendar className="w-4 h-4" />
           <span>Vandaag</span>
@@ -93,28 +119,30 @@ export default function EmployeeView() {
         </button>
         <button
           onClick={() => setActiveTab('planning')}
-          className={`flex-1 py-3 px-2 rounded-[12px] font-bold text-sm flex items-center justify-center space-x-2 transition-all ${activeTab === 'planning' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600 hover:bg-zinc-100/50'}`}
+          className={`py-3 px-1 rounded-[12px] font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all ${activeTab === 'planning' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600'}`}
         >
           <CalendarDays className="w-4 h-4" />
           <span>Planning</span>
         </button>
+        <button onClick={() => setActiveTab('reports')} className={`py-3 px-1 rounded-[12px] font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all ${activeTab === 'reports' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600'}`}><AlertTriangle className="w-4 h-4" /><span>Melden</span></button>
         <button
           onClick={() => setActiveTab('profile')}
-          className={`flex-1 py-3 px-4 rounded-[12px] font-bold text-sm flex items-center justify-center space-x-2 transition-all ${activeTab === 'profile' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600 hover:bg-zinc-100/50'}`}
+          className={`py-3 px-1 rounded-[12px] font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all ${activeTab === 'profile' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-600'}`}
         >
           <UserIcon className="w-4 h-4" />
           <span>Mijn Profiel</span>
         </button>
       </div>
 
-      {activeTab === 'dashboard' && <DashboardTab shifts={shifts} assignments={assignments} loading={loading} />}
-      {activeTab === 'planning' && <EmployeePlanningTab userId={user.id} shifts={plannedShifts} onChanged={loadData} />}
+      {activeTab === 'dashboard' && <DashboardTab userId={user.id} shifts={shifts} breaks={breaks} assignments={assignments} plannedShifts={plannedShifts} loading={loading} onChanged={loadData} />}
+      {activeTab === 'planning' && <EmployeePlanningTab userId={user.id} shifts={plannedShifts} attachments={attachments} onChanged={loadData} />}
+      {activeTab === 'reports' && <ReportsTab shifts={shifts} plannedShifts={plannedShifts} incidents={incidents} corrections={correctionRequests} onChanged={loadData} />}
       {activeTab === 'profile' && <ProfileTab user={user} />}
     </div>
   );
 }
 
-function DashboardTab({ shifts, assignments, loading }: { shifts: Shift[], assignments: Assignment[], loading: boolean }) {
+function DashboardTab({ userId, shifts, breaks, assignments, plannedShifts, loading, onChanged }: { userId: string; shifts: Shift[]; breaks: ShiftBreak[]; assignments: Assignment[]; plannedShifts: PlannedShift[]; loading: boolean; onChanged: () => Promise<void> }) {
   const [isLocating, setIsLocating] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [shiftNotes, setShiftNotes] = useState('');
@@ -124,6 +152,10 @@ function DashboardTab({ shifts, assignments, loading }: { shifts: Shift[], assig
   );
 
   const activeShift = shifts.find(s => !s.clockOut);
+  const activeBreak = activeShift ? breaks.find(item => item.shiftId === activeShift.id && !item.endedAt) : undefined;
+  const todaysPlanned = plannedShifts.filter(item => item.date === localDateKey() && item.confirmations[userId] !== 'declined');
+  const [plannedShiftId, setPlannedShiftId] = useState('');
+  const selectedPlannedShiftId = plannedShiftId || todaysPlanned[0]?.id || '';
 
   // Sync state if active shift already has notes (though usually set at clock out)
   useEffect(() => {
@@ -149,9 +181,11 @@ function DashboardTab({ shifts, assignments, loading }: { shifts: Shift[], assig
     setErrorMsg('');
     try {
       const loc = await getCurrentLocation();
-      await secureApi.clockIn(loc);
+      const result = await secureApi.clockIn(loc, selectedPlannedShiftId || undefined);
+      setErrorMsg(result.queued ? 'Inklokactie staat offline klaar en wordt automatisch verzonden.' : '');
       setShiftNotes('');
       setShiftStatus('Normaal');
+      await onChanged();
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : 'Kon locatie niet ophalen. Zorg dat locatievoorzieningen aan staan.');
     } finally {
@@ -165,16 +199,25 @@ function DashboardTab({ shifts, assignments, loading }: { shifts: Shift[], assig
     setErrorMsg('');
     try {
       const loc = await getCurrentLocation();
-      await secureApi.clockOut({
+      const result = await secureApi.queueClockOut({
         location: loc,
         notes: shiftNotes,
         statusTag: shiftStatus
       });
+      setErrorMsg(result.queued ? 'Uitklokactie staat offline klaar en wordt automatisch verzonden.' : '');
+      await onChanged();
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : 'Kon locatie niet ophalen. Zorg dat locatievoorzieningen aan staan.');
     } finally {
       setIsLocating(false);
     }
+  };
+
+  const toggleBreak = async () => {
+    setIsLocating(true); setErrorMsg('');
+    try { const result = activeBreak ? await secureApi.endBreak() : await secureApi.startBreak(); setErrorMsg(result.queued ? 'Pauzeactie staat offline klaar.' : ''); await onChanged(); }
+    catch (err) { setErrorMsg(err instanceof Error ? err.message : 'Pauze kon niet worden bijgewerkt.'); }
+    finally { setIsLocating(false); }
   };
 
   const handleAcknowledge = async (assignmentId: string) => {
@@ -262,6 +305,11 @@ function DashboardTab({ shifts, assignments, loading }: { shifts: Shift[], assig
         </div>
       )}
 
+      {todaysPlanned.length > 0 && <div className="bg-white rounded-[24px] border border-zinc-200 p-5 space-y-3">
+        <h2 className="font-bold text-zinc-900">Vandaag gepland</h2>
+        {todaysPlanned.map(item => <div key={item.id} className="bg-zinc-50 border border-zinc-200 rounded-xl p-3 flex justify-between gap-3"><div><div className="font-bold">{item.title}</div><div className="text-sm text-zinc-500">{item.startTime}–{item.endTime}{item.customerName ? ` · ${item.customerName}` : ''}</div></div>{item.customerLatitude !== undefined && item.customerLongitude !== undefined && <a target="_blank" rel="noreferrer" href={`https://www.google.com/maps/dir/?api=1&destination=${item.customerLatitude},${item.customerLongitude}`} className="shrink-0 bg-zinc-900 text-white rounded-lg px-3 py-2 text-xs font-bold flex items-center gap-1"><Navigation2 className="w-3.5 h-3.5" />Route</a>}</div>)}
+      </div>}
+
       {/* Time Tracking Card */}
       <div className="bg-white rounded-[24px] shadow-[0_4px_14px_0_rgb(0,0,0,0.03)] border border-zinc-200/60 overflow-hidden">
         <div className="p-8 text-center space-y-6">
@@ -273,6 +321,7 @@ function DashboardTab({ shifts, assignments, loading }: { shifts: Shift[], assig
                 <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse" />
                 <span>Ingeklokt sinds {formatTime(activeShift.clockIn)}</span>
               </div>
+              {activeShift.clockInLoc?.accuracy > 0 && <div className="text-xs font-semibold text-zinc-500">GPS-nauwkeurigheid: ±{Math.round(activeShift.clockInLoc.accuracy)} m{activeShift.clockInDistance !== undefined ? ` · afstand locatie: ${Math.round(activeShift.clockInDistance)} m` : ''}</div>}
               
               <div className="text-left space-y-4 bg-[#FAFAFA] p-5 rounded-[24px] border border-zinc-200">
                 <div>
@@ -299,6 +348,8 @@ function DashboardTab({ shifts, assignments, loading }: { shifts: Shift[], assig
                 </div>
               </div>
 
+              <button onClick={toggleBreak} disabled={isLocating} className={`w-full flex items-center justify-center gap-2 py-4 rounded-[18px] font-bold border ${activeBreak ? 'bg-amber-100 border-amber-300 text-amber-900' : 'bg-white border-zinc-300 text-zinc-800'}`}><Coffee className="w-5 h-5" />{activeBreak ? `Pauze beëindigen · sinds ${formatTime(activeBreak.startedAt)}` : 'Pauze starten'}</button>
+
               <button
                 onClick={handleClockOut}
                 disabled={isLocating}
@@ -311,6 +362,7 @@ function DashboardTab({ shifts, assignments, loading }: { shifts: Shift[], assig
           ) : (
             <div className="space-y-6">
               <p className="text-zinc-500 font-medium">Je bent momenteel niet ingeklokt.</p>
+              {todaysPlanned.length > 0 && <select value={selectedPlannedShiftId} onChange={e => setPlannedShiftId(e.target.value)} className="w-full border border-zinc-200 rounded-xl p-3 bg-white font-semibold text-sm"><option value="">Algemene werkdag</option>{todaysPlanned.map(item => <option key={item.id} value={item.id}>{item.startTime} — {item.title}</option>)}</select>}
               <button
                 onClick={handleClockIn}
                 disabled={isLocating}
@@ -344,7 +396,7 @@ function DashboardTab({ shifts, assignments, loading }: { shifts: Shift[], assig
   );
 }
 
-function EmployeePlanningTab({ userId, shifts, onChanged }: { userId: string; shifts: PlannedShift[]; onChanged: () => Promise<void> }) {
+function EmployeePlanningTab({ userId, shifts, attachments, onChanged }: { userId: string; shifts: PlannedShift[]; attachments: Attachment[]; onChanged: () => Promise<void> }) {
   const [busyId, setBusyId] = useState('');
   const [error, setError] = useState('');
   const upcoming = [...shifts].filter(shift => shift.date >= localDateKey()).sort((a, b) => `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`));
@@ -354,8 +406,29 @@ function EmployeePlanningTab({ userId, shifts, onChanged }: { userId: string; sh
     catch (reason) { setError(reason instanceof Error ? reason.message : 'Uw antwoord kon niet worden opgeslagen.'); }
     finally { setBusyId(''); }
   };
+  const toggleTask = async (shift: PlannedShift, taskId: string) => {
+    const current = shift.checklistStates[userId] || [];
+    const completed = current.includes(taskId) ? current.filter(id => id !== taskId) : [...current, taskId];
+    setBusyId(shift.id); setError('');
+    try { await secureApi.updatePlannedShiftChecklist(shift.id, completed); await onChanged().catch(() => undefined); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : 'Checklist kon niet worden bijgewerkt.'); }
+    finally { setBusyId(''); }
+  };
+  const upload = async (shiftId: string, files: FileList | null) => {
+    if (!files?.length) return;
+    setBusyId(shiftId); setError('');
+    try { for (const file of Array.from(files).slice(0, 5)) await secureApi.uploadAttachment('planned_shift', shiftId, file); await onChanged(); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : 'Uploaden is mislukt.'); }
+    finally { setBusyId(''); }
+  };
+  const download = async (item: Attachment) => {
+    const blob = await secureApi.downloadAttachment(item.id);
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a'); anchor.href = url; anchor.download = item.filename; anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
   return <div className="space-y-4">
-    <div className="px-1"><h2 className="text-2xl font-bold text-zinc-900">Mijn planning</h2><p className="text-sm text-zinc-500 mt-1">Bevestig of weiger elke gepubliceerde dienst.</p></div>
+    <div className="px-1"><h2 className="text-2xl font-bold text-zinc-900">Weekoverzicht</h2><p className="text-sm text-zinc-500 mt-1">Diensten, route, checklist en documenten.</p></div>
     {error && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</div>}
     {!upcoming.length && <div className="bg-white border border-zinc-200 rounded-2xl p-8 text-center text-zinc-500">Er staan nog geen gepubliceerde diensten klaar.</div>}
     {upcoming.map(shift => {
@@ -365,9 +438,66 @@ function EmployeePlanningTab({ userId, shifts, onChanged }: { userId: string; sh
         <div className="grid grid-cols-2 gap-3 text-sm"><div className="bg-zinc-50 rounded-xl p-3"><span className="block text-xs text-zinc-400 font-bold uppercase mb-1">Uren</span><span className="font-bold">{shift.startTime}–{shift.endTime}</span></div><div className="bg-zinc-50 rounded-xl p-3"><span className="block text-xs text-zinc-400 font-bold uppercase mb-1">Pauze</span><span className="font-bold">{shift.breakMinutes} min.</span></div></div>
         {shift.customerName && <div className="flex items-start gap-2 text-sm text-zinc-600"><MapPin className="w-4 h-4 mt-0.5 shrink-0" /><div><div className="font-bold text-zinc-800">{shift.customerName}</div><div>{shift.customerAddress}</div>{shift.customerLatitude !== undefined && shift.customerLongitude !== undefined && <a className="text-zinc-900 underline font-semibold" target="_blank" rel="noreferrer" href={`https://www.google.com/maps/search/?api=1&query=${shift.customerLatitude},${shift.customerLongitude}`}>Open locatie</a>}</div></div>}
         {shift.notes && <p className="text-sm text-zinc-600 bg-zinc-50 rounded-xl p-3">{shift.notes}</p>}
+        {shift.checklist.length > 0 && <div className="border border-zinc-200 rounded-xl p-3 space-y-2"><div className="text-xs uppercase font-bold tracking-wide text-zinc-400 flex items-center gap-2"><ClipboardList className="w-4 h-4" />Checklist</div>{shift.checklist.map((task, index) => { const taskId=String(index); const done=(shift.checklistStates[userId] || []).includes(taskId); return <label key={taskId} className="flex items-start gap-3 text-sm font-semibold cursor-pointer"><input type="checkbox" checked={done} disabled={busyId === shift.id} onChange={() => toggleTask(shift, taskId)} className="mt-0.5 w-4 h-4 accent-zinc-900" /><span className={done ? 'line-through text-zinc-400' : 'text-zinc-700'}>{task}</span></label>; })}</div>}
+        <div className="border border-zinc-200 rounded-xl p-3 space-y-2"><div className="text-xs uppercase font-bold tracking-wide text-zinc-400">Foto’s en documenten</div>{attachments.filter(item => item.entityType === 'planned_shift' && item.entityId === shift.id).map(item => <button key={item.id} type="button" onClick={() => download(item)} className="w-full text-left flex items-center gap-2 text-sm font-semibold text-zinc-700 bg-zinc-50 rounded-lg p-2"><Download className="w-4 h-4" /><span className="truncate">{item.filename}</span></button>)}<label className="flex items-center justify-center gap-2 border border-dashed border-zinc-300 rounded-lg p-3 text-sm font-bold text-zinc-600 cursor-pointer"><Upload className="w-4 h-4" />Bestand toevoegen<input type="file" accept="image/*,.pdf,.doc,.docx,.txt" multiple className="hidden" onChange={event => upload(shift.id, event.target.files)} /></label></div>
         <div className="grid grid-cols-2 gap-3"><button disabled={busyId === shift.id} onClick={() => respond(shift.id, 'declined')} className="py-3 rounded-xl border border-red-200 text-red-700 font-bold flex items-center justify-center gap-2 disabled:opacity-40"><XCircle className="w-4 h-4" />Weigeren</button><button disabled={busyId === shift.id} onClick={() => respond(shift.id, 'confirmed')} className="py-3 rounded-xl bg-zinc-900 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-40">{busyId === shift.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}Bevestigen</button></div>
       </article>;
     })}
+  </div>;
+}
+
+function ReportsTab({ shifts, plannedShifts, incidents, corrections, onChanged }: { shifts: Shift[]; plannedShifts: PlannedShift[]; incidents: Incident[]; corrections: CorrectionRequest[]; onChanged: () => Promise<void> }) {
+  const [mode, setMode] = useState<'incident' | 'correction'>('incident');
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+  const [category, setCategory] = useState('Schade');
+  const [severity, setSeverity] = useState<'low' | 'medium' | 'high'>('medium');
+  const [description, setDescription] = useState('');
+  const [plannedShiftId, setPlannedShiftId] = useState('');
+  const [incidentFiles, setIncidentFiles] = useState<File[]>([]);
+  const [shiftId, setShiftId] = useState('');
+  const [requestedClockIn, setRequestedClockIn] = useState('');
+  const [requestedClockOut, setRequestedClockOut] = useState('');
+  const [reason, setReason] = useState('');
+
+  const submitIncident = async (event: React.FormEvent) => {
+    event.preventDefault(); setBusy(true); setMessage('');
+    try {
+      let incidentLocation;
+      try { incidentLocation = await getCurrentLocation(); } catch { incidentLocation = undefined; }
+      const { data } = await secureApi.createIncident({ plannedShiftId: plannedShiftId || undefined, category, severity, description, location: incidentLocation, occurredAt: Date.now() });
+      for (const file of incidentFiles.slice(0, 5)) await secureApi.uploadAttachment('incident', data.id, file);
+      setDescription(''); setIncidentFiles([]); setMessage('Incident is veilig gemeld.'); await onChanged();
+    } catch (error) { setMessage(error instanceof Error ? error.message : 'Incident melden is mislukt.'); }
+    finally { setBusy(false); }
+  };
+
+  const submitCorrection = async (event: React.FormEvent) => {
+    event.preventDefault(); setBusy(true); setMessage('');
+    try {
+      const result = await secureApi.createCorrectionRequest({ shiftId, requestedClockIn: requestedClockIn ? new Date(requestedClockIn).getTime() : undefined, requestedClockOut: requestedClockOut ? new Date(requestedClockOut).getTime() : undefined, reason });
+      setReason(''); setRequestedClockIn(''); setRequestedClockOut(''); setMessage(result.queued ? 'Correctieverzoek staat offline klaar.' : 'Correctieverzoek is ingediend.'); await onChanged().catch(() => undefined);
+    } catch (error) { setMessage(error instanceof Error ? error.message : 'Correctieverzoek is mislukt.'); }
+    finally { setBusy(false); }
+  };
+
+  return <div className="space-y-5">
+    <div><h2 className="text-2xl font-bold text-zinc-900">Melden</h2><p className="text-sm text-zinc-500 mt-1">Leg incidenten vast of vraag een tijdscorrectie aan.</p></div>
+    <div className="grid grid-cols-2 gap-2 bg-white border border-zinc-200 rounded-xl p-1.5"><button onClick={() => setMode('incident')} className={`py-3 rounded-lg font-bold text-sm ${mode === 'incident' ? 'bg-zinc-900 text-white' : 'text-zinc-600'}`}>Incident</button><button onClick={() => setMode('correction')} className={`py-3 rounded-lg font-bold text-sm ${mode === 'correction' ? 'bg-zinc-900 text-white' : 'text-zinc-600'}`}>Tijdcorrectie</button></div>
+    {message && <div className="bg-zinc-100 border border-zinc-200 rounded-xl p-3 text-sm font-semibold text-zinc-700">{message}</div>}
+    {mode === 'incident' ? <form onSubmit={submitIncident} className="bg-white border border-zinc-200 rounded-[24px] p-5 space-y-4">
+      <label className="block text-sm font-bold">Geplande dienst<select value={plannedShiftId} onChange={e => setPlannedShiftId(e.target.value)} className="mt-1.5 w-full border border-zinc-200 rounded-xl p-3 bg-white"><option value="">Niet gekoppeld</option>{plannedShifts.map(item => <option key={item.id} value={item.id}>{item.date} · {item.title}</option>)}</select></label>
+      <div className="grid grid-cols-2 gap-3"><label className="text-sm font-bold">Categorie<select value={category} onChange={e => setCategory(e.target.value)} className="mt-1.5 w-full border border-zinc-200 rounded-xl p-3 bg-white"><option>Schade</option><option>Ongeval</option><option>Veiligheid</option><option>Klantmelding</option><option>Overig</option></select></label><label className="text-sm font-bold">Ernst<select value={severity} onChange={e => setSeverity(e.target.value as typeof severity)} className="mt-1.5 w-full border border-zinc-200 rounded-xl p-3 bg-white"><option value="low">Laag</option><option value="medium">Middel</option><option value="high">Hoog</option></select></label></div>
+      <label className="block text-sm font-bold">Wat is er gebeurd?<textarea required value={description} onChange={e => setDescription(e.target.value)} className="mt-1.5 w-full border border-zinc-200 rounded-xl p-3 h-32 resize-none" /></label>
+      <label className="flex items-center justify-center gap-2 border border-dashed border-zinc-300 rounded-xl p-4 text-sm font-bold text-zinc-600 cursor-pointer"><Upload className="w-4 h-4" />Foto’s of documenten ({incidentFiles.length})<input type="file" accept="image/*,.pdf,.doc,.docx,.txt" multiple className="hidden" onChange={e => setIncidentFiles(Array.from(e.target.files || []).slice(0, 5))} /></label>
+      <button disabled={busy} className="w-full bg-red-600 text-white rounded-xl py-4 font-bold flex justify-center gap-2">{busy && <Loader2 className="w-5 h-5 animate-spin" />}Incident melden</button>
+    </form> : <form onSubmit={submitCorrection} className="bg-white border border-zinc-200 rounded-[24px] p-5 space-y-4">
+      <label className="block text-sm font-bold">Tijdregistratie<select required value={shiftId} onChange={e => setShiftId(e.target.value)} className="mt-1.5 w-full border border-zinc-200 rounded-xl p-3 bg-white"><option value="">Selecteer...</option>{shifts.slice(0, 30).map(item => <option key={item.id} value={item.id}>{formatDate(item.clockIn)} · {formatTime(item.clockIn)}{item.clockOut ? `–${formatTime(item.clockOut)}` : ' · actief'}</option>)}</select></label>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><label className="text-sm font-bold">Nieuwe starttijd<input type="datetime-local" value={requestedClockIn} onChange={e => setRequestedClockIn(e.target.value)} className="mt-1.5 w-full border border-zinc-200 rounded-xl p-3" /></label><label className="text-sm font-bold">Nieuwe eindtijd<input type="datetime-local" value={requestedClockOut} onChange={e => setRequestedClockOut(e.target.value)} className="mt-1.5 w-full border border-zinc-200 rounded-xl p-3" /></label></div>
+      <label className="block text-sm font-bold">Reden<textarea required value={reason} onChange={e => setReason(e.target.value)} className="mt-1.5 w-full border border-zinc-200 rounded-xl p-3 h-28 resize-none" /></label>
+      <button disabled={busy} className="w-full bg-zinc-900 text-white rounded-xl py-4 font-bold">Correctie aanvragen</button>
+    </form>}
+    <div className="space-y-2"><h3 className="font-bold text-zinc-800">Mijn recente meldingen</h3>{incidents.slice(0, 5).map(item => <div key={item.id} className="bg-white border border-zinc-200 rounded-xl p-3 text-sm"><div className="font-bold">{item.category} · {item.severity === 'high' ? 'hoog' : item.severity === 'medium' ? 'middel' : 'laag'}</div><div className="text-zinc-500 line-clamp-2">{item.description}</div></div>)}{corrections.slice(0, 5).map(item => <div key={item.id} className="bg-white border border-zinc-200 rounded-xl p-3 text-sm flex justify-between gap-2"><span className="font-semibold">Tijdcorrectie · {formatDate(item.createdAt)}</span><span className="font-bold capitalize">{item.status}</span></div>)}</div>
   </div>;
 }
 

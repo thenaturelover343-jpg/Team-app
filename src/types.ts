@@ -36,6 +36,18 @@ export interface Shift {
   clockOutLoc?: GeoLocation;
   statusTag?: 'Normaal' | 'Vertraagd' | 'Gedeeltelijk afgerond' | 'Probleem gemeld';
   notes?: string;
+  plannedShiftId?: string;
+  clockInDistance?: number;
+  clockOutDistance?: number;
+  geofenceStatus?: 'inside' | 'unverified';
+}
+
+export interface ShiftBreak {
+  id: string;
+  shiftId: string;
+  userId: string;
+  startedAt: number;
+  endedAt?: number;
 }
 
 export const timestampToMillis = (value: unknown): number => {
@@ -85,6 +97,46 @@ export interface PlannedShift {
   createdAt: number;
   memberIds: string[];
   confirmations: Record<string, ShiftConfirmation>;
+  checklist: string[];
+  checklistStates: Record<string, string[]>;
+}
+
+export interface Incident {
+  id: string;
+  userId: string;
+  plannedShiftId?: string;
+  category: string;
+  severity: 'low' | 'medium' | 'high';
+  description: string;
+  status: 'open' | 'closed';
+  latitude?: number;
+  longitude?: number;
+  accuracy?: number;
+  occurredAt: number;
+  createdAt: number;
+}
+
+export interface CorrectionRequest {
+  id: string;
+  userId: string;
+  shiftId: string;
+  requestedClockIn?: number;
+  requestedClockOut?: number;
+  reason: string;
+  status: 'pending' | 'approved' | 'rejected';
+  reviewedAt?: number;
+  createdAt: number;
+}
+
+export interface Attachment {
+  id: string;
+  userId: string;
+  entityType: 'planned_shift' | 'incident';
+  entityId: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+  createdAt: number;
 }
 
 export interface AssignmentTask {
