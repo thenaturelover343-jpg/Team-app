@@ -44,7 +44,8 @@ function decodeJsonPart(value: string): Json {
 
 async function getJwks() {
   if (jwksCache && jwksCache.expiresAt > Date.now()) return jwksCache.keys;
-  const response = await fetch(FIREBASE_JWKS, { cf: { cacheTtl: 3600, cacheEverything: true } });
+  // In-memory JWKS cache only — CF cacheTtl conflicts with Google's Cache-Control: no-store
+  const response = await fetch(FIREBASE_JWKS);
   if (!response.ok) throw new Error("Aanmelding kon niet worden gecontroleerd.");
   const payload = await response.json() as { keys?: Json[] };
   const keys = Array.isArray(payload.keys) ? payload.keys : [];

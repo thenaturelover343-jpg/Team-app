@@ -86,11 +86,10 @@ function AppContent() {
       <div className="login-shell min-h-screen flex items-center justify-center p-4 relative"><div className="login-language absolute top-4 right-4"><LanguageSwitch /></div>
         <div className="auth-card ops-card max-w-md w-full p-7 sm:p-9 space-y-8">
           <div className="text-center space-y-3">
-            <div className="brand-mark brand-mark-large flex items-center justify-center mx-auto mb-6">
-              <img src="/brand-logo.png" alt="Barlicious Operations" className="w-full h-full object-contain rounded-[inherit]" />
+            <div className="brand-mark brand-mark-hero flex items-center justify-center mx-auto mb-2">
+              <img src="/brand-logo.svg" alt="Team" className="w-[88%] h-[88%] object-contain" />
             </div>
             <div className="eyebrow">FIELD OPERATIONS</div>
-            <h1 className="text-2xl font-bold text-zinc-900 tracking-tight">Barlicious & Koelverhuur</h1>
             <p className="text-zinc-500">{fr ? 'Connectez-vous avec votre compte invité' : 'Log in met uw uitgenodigde account'}</p>
           </div>
 
@@ -161,7 +160,7 @@ function AppContent() {
           <div className="h-[72px] flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <div className="brand-mark flex items-center justify-center font-bold">
-                <img src="/brand-logo.png" alt="Barlicious Operations" className="w-full h-full object-contain rounded-[inherit]" />
+                <img src="/brand-logo.svg" alt="Barlicious Operations" className="w-full h-full object-contain rounded-[inherit]" />
               </div>
               <div>
                 <span className="font-bold text-xl hidden sm:block tracking-tight text-zinc-900">Barlicious <span className="brand-subtitle">Operations</span></span>
