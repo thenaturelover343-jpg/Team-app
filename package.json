@@ -15,7 +15,8 @@
     "db:generate": "drizzle-kit generate",
     "ensure:d1": "node scripts/ensure-d1-binding.mjs",
     "verify:live-employee-ui": "node scripts/verify-live-employee-ui.mjs",
-    "deploy:worker": "node scripts/run-framework.mjs build && node scripts/ensure-d1-binding.mjs && node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js deploy --config dist/server/wrangler.json && node scripts/verify-live-employee-ui.mjs"
+    "deploy:worker": "node scripts/run-framework.mjs build && node scripts/ensure-d1-binding.mjs && node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js deploy --config dist/server/wrangler.json && node scripts/verify-pilot-live.mjs",
+    "verify:pilot": "node scripts/verify-pilot-live.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
