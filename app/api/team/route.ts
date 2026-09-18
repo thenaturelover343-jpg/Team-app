@@ -285,9 +285,27 @@ async function runAttendanceSweep(db: D1Database) {
   }
 }
 
+function splitDisplayName(name: string) {
+  const trimmed = String(name || "").trim();
+  if (!trimmed) return { firstName: "", lastName: "" };
+  const space = trimmed.indexOf(" ");
+  if (space < 0) return { firstName: trimmed, lastName: "" };
+  return { firstName: trimmed.slice(0, space).trim(), lastName: trimmed.slice(space + 1).trim() };
+}
+
 function mapUser(row: Json) {
+  const displayName = String(row.name || "");
+  const fromCols = {
+    firstName: row.first_name != null ? String(row.first_name) : "",
+    lastName: row.last_name != null ? String(row.last_name) : "",
+  };
+  const split = splitDisplayName(displayName);
+  const firstName = fromCols.firstName || split.firstName;
+  const lastName = fromCols.lastName || split.lastName;
+  const name = (`${firstName} ${lastName}`.trim() || displayName).trim();
   return {
-    id: row.id, email: row.email, name: row.name, phone: row.phone || "", role: row.role,
+    id: row.id, email: row.email, name, firstName, lastName,
+    phone: row.phone || "", address: row.address || "", role: row.role,
     active: Number(row.active) === 1, availability: row.availability || "",
     availabilitySchedule: parseAvailability(row.availability_json), createdAt: Number(row.created_at),
   };
@@ -1012,9 +1030,16 @@ async function act(user: AppUser, action: string, input: Json) {
   }
 
   if (action === "updateProfile") {
-    const availabilitySchedule = cleanAvailability(input.availabilitySchedule);
-    await db.prepare("UPDATE users SET name=?, phone=?, availability=?, availability_json=? WHERE id=?")
-      .bind(clean(input.name, 160), clean(input.phone, 80), clean(input.availability, 1000), JSON.stringify(availabilitySchedule), user.uid).run();
+    const firstName = clean(input.firstName, 80);
+    const lastName = clean(input.lastName, 80);
+    if (!firstName || !lastName) throw new Error("Voornaam en achternaam zijn verplicht.");
+    const phone = clean(input.phone, 80);
+    const address = clean(input.address, 500);
+    if (!phone) throw new Error("Telefoonnummer is verplicht.");
+    if (!address) throw new Error("Adres is verplicht.");
+    const name = clean(input.name, 160) || `${firstName} ${lastName}`.trim();
+    await db.prepare("UPDATE users SET name=?, first_name=?, last_name=?, phone=?, address=? WHERE id=?")
+      .bind(name, firstName, lastName, phone, address, user.uid).run();
     await audit(db, user.uid, "profile.updated", "user", user.uid);
     return { ok: true };
   }

@@ -1,4 +1,4 @@
-import type { AccessEvent, Assignment, AssignmentTask, Attachment, AuditEvent, BackupRun, CorrectionRequest, Customer, ErrorEvent, GeoLocation, Incident, PilotFeedback, PilotProgram, PlannedShift, PrivacySettings, PushState, Shift, ShiftBreak, TeamNotification, User, WeeklyAvailability } from '../types';
+import type { AccessEvent, Assignment, AssignmentTask, Attachment, AuditEvent, BackupRun, CorrectionRequest, Customer, ErrorEvent, GeoLocation, Incident, PilotFeedback, PilotProgram, PlannedShift, PrivacySettings, PushState, Shift, ShiftBreak, TeamNotification, User } from '../types';
 import { auth } from './firebase';
 import { enqueueOfflineAction, flushOfflineQueue } from './offlineQueue';
 
@@ -107,7 +107,7 @@ export const secureApi = {
   flushOfflineQueue: () => flushOfflineQueue((action, input) => call(action, input)),
   acknowledgeAssignment: (assignmentId: string) => call<{ ok: boolean }>('acknowledgeAssignment', { assignmentId }),
   transitionAssignment: (input: AssignmentTransitionInput) => call<{ ok: boolean }>('transitionAssignment', input),
-  updateProfile: (input: { name: string; phone: string; availability: string; availabilitySchedule: WeeklyAvailability }) => call<{ ok: boolean }>('updateProfile', input),
+  updateProfile: (input: { firstName: string; lastName: string; phone: string; address: string; name?: string }) => call<{ ok: boolean }>('updateProfile', input),
   updateAssignmentDetails: (assignmentId: string, tasks: AssignmentTask[], workNotes: string, materials = '', completionNotes = '') =>
     call<{ ok: boolean }>('updateAssignmentDetails', { assignmentId, tasks, workNotes, materials, completionNotes }),
 };

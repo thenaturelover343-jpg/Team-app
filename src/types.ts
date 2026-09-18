@@ -3,11 +3,15 @@ export type Role = 'admin' | 'employee';
 export interface User {
   id: string; // Document ID is uid
   name: string;
+  firstName?: string;
+  lastName?: string;
   email: string;
   role: Role;
   active?: boolean;
   createdAt: number;
   phone?: string;
+  address?: string;
+  /** @deprecated Kept for admin planning conflict checks; not edited on employee profile. */
   availability?: string;
   availabilitySchedule?: WeeklyAvailability;
 }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
-import { User, Shift, ShiftBreak, Assignment, Attachment, CorrectionRequest, Incident, PlannedShift, PushState, TeamNotification, WeeklyAvailability, PrivacySettings, AccessEvent, PilotProgram, PilotFeedback, getCurrentLocation, formatTime, formatDate, AssignmentTask, localDateKey } from './types';
+import { User, Shift, ShiftBreak, Assignment, Attachment, CorrectionRequest, Incident, PlannedShift, PushState, TeamNotification, PrivacySettings, AccessEvent, PilotProgram, PilotFeedback, getCurrentLocation, formatTime, formatDate, AssignmentTask, localDateKey } from './types';
 import { MapPin, Clock, CheckCircle, Play, Square, Navigation2, FileText, Loader2, User as UserIcon, Calendar, History, Save, Plus, Trash2, CheckSquare, CalendarDays, XCircle, AlertTriangle, ClipboardList, WifiOff, Coffee, Upload, Download, Bell } from 'lucide-react';
 import { useAuth } from './hooks/useAuth';
 import { handleFirestoreError, OperationType } from './lib/firebase';
@@ -114,7 +114,7 @@ export default function EmployeeView() {
       {activeTab === 'planning' && <EmployeePlanningTab userId={user.id} shifts={plannedShifts} attachments={attachments} onChanged={loadData} />}
       {activeTab === 'reports' && <ReportsTab shifts={shifts} plannedShifts={plannedShifts} incidents={incidents} corrections={correctionRequests} onChanged={loadData} />}
       {activeTab === 'notifications' && <NotificationCenter notifications={notifications} push={push} onChanged={loadData} />}
-      {activeTab === 'profile' && <div className="space-y-6"><ProfileTab user={user} /><PrivacyPanel privacy={privacy} accessEvents={accessEvents} pilot={pilot} feedback={pilotFeedback} onChanged={loadData} /></div>}
+      {activeTab === 'profile' && <div className="space-y-6"><ProfileTab user={user} /><PrivacyPanel privacy={privacy} accessEvents={accessEvents} pilot={pilot} feedback={pilotFeedback} onChanged={loadData} subtle /></div>}
     </div>
   );
 }
@@ -259,14 +259,14 @@ function DashboardTab({ userId, shifts, breaks, assignments, plannedShifts, atta
       )}
 
       {todaysPlanned.length > 0 && <div className="ops-card p-5 space-y-3">
-        <h2 className="font-bold text-zinc-900">Vandaag gepland</h2>
+        <h2 className="ops-section-title">Vandaag gepland</h2>
         {todaysPlanned.map(item => <div key={item.id} className="ops-panel p-3 flex justify-between gap-3"><div><div className="font-bold">{item.title}</div><div className="text-sm text-zinc-500">{item.startTime}–{item.endTime}{item.customerName ? ` · ${item.customerName}` : ''}</div></div>{item.customerLatitude !== undefined && item.customerLongitude !== undefined && <a target="_blank" rel="noreferrer" href={`https://www.google.com/maps/dir/?api=1&destination=${item.customerLatitude},${item.customerLongitude}`} className="ops-btn-primary shrink-0 px-3 text-xs gap-1"><Navigation2 className="w-3.5 h-3.5" />Route</a>}</div>)}
       </div>}
 
       {/* Time Tracking Card */}
-      <div className="ops-card overflow-hidden">
+      <div className="ops-card employee-hero-clock overflow-hidden">
         <div className="p-8 text-center space-y-6">
-          <h2 className="text-xl font-bold text-zinc-800">Urenregistratie</h2>
+          <h2 className="ops-page-title text-xl">Urenregistratie</h2>
           
           {activeShift ? (
             <div className="space-y-6">
@@ -331,10 +331,10 @@ function DashboardTab({ userId, shifts, breaks, assignments, plannedShifts, atta
 
       {/* Assignments Card */}
       <div className="space-y-4">
-        <h2 className="text-xl font-bold text-zinc-800 px-2 pt-4">Mijn Planning Vandaag</h2>
+        <h2 className="ops-page-title text-xl px-2 pt-4">Mijn Planning Vandaag</h2>
         
         {myAssignments.length === 0 ? (
-          <div className="bg-zinc-100/50/50 border-2 border-dashed border-zinc-200/60 rounded-[24px] p-10 text-center text-zinc-500 font-medium">
+          <div className="ops-empty">
             Je hebt nog geen opdrachten voor vandaag.
           </div>
         ) : (
@@ -455,20 +455,27 @@ function ReportsTab({ shifts, plannedShifts, incidents, corrections, onChanged }
 }
 
 function ProfileTab({ user }: { user: User }) {
-  const [name, setName] = useState(user.name || '');
+  const splitName = (full: string) => {
+    const trimmed = (full || '').trim();
+    const i = trimmed.indexOf(' ');
+    if (i < 0) return { firstName: trimmed, lastName: '' };
+    return { firstName: trimmed.slice(0, i).trim(), lastName: trimmed.slice(i + 1).trim() };
+  };
+  const initial = splitName(user.name || '');
+  const [firstName, setFirstName] = useState(user.firstName || initial.firstName);
+  const [lastName, setLastName] = useState(user.lastName || initial.lastName);
   const [phone, setPhone] = useState(user.phone || '');
-  const [availability, setAvailability] = useState(user.availability || '');
-  const [availabilitySchedule, setAvailabilitySchedule] = useState<WeeklyAvailability>(() => user.availabilitySchedule || {
-    '0': { enabled: false, start: '09:00', end: '17:00' },
-    '1': { enabled: true, start: '09:00', end: '17:00' },
-    '2': { enabled: true, start: '09:00', end: '17:00' },
-    '3': { enabled: true, start: '09:00', end: '17:00' },
-    '4': { enabled: true, start: '09:00', end: '17:00' },
-    '5': { enabled: true, start: '09:00', end: '17:00' },
-    '6': { enabled: false, start: '09:00', end: '17:00' },
-  });
+  const [address, setAddress] = useState(user.address || '');
   const [isUpdating, setIsUpdating] = useState(false);
   const [msg, setMsg] = useState({ text: '', type: '' });
+
+  useEffect(() => {
+    const initial = splitName(user.name || '');
+    setFirstName(user.firstName || initial.firstName);
+    setLastName(user.lastName || initial.lastName);
+    setPhone(user.phone || '');
+    setAddress(user.address || '');
+  }, [user.id, user.firstName, user.lastName, user.name, user.phone, user.address]);
 
   const [historyAssignments, setHistoryAssignments] = useState<Assignment[]>([]);
   const [historyShifts, setHistoryShifts] = useState<Shift[]>([]);
@@ -498,7 +505,8 @@ function ProfileTab({ user }: { user: User }) {
     setIsUpdating(true);
     setMsg({ text: '', type: '' });
     try {
-      await secureApi.updateProfile({ name, phone, availability, availabilitySchedule });
+      const name = `${firstName} ${lastName}`.trim();
+      await secureApi.updateProfile({ firstName, lastName, phone, address, name });
       setMsg({ text: 'Profiel succesvol bijgewerkt!', type: 'success' });
     } catch (err) {
       console.error(err);
@@ -521,28 +529,23 @@ function ProfileTab({ user }: { user: User }) {
           )}
 
           <form onSubmit={handleSave} className="space-y-4">
-            <div>
-              <label className="block text-sm font-bold text-zinc-700 mb-1.5">Volledige Naam</label>
-              <input type="text" value={name} onChange={e => setName(e.target.value)} required className="w-full border border-zinc-200 rounded-[24px] p-3.5 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none bg-[#FAFAFA] transition-all font-medium" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-bold text-zinc-700 mb-1.5">Voornaam</label>
+                <input type="text" value={firstName} onChange={e => setFirstName(e.target.value)} required className="w-full border border-zinc-200 rounded-[24px] p-3.5 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none bg-[#FAFAFA] transition-all font-medium" />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-zinc-700 mb-1.5">Achternaam</label>
+                <input type="text" value={lastName} onChange={e => setLastName(e.target.value)} required className="w-full border border-zinc-200 rounded-[24px] p-3.5 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none bg-[#FAFAFA] transition-all font-medium" />
+              </div>
             </div>
             <div>
               <label className="block text-sm font-bold text-zinc-700 mb-1.5">Telefoonnummer</label>
-              <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="04xx xx xx xx" className="w-full border border-zinc-200 rounded-[24px] p-3.5 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none bg-[#FAFAFA] transition-all font-medium" />
+              <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} required placeholder="04xx xx xx xx" className="w-full border border-zinc-200 rounded-[24px] p-3.5 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none bg-[#FAFAFA] transition-all font-medium" />
             </div>
             <div>
-              <label className="block text-sm font-bold text-zinc-700 mb-1.5">Mijn Beschikbaarheid</label>
-              <textarea value={availability} onChange={e => setAvailability(e.target.value)} placeholder="Bijv. Ma-Vr beschikbaar, in het weekend in overleg..." rows={3} className="w-full border border-zinc-200 rounded-[24px] p-3.5 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none bg-[#FAFAFA] transition-all font-medium resize-none"></textarea>
-            </div>
-            <div className="space-y-2">
-              <div className="text-sm font-bold text-zinc-700">Vaste weekuren voor conflictcontrole</div>
-              {[['1','Ma'],['2','Di'],['3','Wo'],['4','Do'],['5','Vr'],['6','Za'],['0','Zo']].map(([key, label]) => {
-                const day = availabilitySchedule[key] || { enabled: false, start: '09:00', end: '17:00' };
-                return <div key={key} className="grid grid-cols-[48px_1fr_1fr] gap-2 items-center bg-zinc-50 border border-zinc-200 rounded-xl p-2.5">
-                  <label className="font-bold text-sm flex items-center gap-2"><input type="checkbox" checked={day.enabled} onChange={e => setAvailabilitySchedule(current => ({ ...current, [key]: { ...day, enabled: e.target.checked } }))} className="accent-zinc-900" />{label}</label>
-                  <input aria-label={`Start ${label}`} type="time" disabled={!day.enabled} value={day.start} onChange={e => setAvailabilitySchedule(current => ({ ...current, [key]: { ...day, start: e.target.value } }))} className="border border-zinc-200 rounded-lg p-2 text-sm disabled:opacity-40" />
-                  <input aria-label={`Einde ${label}`} type="time" disabled={!day.enabled} value={day.end} onChange={e => setAvailabilitySchedule(current => ({ ...current, [key]: { ...day, end: e.target.value } }))} className="border border-zinc-200 rounded-lg p-2 text-sm disabled:opacity-40" />
-                </div>;
-              })}
+              <label className="block text-sm font-bold text-zinc-700 mb-1.5">Adres</label>
+              <input type="text" value={address} onChange={e => setAddress(e.target.value)} required placeholder="Straat, nummer, postcode, plaats" className="w-full border border-zinc-200 rounded-[24px] p-3.5 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none bg-[#FAFAFA] transition-all font-medium" />
             </div>
             <button type="submit" disabled={isUpdating} className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-bold py-4 rounded-[24px] flex items-center justify-center space-x-2 transition-all shadow-lg shadow-[0_4px_14px_0_rgb(0,0,0,0.1)] disabled:opacity-50">
               {isUpdating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
