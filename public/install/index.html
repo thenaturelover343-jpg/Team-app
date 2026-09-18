@@ -12,6 +12,7 @@
     body { font-family: system-ui, -apple-system, sans-serif; margin: 0; background: #fafafa; color: #18181b; }
     main { max-width: 440px; margin: 0 auto; padding: 24px 16px 56px; }
     .card { background: #ecfdf5; border: 2px solid #34d399; border-radius: 20px; padding: 22px; box-shadow: 0 8px 24px rgba(0,0,0,.06); }
+    .card-amber { background: #fffbeb; border: 2px solid #fbbf24; border-radius: 20px; padding: 22px; box-shadow: 0 8px 24px rgba(0,0,0,.06); }
     .card-muted { background: #fff; border: 1px solid #e4e4e7; border-radius: 20px; padding: 20px; margin-top: 16px; }
     h1 { font-size: 1.45rem; margin: 0 0 6px; line-height: 1.25; }
     p { color: #52525b; line-height: 1.45; margin: 0; }
@@ -28,7 +29,7 @@
 </head>
 <body>
   <main>
-    <div id="ios-card" class="card hidden">
+    <div id="ios-safari-card" class="card hidden">
       <div class="row" style="margin-bottom:18px">
         <div class="share-box" aria-hidden="true">
           <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -54,8 +55,30 @@
         <div class="step">3</div>
         <div class="step-text">Tik <strong>"Voeg toe"</strong></div>
       </div>
-      <button type="button" class="btn btn-secondary" id="copy-link">Kopieer link</button>
+      <button type="button" class="btn btn-secondary" id="copy-link-safari">Kopieer link</button>
       <a class="btn" href="/">Open de app</a>
+    </div>
+
+    <div id="ios-other-card" class="card-amber hidden">
+      <h1>Open deze link in Safari</h1>
+      <p style="margin-top:8px;font-weight:600;color:#92400e">Open deze link in Safari (niet in Grok/Chrome). Alleen Safari heeft het Deel-icoon.</p>
+      <button type="button" class="btn" id="copy-link-other">Kopieer link</button>
+      <div class="row" style="margin-top:18px">
+        <div class="step">1</div>
+        <div class="step-text">Tik <strong>Kopieer link</strong></div>
+      </div>
+      <div class="row">
+        <div class="step">2</div>
+        <div class="step-text">Open <strong>Safari</strong> (blauw kompas)</div>
+      </div>
+      <div class="row">
+        <div class="step">3</div>
+        <div class="step-text">Plak de link en open de app</div>
+      </div>
+      <div class="row">
+        <div class="step">4</div>
+        <div class="step-text">In Safari: Deel → Zet op beginscherm → Voeg toe</div>
+      </div>
     </div>
 
     <div id="android-card" class="card-muted hidden">
@@ -66,14 +89,15 @@
 
     <div id="desktop-card" class="card-muted">
       <h1>Installeer Barlicious Team</h1>
-      <p>Scan de QR-code met je telefoon, of open de link hieronder.</p>
+      <p>Scan de QR-code met je telefoon, of open de link hieronder <strong>in Safari</strong> op iPhone.</p>
       <img class="qr" src="/install-qr.svg" alt="QR-code naar Barlicious Team App" width="180" height="180" />
       <p style="text-align:center;font-size:.85rem"><code>https://barlicious-team-app.thenaturelover343.workers.dev</code></p>
       <button type="button" class="btn btn-secondary" id="copy-link-desktop">Kopieer link</button>
       <a class="btn" href="/">Open de app</a>
       <div style="margin-top:16px">
-        <p style="font-weight:700;color:#18181b;margin-bottom:8px">iPhone (Safari)</p>
+        <p style="font-weight:700;color:#18181b;margin-bottom:8px">iPhone — open eerst in Safari</p>
         <ol style="padding-left:1.2rem;color:#3f3f46;margin:0">
+          <li>Open de link in Safari (niet in Grok/Chrome)</li>
           <li>Tik op het Deel-icoon (□↑) onderaan Safari</li>
           <li>Scroll en tik "Zet op beginscherm"</li>
           <li>Tik "Voeg toe"</li>
@@ -87,12 +111,15 @@
   </main>
   <script>
     (function () {
-      var ua = navigator.userAgent.toLowerCase();
+      var uaRaw = navigator.userAgent;
+      var ua = uaRaw.toLowerCase();
       var iOSUa = /iphone|ipad|ipod/.test(ua);
       var iPadOs = navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1;
       var isIOS = iOSUa || iPadOs;
       var isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
       var isAndroid = /android/.test(ua);
+      var isNonSafariIOS = /CriOS|FxiOS|EdgiOS|OPiOS|OPT\/|Grok|ChatGPT|Instagram|FBAN|FBAV|Line\/|Twitter|LinkedInApp|DuckDuckGo|YaBrowser|wv\)/i.test(uaRaw);
+      var isIOSSafari = isIOS && !isNonSafariIOS && /Safari/i.test(uaRaw) && /Version\//i.test(uaRaw);
 
       function copyLink(btn) {
         var url = location.origin + '/';
@@ -106,22 +133,27 @@
         }
       }
 
-      var copyBtn = document.getElementById('copy-link');
-      var copyDesk = document.getElementById('copy-link-desktop');
-      if (copyBtn) copyBtn.addEventListener('click', function () { copyLink(copyBtn); });
-      if (copyDesk) copyDesk.addEventListener('click', function () { copyLink(copyDesk); });
+      ['copy-link-safari', 'copy-link-other', 'copy-link-desktop'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.addEventListener('click', function () { copyLink(el); });
+      });
 
       if (isStandalone) {
         document.getElementById('standalone-note').classList.remove('hidden');
-        document.getElementById('ios-card').classList.add('hidden');
+        document.getElementById('ios-safari-card').classList.add('hidden');
+        document.getElementById('ios-other-card').classList.add('hidden');
         document.getElementById('android-card').classList.add('hidden');
         document.getElementById('desktop-card').classList.add('hidden');
         return;
       }
 
       if (isIOS) {
-        document.getElementById('ios-card').classList.remove('hidden');
         document.getElementById('desktop-card').classList.add('hidden');
+        if (isIOSSafari) {
+          document.getElementById('ios-safari-card').classList.remove('hidden');
+        } else {
+          document.getElementById('ios-other-card').classList.remove('hidden');
+        }
       } else if (isAndroid) {
         document.getElementById('android-card').classList.remove('hidden');
         document.getElementById('desktop-card').classList.add('hidden');
