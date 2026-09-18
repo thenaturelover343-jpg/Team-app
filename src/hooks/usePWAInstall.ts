@@ -11,7 +11,14 @@ export function usePWAInstall() {
     window.matchMedia('(display-mode: standalone)').matches ||
     (window.navigator as unknown as { standalone?: boolean }).standalone === true
   ));
-  const [isIOS] = useState(() => typeof window !== 'undefined' && /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase()));
+  const [isIOS] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const ua = window.navigator.userAgent.toLowerCase();
+    const iOSUa = /iphone|ipad|ipod/.test(ua);
+    // iPadOS 13+ can report as Macintosh with touch
+    const iPadOs = window.navigator.platform === 'MacIntel' && (window.navigator.maxTouchPoints || 0) > 1;
+    return iOSUa || iPadOs;
+  });
 
   useEffect(() => {
     const handleBeforeInstallPrompt = (e: Event) => {
