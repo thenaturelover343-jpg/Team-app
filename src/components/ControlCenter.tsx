@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { AlertTriangle, CheckCircle, Clock3, Download, Loader2, Users } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Clock3, Download, Loader2, QrCode, Users } from 'lucide-react';
 import type { PlannedShift, PushState, Shift, TeamNotification, User } from '../types';
 import { formatDate, formatTime, localDateKey } from '../types';
 import { secureApi } from '../lib/secureApi';
@@ -52,6 +52,19 @@ export default function ControlCenter({ users, plannedShifts, shifts, notificati
     <section className="space-y-3"><h3 className="font-bold text-lg">Openstaande urencontrole</h3>{pending.length === 0 && <div className="ops-panel p-5 text-zinc-500">Alle afgesloten uren zijn behandeld.</div>}{pending.slice(0, 50).map(item => { const minutes = item.clockOut ? Math.max(0, Math.round((item.clockOut - item.clockIn) / 60000)) : 0; return <article key={item.id} className="ops-card p-4 space-y-3"><div className="flex justify-between gap-3"><div><div className="font-bold">{name(item.userId)}</div><div className="text-sm text-zinc-500">{formatDate(item.clockIn)} · {formatTime(item.clockIn)}–{item.clockOut ? formatTime(item.clockOut) : ''}</div></div><span className="font-bold">{Math.floor(minutes / 60)}u {minutes % 60}m</span></div><input value={note} onChange={event => setNote(event.target.value)} placeholder="Opmerking bij afwijzing (optioneel)" className="ops-input w-full p-3 text-sm" /><div className="grid grid-cols-2 gap-3"><button disabled={busy !== ''} onClick={() => review(item.id, 'rejected')} className="ops-btn-danger">Afwijzen</button><button disabled={busy !== ''} onClick={() => review(item.id, 'approved')} className="ops-btn-primary">{busy === item.id && <Loader2 className="w-4 h-4 animate-spin mr-2" />}Goedkeuren</button></div></article>; })}</section>
 
     <section className="ops-card p-5 space-y-4"><div><h3 className="font-bold text-lg">Loon- en facturatie-export</h3><p className="text-sm text-zinc-500">Alleen goedgekeurde, afgesloten tijdregistraties worden opgenomen.</p></div><div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><label className="text-sm font-bold">Van<input type="date" value={startDate} onChange={event => setStartDate(event.target.value)} className="ops-input mt-1.5 w-full p-3" /></label><label className="text-sm font-bold">Tot<input type="date" value={endDate} onChange={event => setEndDate(event.target.value)} className="ops-input mt-1.5 w-full p-3" /></label></div><div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><button onClick={() => download('payroll')} disabled={busy !== ''} className="ops-btn-primary gap-2"><Download className="w-4 h-4" />Loonexport CSV</button><button onClick={() => download('invoice')} disabled={busy !== ''} className="ops-btn-secondary gap-2"><Download className="w-4 h-4" />Facturatie CSV</button></div></section>
+
+
+    <section className="ops-card p-5 space-y-3">
+      <div className="flex items-center gap-2"><QrCode className="w-5 h-5" /><h3 className="ops-section-title !mb-0">App installeren (QR)</h3></div>
+      <p className="text-sm text-zinc-500">Laat medewerkers deze code scannen. Ze openen de installatiepagina en zetten de app op hun beginscherm.</p>
+      <div className="flex flex-col sm:flex-row items-center gap-4">
+        <img src="/install-qr.svg" alt="QR installatiecode" className="w-40 h-40 bg-white border border-zinc-200 rounded-xl p-2" />
+        <div className="space-y-2 text-sm w-full">
+          <div className="font-mono text-xs break-all bg-zinc-50 border border-zinc-200 rounded-lg p-2">https://barlicious-team-app.thenaturelover343.workers.dev/install</div>
+          <a href="/install" target="_blank" rel="noreferrer" className="ops-btn-secondary inline-flex">Open installatiepagina</a>
+        </div>
+      </div>
+    </section>
 
     <NotificationCenter notifications={notifications} push={push} onChanged={onChanged} />
   </div>;

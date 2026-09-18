@@ -15,8 +15,18 @@ export async function enablePush(publicKey: string) {
   if (permission !== 'granted') throw new Error('Geef toestemming voor meldingen in de browserinstellingen.');
   const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
   await navigator.serviceWorker.ready;
+  // Prefer an active registration ready for push
   const existing = await registration.pushManager.getSubscription();
-  return existing || registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: applicationServerKey(publicKey) });
+  if (existing) return existing;
+  try {
+    return await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: applicationServerKey(publicKey),
+    });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : 'Pushabonnement mislukt.';
+    throw new Error(msg.includes('push service') ? 'Pushdienst weigerde het abonnement. Herlaad de geïnstalleerde app en probeer opnieuw.' : msg);
+  }
 }
 
 export async function disablePush() {

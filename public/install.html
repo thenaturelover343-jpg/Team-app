@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#18181b" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <title>Installeer Barlicious Team</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; margin: 0; background: #fafafa; color: #18181b; }
+    main { max-width: 420px; margin: 0 auto; padding: 24px 16px 48px; }
+    .card { background: #fff; border: 1px solid #e4e4e7; border-radius: 20px; padding: 20px; box-shadow: 0 8px 24px rgba(0,0,0,.04); }
+    h1 { font-size: 1.4rem; margin: 0 0 8px; }
+    p { color: #52525b; line-height: 1.45; }
+    img.qr { display: block; width: 220px; height: 220px; margin: 16px auto; background: #fff; }
+    .btn { display: block; text-align: center; background: #18181b; color: #fff; text-decoration: none; font-weight: 700; padding: 14px 16px; border-radius: 14px; margin-top: 12px; }
+    ol { padding-left: 1.2rem; color: #3f3f46; }
+    li { margin: 8px 0; }
+    code { background: #f4f4f5; padding: 2px 6px; border-radius: 6px; font-size: .85rem; word-break: break-all; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="card">
+      <h1>Installeer als telefoon-app</h1>
+      <p>Scan de QR-code of open de app. Daarna: <strong>Installeer app</strong> (Android) of Safari → <strong>Delen → Zet op beginscherm</strong> (iPhone).</p>
+      <img class="qr" src="/install-qr.svg" alt="QR-code naar Barlicious Team App" width="220" height="220" />
+      <p style="text-align:center;font-size:.85rem"><code>https://barlicious-team-app.thenaturelover343.workers.dev</code></p>
+      <a class="btn" href="/">Open de app</a>
+      <ol>
+        <li><strong>Android (Chrome):</strong> open de app → tik op <em>Installeer app</em>.</li>
+        <li><strong>iPhone (Safari):</strong> Delen → <em>Zet op beginscherm</em> → Voeg toe.</li>
+        <li>Open daarna vanaf het beginscherm (geen browsertab) en activeer meldingen.</li>
+      </ol>
+    </div>
+  </main>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function () {});
+    }
+  </script>
+</body>
+</html>
