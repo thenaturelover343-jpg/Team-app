@@ -238,6 +238,16 @@
 .admin-nav > .ops-nav-btn:hover { background: rgba(26, 48, 61, 0.82); color: var(--ops-text); }
 .admin-nav > .ops-nav-btn.ops-nav-btn-active:hover { background: var(--ops-accent-soft); color: var(--ops-accent-strong); }
 
+.admin-nav.ops-nav {
+  mask-image: linear-gradient(to right, black 0, black calc(100% - 2rem), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, black 0, black calc(100% - 2rem), transparent 100%);
+}
+.admin-nav.ops-nav:focus-within,
+.admin-nav.ops-nav:hover {
+  mask-image: none;
+  -webkit-mask-image: none;
+}
+
 .ops-page-title {
   color: var(--ops-text) !important;
   font-family: var(--font-display);

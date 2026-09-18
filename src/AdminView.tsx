@@ -72,17 +72,26 @@ export default function AdminView({ onViewAsEmployee }: { onViewAsEmployee?: () 
           Bekijk werknemerskant
         </button>
       )}
-      <div className="admin-nav ops-nav p-1.5">
-        <button onClick={() => setActiveTab('control')} className={`ops-nav-btn relative ${activeTab === 'control' ? 'ops-nav-btn-active' : ''}`}><ShieldCheck className="w-4 h-4" /><span>Controle</span>{notifications.some(item => !item.readAt) && <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full" />}</button>
+      <div className="admin-nav ops-nav p-1.5" role="tablist" aria-label="Beheer secties">
+        <button type="button" onClick={() => setActiveTab('control')} className={`ops-nav-btn relative ${activeTab === 'control' ? 'ops-nav-btn-active' : ''}`}><ShieldCheck className="w-4 h-4" /><span>Controle</span>{notifications.some(item => !item.readAt) && <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full" />}</button>
         <button
+          type="button"
+          onClick={() => setActiveTab('customers')}
+          className={`ops-nav-btn ${activeTab === 'customers' ? 'ops-nav-btn-active' : ''}`}
+        >
+          <Users className="w-4 h-4" />
+          <span>Klantenbeheer</span>
+        </button>
+        <button
+          type="button"
           onClick={() => setActiveTab('week')}
           className={`ops-nav-btn ${activeTab === 'week' ? 'ops-nav-btn-active' : ''}`}
         >
           <CalendarDays className="w-4 h-4" />
           <span>Weekplanner</span>
         </button>
-        <button onClick={() => setActiveTab('quality')} className={`ops-nav-btn ${activeTab === 'quality' ? 'ops-nav-btn-active' : ''}`}><Settings className="w-4 h-4"/><span>{fr ? 'Qualité' : 'Kwaliteit'}</span></button>
         <button
+          type="button"
           onClick={() => setActiveTab('planning')}
           className={`ops-nav-btn ${activeTab === 'planning' ? 'ops-nav-btn-active' : ''}`}
         >
@@ -90,36 +99,33 @@ export default function AdminView({ onViewAsEmployee }: { onViewAsEmployee?: () 
           <span>Opdrachten</span>
         </button>
         <button
+          type="button"
           onClick={() => setActiveTab('timesheets')}
           className={`ops-nav-btn ${activeTab === 'timesheets' ? 'ops-nav-btn-active' : ''}`}
         >
           <Clock className="w-4 h-4" />
           <span>Uren</span>
         </button>
+        <button type="button" onClick={() => setActiveTab('reports')} className={`ops-nav-btn ${activeTab === 'reports' ? 'ops-nav-btn-active' : ''}`}><AlertTriangle className="w-4 h-4" /><span>Meldingen</span></button>
         <button
-          onClick={() => setActiveTab('customers')}
-          className={`ops-nav-btn ${activeTab === 'customers' ? 'ops-nav-btn-active' : ''}`}
-        >
-          <Users className="w-4 h-4" />
-          <span>Klanten</span>
-        </button>
-        <button onClick={() => setActiveTab('reports')} className={`ops-nav-btn ${activeTab === 'reports' ? 'ops-nav-btn-active' : ''}`}><AlertTriangle className="w-4 h-4" /><span>Meldingen</span></button>
-        <button
+          type="button"
           onClick={() => setActiveTab('team')}
           className={`ops-nav-btn ${activeTab === 'team' ? 'ops-nav-btn-active' : ''}`}
         >
           <UserIcon className="w-4 h-4" />
           <span>Team</span>
         </button>
+        <button type="button" onClick={() => setActiveTab('quality')} className={`ops-nav-btn ${activeTab === 'quality' ? 'ops-nav-btn-active' : ''}`}><Settings className="w-4 h-4"/><span>{fr ? 'Qualité' : 'Kwaliteit'}</span></button>
       </div>
+      <p className="text-xs text-zinc-500 px-1 -mt-4">Veeg of scroll horizontaal voor meer tabs · Klantenbeheer staat vooraan</p>
 
       {activeTab === 'control' && <ControlCenter users={users} plannedShifts={plannedShifts} shifts={shifts} notifications={notifications} push={push} onChanged={loadData} />}
       {activeTab === 'week' && <WeekPlanner users={users} customers={customers} shifts={plannedShifts} onChanged={loadData} />}
-      {activeTab === 'planning' && <PlanningTab users={users} assignments={assignments} customers={customers} />}
+      {activeTab === 'planning' && <PlanningTab users={users} assignments={assignments} customers={customers} onChanged={loadData} />}
       {activeTab === 'timesheets' && <TimesheetsTab users={users} shifts={shifts} assignments={assignments} />}
       {activeTab === 'reports' && <AdminReportsTab users={users} incidents={incidents} corrections={correctionRequests} onChanged={loadData} />}
-      {activeTab === 'customers' && <CustomersTab customers={customers} />}
-      {activeTab === 'team' && <TeamTab users={users} />}
+      {activeTab === 'customers' && <CustomersTab customers={customers} onChanged={loadData} />}
+      {activeTab === 'team' && <TeamTab users={users} onChanged={loadData} />}
       {activeTab === 'quality' && <QualityCenter users={users} privacy={privacy} auditEvents={auditEvents} accessEvents={accessEvents} backups={backups} errors={errors} pilot={pilot} feedback={pilotFeedback} onChanged={loadData} />}
     </div>
   );
@@ -139,9 +145,10 @@ function AdminReportsTab({ users, incidents, corrections, onChanged }: { users: 
   </div>;
 }
 
-function CustomersTab({ customers }: { customers: Customer[] }) {
-  const [isAdding, setIsAdding] = useState(false);
+function CustomersTab({ customers, onChanged }: { customers: Customer[]; onChanged: () => Promise<void> }) {
+  const [isAdding, setIsAdding] = useState(customers.length === 0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
   
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
@@ -153,11 +160,16 @@ function CustomersTab({ customers }: { customers: Customer[] }) {
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !address) return;
+    if (!name || !address) {
+      setErrorMsg('Naam en adres zijn verplicht.');
+      return;
+    }
     
     setIsSubmitting(true);
+    setErrorMsg('');
     try {
       await secureApi.saveCustomer({ name, address, phone, email, btwNumber, latitude: latitude === '' ? '' : Number(latitude), longitude: longitude === '' ? '' : Number(longitude) });
+      await onChanged();
       setName('');
       setAddress('');
       setPhone('');
@@ -167,6 +179,8 @@ function CustomersTab({ customers }: { customers: Customer[] }) {
       setLongitude('');
       setIsAdding(false);
     } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Klant opslaan is mislukt.';
+      setErrorMsg(msg);
       handleFirestoreError(err, OperationType.CREATE, 'customers');
     } finally {
       setIsSubmitting(false);
@@ -192,6 +206,7 @@ function CustomersTab({ customers }: { customers: Customer[] }) {
         <form onSubmit={handleAdd} className="ops-card p-8 space-y-6 relative overflow-hidden">
           <div className="absolute top-0 left-0 w-1.5 h-full bg-zinc-900"></div>
           <h3 className="font-bold text-lg text-zinc-800">Nieuwe Klant Toevoegen</h3>
+          {errorMsg && <div className="ops-panel p-3 text-sm text-red-300 border border-red-400/40" role="alert">{errorMsg}</div>}
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
@@ -280,9 +295,10 @@ function CustomersTab({ customers }: { customers: Customer[] }) {
   );
 }
 
-function PlanningTab({ users, assignments, customers }: { users: User[], assignments: Assignment[], customers: Customer[] }) {
+function PlanningTab({ users, assignments, customers, onChanged }: { users: User[], assignments: Assignment[], customers: Customer[]; onChanged: () => Promise<void> }) {
   const [isAdding, setIsAdding] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
   
   // Form State
   const [userId, setUserId] = useState('');
@@ -308,13 +324,17 @@ function PlanningTab({ users, assignments, customers }: { users: User[], assignm
     if (!selectedCustomer) return;
 
     setIsSubmitting(true);
+    setErrorMsg('');
     try {
       await secureApi.saveAssignment({ userId, date, startTime, customerId, description, siteAddress: siteAddress.trim() || selectedCustomer.address });
+      await onChanged();
       setCustomerId('');
       setSiteAddress('');
       setDescription('');
       setIsAdding(false);
     } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Opdracht opslaan is mislukt.';
+      setErrorMsg(msg);
       handleFirestoreError(err, OperationType.CREATE, 'assignments');
     } finally {
       setIsSubmitting(false);
@@ -340,6 +360,7 @@ function PlanningTab({ users, assignments, customers }: { users: User[], assignm
         <form onSubmit={handleAdd} className="ops-card p-8 space-y-6 relative overflow-hidden">
           <div className="absolute top-0 left-0 w-1.5 h-full bg-zinc-900"></div>
           <h3 className="font-bold text-lg text-zinc-800">Opdracht Inplannen</h3>
+          {errorMsg && <div className="ops-panel p-3 text-sm text-red-300 border border-red-400/40" role="alert">{errorMsg}</div>}
           
           {customers.length === 0 ? (
              <div className="ops-chip-warning w-full justify-start p-4 text-sm">
@@ -946,7 +967,7 @@ function TimesheetsTab({ users, shifts, assignments = [] }: { users: User[], shi
     </div>
   );
 }
-function TeamTab({ users }: { users: User[] }) {
+function TeamTab({ users, onChanged }: { users: User[]; onChanged: () => Promise<void> }) {
   const [errorMsg, setErrorMsg] = useState('');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -964,6 +985,7 @@ function TeamTab({ users }: { users: User[] }) {
     setIsSubmitting(true);
     try {
       const result = await secureApi.inviteEmployee({ name, email, phone, role: inviteRole });
+      await onChanged();
       setInviteLink(result.data.resetLink || 'uitgenodigd');
       setName('');
       setEmail('');
@@ -980,6 +1002,7 @@ function TeamTab({ users }: { users: User[] }) {
     try {
       const newRole = user.role === 'admin' ? 'employee' : 'admin';
       await secureApi.setEmployeeAccess({ uid: user.id, role: newRole, active: user.active !== false });
+      await onChanged();
     } catch (error: unknown) {
       setErrorMsg(message(error));
     }
@@ -988,6 +1011,7 @@ function TeamTab({ users }: { users: User[] }) {
   const toggleActive = async (user: User) => {
     try {
       await secureApi.setEmployeeAccess({ uid: user.id, role: user.role, active: user.active === false });
+      await onChanged();
     } catch (error: unknown) {
       setErrorMsg(message(error));
     }

@@ -191,7 +191,7 @@ function AppContent() {
                   title={viewAsEmployee ? 'Terug naar beheer' : 'Bekijk als werknemer'}
                 >
                   {viewAsEmployee ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  <span className="hidden xs:inline">{viewAsEmployee ? 'Beheer' : 'Werknemer'}</span>
+                  <span className={viewAsEmployee ? 'inline font-extrabold' : 'hidden xs:inline'}>{viewAsEmployee ? 'Terug naar beheer' : 'Werknemer'}</span>
                 </button>
               )}
               <div className="user-pill flex items-center gap-2 sm:gap-3 pl-2 pr-2 sm:pr-3 py-1.5 shrink-0">
@@ -218,13 +218,13 @@ function AppContent() {
           <button
             type="button"
             onClick={toggleEmployeePreview}
-            className={`w-full rounded-[14px] px-4 py-3.5 text-left font-bold border ${viewAsEmployee ? 'ops-btn-secondary' : 'ops-btn-primary'} flex items-center justify-between gap-3`}
+            className={`w-full rounded-[14px] px-4 ${viewAsEmployee ? 'py-5 text-lg ring-4 ring-cyan-400/50 shadow-lg shadow-cyan-500/20' : 'py-3.5'} text-left font-bold border ops-btn-primary flex items-center justify-between gap-3`}
           >
             <span className="flex items-center gap-2">
-              {viewAsEmployee ? <EyeOff className="w-5 h-5 shrink-0" /> : <Eye className="w-5 h-5 shrink-0" />}
-              <span>{viewAsEmployee ? 'Terug naar beheer' : 'Bekijk werknemerskant'}</span>
+              {viewAsEmployee ? <EyeOff className="w-6 h-6 shrink-0" /> : <Eye className="w-5 h-5 shrink-0" />}
+              <span>{viewAsEmployee ? '← Terug naar beheer' : 'Bekijk werknemerskant'}</span>
             </span>
-            <span className="text-xs font-semibold opacity-80">{viewAsEmployee ? 'Nu: werknemer-preview' : 'Open Vandaag / clock-in'}</span>
+            <span className="text-xs sm:text-sm font-semibold opacity-90">{viewAsEmployee ? 'PREVIEW AAN — tik hier om klanten en planning te beheren' : 'Open Vandaag / clock-in'}</span>
           </button>
         </div>
       )}
