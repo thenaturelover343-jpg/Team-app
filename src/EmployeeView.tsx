@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
-import { User, Shift, ShiftBreak, Assignment, Attachment, CorrectionRequest, Incident, PlannedShift, PushState, TeamNotification, WeeklyAvailability, PrivacySettings, AccessEvent, PilotProgram, PilotFeedback, getCurrentLocation, formatTime, formatDate, AssignmentTask, localDateKey } from './types';
-import { MapPin, Clock, CheckCircle, Play, Square, Navigation2, FileText, Loader2, User as UserIcon, Calendar, History, Save, Plus, Trash2, CheckSquare, CalendarDays, XCircle, AlertTriangle, ClipboardList, WifiOff, Coffee, Upload, Download, Bell } from 'lucide-react';
+import { User, Shift, ShiftBreak, Assignment, Attachment, CorrectionRequest, Incident, PlannedShift, PushState, TeamNotification, WeeklyAvailability, PrivacySettings, AccessEvent, PilotProgram, PilotFeedback, getCurrentLocation, formatTime, formatDate, AssignmentTask, localDateKey, isGeoBlockedError, openDeviceLocationSettings, detectGeoPlatform, queryLocationPermission, iosLocationStepsCopy, androidLocationStepsCopy } from './types';
+import { MapPin, Clock, CheckCircle, Play, Square, Navigation2, FileText, Loader2, User as UserIcon, Calendar, History, Save, Plus, Trash2, CheckSquare, CalendarDays, XCircle, AlertTriangle, ClipboardList, WifiOff, Coffee, Upload, Download, Bell, Settings } from 'lucide-react';
 import { useAuth } from './hooks/useAuth';
 import { handleFirestoreError, OperationType } from './lib/firebase';
 import { secureApi } from './lib/secureApi';
@@ -114,7 +114,7 @@ export default function EmployeeView() {
       {activeTab === 'planning' && <EmployeePlanningTab userId={user.id} shifts={plannedShifts} attachments={attachments} onChanged={loadData} />}
       {activeTab === 'reports' && <ReportsTab shifts={shifts} plannedShifts={plannedShifts} incidents={incidents} corrections={correctionRequests} onChanged={loadData} />}
       {activeTab === 'notifications' && <NotificationCenter notifications={notifications} push={push} onChanged={loadData} />}
-      {activeTab === 'profile' && <div className="space-y-6"><ProfileTab user={user} /><PrivacyPanel privacy={privacy} accessEvents={accessEvents} pilot={pilot} feedback={pilotFeedback} onChanged={loadData} /></div>}
+      {activeTab === 'profile' && <div className="space-y-6"><ProfileTab user={user} /><PrivacyPanel privacy={privacy} accessEvents={accessEvents} pilot={pilot} feedback={pilotFeedback} onChanged={loadData} subtle /></div>}
     </div>
   );
 }
@@ -122,6 +122,8 @@ export default function EmployeeView() {
 function DashboardTab({ userId, shifts, breaks, assignments, plannedShifts, attachments, loading, onChanged }: { userId: string; shifts: Shift[]; breaks: ShiftBreak[]; assignments: Assignment[]; plannedShifts: PlannedShift[]; attachments: Attachment[]; loading: boolean; onChanged: () => Promise<void> }) {
   const [isLocating, setIsLocating] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [showLocationHelp, setShowLocationHelp] = useState(false);
+  const [geoPlatform] = useState(() => detectGeoPlatform());
   const [shiftNotes, setShiftNotes] = useState('');
   const [shiftStatus, setShiftStatus] = useState<'Normaal' | 'Vertraagd' | 'Gedeeltelijk afgerond' | 'Probleem gemeld'>('Normaal');
 
@@ -146,6 +148,28 @@ function DashboardTab({ userId, shifts, breaks, assignments, plannedShifts, atta
     return order[a.status] - order[b.status];
   });
 
+  const openLocationBlockedUi = () => {
+    setShowLocationHelp(true);
+    setErrorMsg('');
+  };
+
+  const requireLocationOrHelp = async () => {
+    const permission = await queryLocationPermission();
+    if (permission === 'denied' || permission === 'unsupported') {
+      openLocationBlockedUi();
+      throw new Error('LOC_BLOCKED');
+    }
+    try {
+      return await getCurrentLocation();
+    } catch (err: unknown) {
+      if (isGeoBlockedError(err)) {
+        openLocationBlockedUi();
+        throw new Error('LOC_BLOCKED');
+      }
+      throw err;
+    }
+  };
+
   if (loading) {
     return <div className="flex justify-center p-8"><Loader2 className="w-6 h-6 animate-spin text-zinc-900" /></div>;
   }
@@ -154,17 +178,47 @@ function DashboardTab({ userId, shifts, breaks, assignments, plannedShifts, atta
     setIsLocating(true);
     setErrorMsg('');
     try {
-      const loc = await getCurrentLocation();
+      const loc = await requireLocationOrHelp();
       const result = await secureApi.clockIn(loc, selectedPlannedShiftId || undefined);
+      setShowLocationHelp(false);
       setErrorMsg(result.queued ? 'Inklokactie staat offline klaar en wordt automatisch verzonden.' : '');
       setShiftNotes('');
       setShiftStatus('Normaal');
       await onChanged();
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Kon locatie niet ophalen. Zorg dat locatievoorzieningen aan staan.');
+      if (err instanceof Error && err.message === 'LOC_BLOCKED') {
+        /* modal already shown */
+      } else {
+        setErrorMsg(err instanceof Error ? err.message : 'Kon locatie niet ophalen. Zorg dat locatievoorzieningen aan staan.');
+      }
     } finally {
       setIsLocating(false);
     }
+  };
+
+  const handleRetryLocation = async () => {
+    setIsLocating(true);
+    setErrorMsg('');
+    try {
+      // Re-request position — triggers the system permission prompt when possible.
+      await getCurrentLocation();
+      setShowLocationHelp(false);
+    } catch (err: unknown) {
+      if (isGeoBlockedError(err)) {
+        openLocationBlockedUi();
+        return;
+      }
+      setErrorMsg(err instanceof Error ? err.message : 'Kon locatie niet ophalen.');
+      return;
+    } finally {
+      setIsLocating(false);
+    }
+    if (activeShift) await handleClockOut();
+    else await handleClockIn();
+  };
+
+  const handleOpenSettings = () => {
+    openDeviceLocationSettings();
   };
 
   const handleClockOut = async () => {
@@ -172,16 +226,21 @@ function DashboardTab({ userId, shifts, breaks, assignments, plannedShifts, atta
     setIsLocating(true);
     setErrorMsg('');
     try {
-      const loc = await getCurrentLocation();
+      const loc = await requireLocationOrHelp();
       const result = await secureApi.queueClockOut({
         location: loc,
         notes: shiftNotes,
         statusTag: shiftStatus
       });
+      setShowLocationHelp(false);
       setErrorMsg(result.queued ? 'Uitklokactie staat offline klaar en wordt automatisch verzonden.' : '');
       await onChanged();
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Kon locatie niet ophalen. Zorg dat locatievoorzieningen aan staan.');
+      if (err instanceof Error && err.message === 'LOC_BLOCKED') {
+        /* modal already shown */
+      } else {
+        setErrorMsg(err instanceof Error ? err.message : 'Kon locatie niet ophalen. Zorg dat locatievoorzieningen aan staan.');
+      }
     } finally {
       setIsLocating(false);
     }
@@ -213,11 +272,62 @@ function DashboardTab({ userId, shifts, breaks, assignments, plannedShifts, atta
     }
   };
 
+  const locationSteps =
+    geoPlatform === 'ios'
+      ? iosLocationStepsCopy()
+      : geoPlatform === 'android'
+        ? androidLocationStepsCopy()
+        : 'Zet locatievoorzieningen aan in de instellingen van uw toestel en geef deze app toegang.';
+
   return (
     <div className="space-y-6">
       {errorMsg && (
         <div className="p-4 bg-red-50 text-red-700 rounded-[12px] border border-red-200 text-sm font-medium">
           {errorMsg}
+        </div>
+      )}
+
+      {showLocationHelp && (
+        <div className="ops-card border border-amber-200 bg-amber-50/80 p-5 space-y-4 shadow-[0_4px_14px_0_rgb(0,0,0,0.03)]" role="dialog" aria-labelledby="locatie-uit-title">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-800">
+              <MapPin className="w-5 h-5" />
+            </div>
+            <div className="space-y-1.5 min-w-0">
+              <h3 id="locatie-uit-title" className="text-lg font-bold text-zinc-900">Locatie staat uit</h3>
+              <p className="text-sm text-zinc-700 font-medium">
+                Om in te klokken moet locatie aan staan en toegang hebben. Zonder GPS kunnen we uw aanwezigheid niet registreren.
+              </p>
+              <p className="text-xs text-zinc-600 leading-relaxed pt-1">
+                <span className="font-bold text-zinc-800">Stappen{geoPlatform === 'ios' ? ' (iPhone)' : geoPlatform === 'android' ? ' (Android)' : ''}:</span>{' '}
+                {locationSteps}
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={handleOpenSettings}
+              className="ops-btn-primary w-full py-3.5 gap-2"
+            >
+              <Settings className="w-4 h-4" />
+              Open Instellingen
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleRetryLocation()}
+              disabled={isLocating}
+              className="ops-btn-secondary w-full py-3.5 gap-2 disabled:opacity-50"
+            >
+              {isLocating ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              Opnieuw proberen
+            </button>
+          </div>
+          {geoPlatform === 'ios' && (
+            <p className="text-xs text-zinc-500">
+              Op iPhone opent &quot;Open Instellingen&quot; indien mogelijk Instellingen. Lukt dat niet (Safari/PWA), volg dan handmatig: {iosLocationStepsCopy()}.
+            </p>
+          )}
         </div>
       )}
 
@@ -352,7 +462,10 @@ function DashboardTab({ userId, shifts, breaks, assignments, plannedShifts, atta
 function EmployeePlanningTab({ userId, shifts, attachments, onChanged }: { userId: string; shifts: PlannedShift[]; attachments: Attachment[]; onChanged: () => Promise<void> }) {
   const [busyId, setBusyId] = useState('');
   const [error, setError] = useState('');
-  const upcoming = [...shifts].filter(shift => shift.date >= localDateKey()).sort((a, b) => `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`));
+  const [mode, setMode] = useState<'today' | 'week'>('today');
+  const today = localDateKey();
+  const upcoming = [...shifts].filter(shift => shift.date >= today).sort((a, b) => `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`));
+  const visible = mode === 'today' ? upcoming.filter(shift => shift.date === today) : upcoming;
   const respond = async (shiftId: string, status: 'confirmed' | 'declined') => {
     setBusyId(shiftId); setError('');
     try { await secureApi.confirmPlannedShift(shiftId, status); await onChanged(); }
@@ -381,10 +494,14 @@ function EmployeePlanningTab({ userId, shifts, attachments, onChanged }: { userI
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
   return <div className="space-y-4">
-    <div className="px-1"><h2 className="text-2xl font-bold text-zinc-900">Weekoverzicht</h2><p className="text-sm text-zinc-500 mt-1">Diensten, route, checklist en documenten.</p></div>
+    <div className="px-1"><h2 className="text-2xl font-bold text-zinc-900">Mijn planning</h2><p className="text-sm text-zinc-500 mt-1">Bekijk je diensten en route voor vandaag of de week.</p></div>
+    <div className="grid grid-cols-2 gap-2 bg-white border border-zinc-200 rounded-xl p-1.5">
+      <button type="button" onClick={() => setMode('today')} className={`py-3 rounded-lg font-bold text-sm ${mode === 'today' ? 'bg-zinc-900 text-white' : 'text-zinc-600'}`}>Vandaag</button>
+      <button type="button" onClick={() => setMode('week')} className={`py-3 rounded-lg font-bold text-sm ${mode === 'week' ? 'bg-zinc-900 text-white' : 'text-zinc-600'}`}>Week</button>
+    </div>
     {error && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</div>}
-    {!upcoming.length && <div className="bg-white border border-zinc-200 rounded-2xl p-8 text-center text-zinc-500">Er staan nog geen gepubliceerde diensten klaar.</div>}
-    {upcoming.map(shift => {
+    {!visible.length && <div className="bg-white border border-zinc-200 rounded-2xl p-8 text-center text-zinc-500">{mode === 'today' ? 'Geen diensten gepland voor vandaag.' : 'Er staan nog geen gepubliceerde diensten klaar.'}</div>}
+    {visible.map(shift => {
       const confirmation = shift.confirmations[userId] || 'pending';
       return <article key={shift.id} className="bg-white border border-zinc-200 rounded-[24px] p-5 shadow-sm space-y-4">
         <div className="flex items-start justify-between gap-3"><div><div className="text-xs uppercase tracking-wide font-bold text-zinc-400">{formatDate(shift.date)}</div><h3 className="text-lg font-extrabold text-zinc-900 mt-1">{shift.title}</h3></div><span className={`text-xs font-bold px-3 py-1.5 rounded-full ${confirmation === 'confirmed' ? 'bg-emerald-100 text-emerald-700' : confirmation === 'declined' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'}`}>{confirmation === 'confirmed' ? 'Bevestigd' : confirmation === 'declined' ? 'Geweigerd' : 'Antwoord nodig'}</span></div>
@@ -455,20 +572,20 @@ function ReportsTab({ shifts, plannedShifts, incidents, corrections, onChanged }
 }
 
 function ProfileTab({ user }: { user: User }) {
-  const [name, setName] = useState(user.name || '');
+  // Do not prefill voornaam/achternaam from displayName/username (e.g. "Nature Lover").
+  const [firstName, setFirstName] = useState(user.firstName || '');
+  const [lastName, setLastName] = useState(user.lastName || '');
   const [phone, setPhone] = useState(user.phone || '');
-  const [availability, setAvailability] = useState(user.availability || '');
-  const [availabilitySchedule, setAvailabilitySchedule] = useState<WeeklyAvailability>(() => user.availabilitySchedule || {
-    '0': { enabled: false, start: '09:00', end: '17:00' },
-    '1': { enabled: true, start: '09:00', end: '17:00' },
-    '2': { enabled: true, start: '09:00', end: '17:00' },
-    '3': { enabled: true, start: '09:00', end: '17:00' },
-    '4': { enabled: true, start: '09:00', end: '17:00' },
-    '5': { enabled: true, start: '09:00', end: '17:00' },
-    '6': { enabled: false, start: '09:00', end: '17:00' },
-  });
+  const [address, setAddress] = useState(user.address || '');
   const [isUpdating, setIsUpdating] = useState(false);
   const [msg, setMsg] = useState({ text: '', type: '' });
+
+  useEffect(() => {
+    setFirstName(user.firstName || '');
+    setLastName(user.lastName || '');
+    setPhone(user.phone || '');
+    setAddress(user.address || '');
+  }, [user.id, user.firstName, user.lastName, user.phone, user.address]);
 
   const [historyAssignments, setHistoryAssignments] = useState<Assignment[]>([]);
   const [historyShifts, setHistoryShifts] = useState<Shift[]>([]);
@@ -498,7 +615,8 @@ function ProfileTab({ user }: { user: User }) {
     setIsUpdating(true);
     setMsg({ text: '', type: '' });
     try {
-      await secureApi.updateProfile({ name, phone, availability, availabilitySchedule });
+      const name = `${firstName} ${lastName}`.trim();
+      await secureApi.updateProfile({ firstName, lastName, phone, address, name });
       setMsg({ text: 'Profiel succesvol bijgewerkt!', type: 'success' });
     } catch (err) {
       console.error(err);
@@ -521,28 +639,23 @@ function ProfileTab({ user }: { user: User }) {
           )}
 
           <form onSubmit={handleSave} className="space-y-4">
-            <div>
-              <label className="block text-sm font-bold text-zinc-700 mb-1.5">Volledige Naam</label>
-              <input type="text" value={name} onChange={e => setName(e.target.value)} required className="w-full border border-zinc-200 rounded-[24px] p-3.5 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none bg-[#FAFAFA] transition-all font-medium" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-bold text-zinc-700 mb-1.5">Voornaam</label>
+                <input type="text" value={firstName} onChange={e => setFirstName(e.target.value)} required placeholder="Vul je voornaam in" className="w-full border border-zinc-200 rounded-[24px] p-3.5 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none bg-[#FAFAFA] transition-all font-medium" />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-zinc-700 mb-1.5">Achternaam</label>
+                <input type="text" value={lastName} onChange={e => setLastName(e.target.value)} required placeholder="Vul je achternaam in" className="w-full border border-zinc-200 rounded-[24px] p-3.5 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none bg-[#FAFAFA] transition-all font-medium" />
+              </div>
             </div>
             <div>
               <label className="block text-sm font-bold text-zinc-700 mb-1.5">Telefoonnummer</label>
-              <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="04xx xx xx xx" className="w-full border border-zinc-200 rounded-[24px] p-3.5 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none bg-[#FAFAFA] transition-all font-medium" />
+              <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} required placeholder="04xx xx xx xx" className="w-full border border-zinc-200 rounded-[24px] p-3.5 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none bg-[#FAFAFA] transition-all font-medium" />
             </div>
             <div>
-              <label className="block text-sm font-bold text-zinc-700 mb-1.5">Mijn Beschikbaarheid</label>
-              <textarea value={availability} onChange={e => setAvailability(e.target.value)} placeholder="Bijv. Ma-Vr beschikbaar, in het weekend in overleg..." rows={3} className="w-full border border-zinc-200 rounded-[24px] p-3.5 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none bg-[#FAFAFA] transition-all font-medium resize-none"></textarea>
-            </div>
-            <div className="space-y-2">
-              <div className="text-sm font-bold text-zinc-700">Vaste weekuren voor conflictcontrole</div>
-              {[['1','Ma'],['2','Di'],['3','Wo'],['4','Do'],['5','Vr'],['6','Za'],['0','Zo']].map(([key, label]) => {
-                const day = availabilitySchedule[key] || { enabled: false, start: '09:00', end: '17:00' };
-                return <div key={key} className="grid grid-cols-[48px_1fr_1fr] gap-2 items-center bg-zinc-50 border border-zinc-200 rounded-xl p-2.5">
-                  <label className="font-bold text-sm flex items-center gap-2"><input type="checkbox" checked={day.enabled} onChange={e => setAvailabilitySchedule(current => ({ ...current, [key]: { ...day, enabled: e.target.checked } }))} className="accent-zinc-900" />{label}</label>
-                  <input aria-label={`Start ${label}`} type="time" disabled={!day.enabled} value={day.start} onChange={e => setAvailabilitySchedule(current => ({ ...current, [key]: { ...day, start: e.target.value } }))} className="border border-zinc-200 rounded-lg p-2 text-sm disabled:opacity-40" />
-                  <input aria-label={`Einde ${label}`} type="time" disabled={!day.enabled} value={day.end} onChange={e => setAvailabilitySchedule(current => ({ ...current, [key]: { ...day, end: e.target.value } }))} className="border border-zinc-200 rounded-lg p-2 text-sm disabled:opacity-40" />
-                </div>;
-              })}
+              <label className="block text-sm font-bold text-zinc-700 mb-1.5">Adres</label>
+              <input type="text" value={address} onChange={e => setAddress(e.target.value)} required placeholder="Straat, nummer, postcode, plaats" className="w-full border border-zinc-200 rounded-[24px] p-3.5 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none bg-[#FAFAFA] transition-all font-medium" />
             </div>
             <button type="submit" disabled={isUpdating} className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-bold py-4 rounded-[24px] flex items-center justify-center space-x-2 transition-all shadow-lg shadow-[0_4px_14px_0_rgb(0,0,0,0.1)] disabled:opacity-50">
               {isUpdating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
@@ -764,6 +877,11 @@ function AssignmentCard({ assignment, attachments, onChanged }: { assignment: As
   };
 
   const handleComplete = async () => {
+    setPhotoError('');
+    if (!notes.trim()) {
+      setPhotoError('Vul in wat is gedaan voordat je afrondt.');
+      return;
+    }
     setIsUpdating(true);
     try {
       await persistDetails();
@@ -772,12 +890,14 @@ function AssignmentCard({ assignment, attachments, onChanged }: { assignment: As
         assignmentId: assignment.id,
         status: 'completed',
         location,
-        notes,
-        workNotes: notes,
+        notes: notes.trim(),
+        workNotes: notes.trim(),
         materials,
         completionNotes,
       });
       await onChanged();
+    } catch (err) {
+      setPhotoError(err instanceof Error ? err.message : 'Afronden mislukt.');
     } finally {
       setIsUpdating(false);
     }
@@ -886,41 +1006,19 @@ function AssignmentCard({ assignment, attachments, onChanged }: { assignment: As
             </div>
 
             <div className="space-y-2.5 pt-2 border-t border-zinc-200">
-              <label className="text-sm font-bold text-zinc-800 flex items-center space-x-2">
-                <FileText className="w-4 h-4 text-zinc-400" />
-                <span>Wat is er gedaan?</span>
+              <label className="text-base font-extrabold text-zinc-900 flex items-center space-x-2">
+                <FileText className="w-5 h-5 text-zinc-900" />
+                <span>Wat is gedaan</span>
               </label>
+              <p className="text-xs text-zinc-500">Verplicht bij afronden. Voorbeeld: twee kranen gekuist + materiaal.</p>
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 onBlur={() => handleUpdate({ workNotes: notes })}
-                className="ops-input w-full p-4 resize-none"
-                rows={3}
-                placeholder="Korte uitleg van het uitgevoerde werk..."
-              />
-            </div>
-
-            <div className="space-y-2.5">
-              <label className="text-sm font-bold text-zinc-800">Gebruikte materialen</label>
-              <textarea
-                value={materials}
-                onChange={(e) => setMaterials(e.target.value)}
-                onBlur={() => handleUpdate({ materials })}
-                className="ops-input w-full p-4 resize-none"
-                rows={2}
-                placeholder="Bv. 2x slang 10m, afdichtmiddel..."
-              />
-            </div>
-
-            <div className="space-y-2.5">
-              <label className="text-sm font-bold text-zinc-800">Vrije notities</label>
-              <textarea
-                value={completionNotes}
-                onChange={(e) => setCompletionNotes(e.target.value)}
-                onBlur={() => handleUpdate({ completionNotes })}
-                className="ops-input w-full p-4 resize-none"
-                rows={2}
-                placeholder="Opmerkingen klant, aandachtspunten..."
+                className="ops-input w-full p-4 resize-none text-base"
+                rows={4}
+                required
+                placeholder="Bv. twee kranen gekuist, pakking vervangen..."
               />
             </div>
 
@@ -947,13 +1045,14 @@ function AssignmentCard({ assignment, attachments, onChanged }: { assignment: As
               <LiveLocationMap />
             </div>
 
+            {photoError && <div className="ops-chip-danger w-full justify-start p-3 text-sm font-semibold">{photoError}</div>}
             <button
               onClick={handleComplete}
               disabled={isUpdating}
               className="ops-btn-primary w-full space-x-2 py-4 mt-2"
             >
               {isUpdating ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle className="w-5 h-5" />}
-              <span>Opdracht Afronden & Vertrekken</span>
+              <span>Markeer als klaar</span>
             </button>
           </div>
         )}

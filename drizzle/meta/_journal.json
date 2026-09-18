@@ -57,6 +57,13 @@
       "when": 1789710000000,
       "tag": "0007_job_site_completion",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1758170000000,
+      "tag": "0008_user_profile_fields",
+      "breakpoints": true
     }
   ]
 }

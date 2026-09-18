@@ -21,7 +21,8 @@ const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === "seatbelt";
 const managedLinux = readExecutionProfile() === "managed-linux";
 
 const localBindingConfig = {
-  main: "vinext/server/fetch-handler",
+  // Custom entry proxies /__/auth/* first-party for iOS PWA Firebase redirect.
+  main: "./worker/firebase-auth-proxy.ts",
   compatibility_flags: ["nodejs_compat"],
   vars: {
     BOOTSTRAP_ADMIN_EMAIL: PRODUCTION_BOOTSTRAP_ADMIN_EMAIL,
