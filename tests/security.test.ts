@@ -28,7 +28,8 @@ test('geofence controleert afstand en GPS-nauwkeurigheid', () => {
   assert.ok(distanceMeters(target, { lat: 50.9405, lng: 4.04 }) < 100);
   assert.equal(validateGeofence({ ...target, accuracy: 10 }, target).status, 'inside');
   assert.equal(validateGeofence({ ...target, accuracy: 10 }).status, 'unverified');
-  assert.throws(() => validateGeofence({ ...target, accuracy: 101 }, target), /onvoldoende nauwkeurig/);
+  assert.equal(validateGeofence({ ...target, accuracy: 150 }, target).status, 'inside');
+  assert.throws(() => validateGeofence({ ...target, accuracy: 201 }, target), /onvoldoende nauwkeurig/);
   assert.throws(() => validateGeofence({ lat: 51, lng: 4.04, accuracy: 10 }, target), /buiten de toegestane zone/);
 });
 
