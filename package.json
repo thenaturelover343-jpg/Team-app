@@ -13,7 +13,9 @@
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "db:generate": "drizzle-kit generate",
-    "ensure:d1": "node scripts/ensure-d1-binding.mjs"
+    "ensure:d1": "node scripts/ensure-d1-binding.mjs",
+    "verify:live-employee-ui": "node scripts/verify-live-employee-ui.mjs",
+    "deploy:worker": "node scripts/run-framework.mjs build && node scripts/ensure-d1-binding.mjs && node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js deploy --config dist/server/wrangler.json && node scripts/verify-live-employee-ui.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

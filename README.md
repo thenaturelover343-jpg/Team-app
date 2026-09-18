@@ -114,6 +114,30 @@ Live Worker `barlicious-team-app` must always ship with:
 
 plus plain var `BOOTSTRAP_ADMIN_EMAIL`. Source of truth: `.openai/hosting.json` → `vite.config.ts` → `dist/server/wrangler.json`. After every build, `npm run ensure:d1` (chained from `npm run build`) re-asserts the binding so icon/PWA deploys cannot wipe D1 again. Never deploy with `"d1_databases": []`.
 
+## Deploy (Worker) — required sequence
+
+Stale Worker bundles caused a live regression (old EmployeeView: Weekoverzicht / Mijn Beschikbaarheid). **Never deploy without live verification.**
+
+```sh
+npm run deploy:worker
+```
+
+That runs, in order:
+
+1. `vinext` / framework **build**
+2. **ensure-d1** (`scripts/ensure-d1-binding.mjs`) — pins DB `73a03a39-22d7-4c60-b263-320b42a2f4dd`, `BOOTSTRAP_ADMIN_EMAIL`, worker name `barlicious-team-app` (VAPID_* stay as existing Worker secrets)
+3. **wrangler deploy** from `dist/server/wrangler.json`
+4. **verify-live** (`scripts/verify-live-employee-ui.mjs`) — curls live HTML/JS and **fails** if it finds `Mijn Beschikbaarheid` or `Weekoverzicht` without `Mijn Planning Vandaag` / `Vandaag`
+
+Manual check:
+
+```sh
+npm run verify:live-employee-ui
+```
+
+Bump `public/app-version.txt` before deploy so the in-app update banner fires.
+
+
 For a D1-backed local preview, generate SQL with `npm run db:generate`. Build once through the Sites skill's build entrypoint (or `npm run build` for standalone use) to generate `dist/server/wrangler.json`, rebuilding if bindings change. From the project root, apply each pending migration in order:
 
 ```sh

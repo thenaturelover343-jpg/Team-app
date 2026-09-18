@@ -286,10 +286,13 @@ async function runAttendanceSweep(db: D1Database) {
 }
 
 function mapUser(row: Json) {
-  // Never invent voornaam/achternaam from displayName/username — only explicit columns.
-  const displayName = String(row.name || "");
+  // Prefer explicit first_name/last_name. Never invent by splitting displayName/username.
   const firstName = row.first_name != null ? String(row.first_name).trim() : "";
   const lastName = row.last_name != null ? String(row.last_name).trim() : "";
+  const composed = `${firstName} ${lastName}`.trim();
+  const stored = String(row.name || "").trim();
+  const emailLocal = String(row.email || "").split("@")[0] || "";
+  const displayName = composed || stored || emailLocal;
   return {
     id: row.id, email: row.email, name: displayName, firstName, lastName,
     phone: row.phone || "", address: row.address || "", role: row.role,

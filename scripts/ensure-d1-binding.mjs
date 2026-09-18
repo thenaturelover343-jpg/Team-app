@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
- * Guarantees dist/server/wrangler.json always has the production D1 binding
- * and BOOTSTRAP_ADMIN_EMAIL after vinext/vite build. Empty d1_databases wipe
- * the live Worker DB binding on deploy — that caused login outages.
+ * Guarantees dist/server/wrangler.json always has the production D1 binding,
+ * BOOTSTRAP_ADMIN_EMAIL, and Worker name after vinext/vite build. Empty
+ * d1_databases wipe the live Worker DB binding on deploy — that caused login outages.
+ * VAPID_* remain Worker secrets (not plain vars); deploy must not delete them.
  */
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
@@ -12,6 +13,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const wranglerPath = resolve(root, "dist/server/wrangler.json");
 const hostingPath = resolve(root, ".openai/hosting.json");
 
+const WORKER_NAME = "barlicious-team-app";
 const D1 = {
   binding: "DB",
   database_name: "team-app",
@@ -54,5 +56,11 @@ if (!hasCorrect) {
 }
 
 data.vars = { ...(data.vars || {}), BOOTSTRAP_ADMIN_EMAIL: bootstrap };
+data.name = WORKER_NAME;
+data.topLevelName = WORKER_NAME;
+// Live Worker does not use R2; placeholder buckets break deploy.
+data.r2_buckets = [];
 writeFileSync(wranglerPath, JSON.stringify(data, null, 2) + "\n");
 console.log(`[ensure-d1-binding] vars.BOOTSTRAP_ADMIN_EMAIL set`);
+console.log(`[ensure-d1-binding] worker name → ${WORKER_NAME}`);
+console.log(`[ensure-d1-binding] VAPID_* expected as existing Worker secrets (not overwritten)`);
