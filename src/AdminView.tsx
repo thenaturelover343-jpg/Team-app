@@ -11,7 +11,8 @@ import { useLanguage } from './i18n';
 
 export default function AdminView({ onViewAsEmployee }: { onViewAsEmployee?: () => void } = {}) {
   const { locale } = useLanguage(); const fr = locale === 'fr';
-  const [activeTab, setActiveTab] = useState<'control' | 'week' | 'planning' | 'timesheets' | 'reports' | 'customers' | 'team' | 'quality'>('control');
+  const [activeTab, setActiveTab] = useState<'control' | 'week' | 'planning' | 'timesheets' | 'reports' | 'customers' | 'team' | 'quality'>('customers');
+  const [customerFormKey, setCustomerFormKey] = useState(0);
   
   const [users, setUsers] = useState<User[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
@@ -119,12 +120,12 @@ export default function AdminView({ onViewAsEmployee }: { onViewAsEmployee?: () 
       </div>
       <p className="text-xs text-zinc-500 px-1 -mt-4">Veeg of scroll horizontaal voor meer tabs · Klantenbeheer staat vooraan</p>
 
-      {activeTab === 'control' && <ControlCenter users={users} plannedShifts={plannedShifts} shifts={shifts} notifications={notifications} push={push} onChanged={loadData} />}
+      {activeTab === 'control' && <ControlCenter users={users} plannedShifts={plannedShifts} shifts={shifts} notifications={notifications} push={push} onChanged={loadData} onCreateCustomer={() => { setActiveTab('customers'); setCustomerFormKey(k => k + 1); }} />}
       {activeTab === 'week' && <WeekPlanner users={users} customers={customers} shifts={plannedShifts} onChanged={loadData} />}
       {activeTab === 'planning' && <PlanningTab users={users} assignments={assignments} customers={customers} onChanged={loadData} />}
       {activeTab === 'timesheets' && <TimesheetsTab users={users} shifts={shifts} assignments={assignments} />}
       {activeTab === 'reports' && <AdminReportsTab users={users} incidents={incidents} corrections={correctionRequests} onChanged={loadData} />}
-      {activeTab === 'customers' && <CustomersTab customers={customers} onChanged={loadData} />}
+      {activeTab === 'customers' && <CustomersTab key={customerFormKey} customers={customers} onChanged={loadData} />}
       {activeTab === 'team' && <TeamTab users={users} onChanged={loadData} />}
       {activeTab === 'quality' && <QualityCenter users={users} privacy={privacy} auditEvents={auditEvents} accessEvents={accessEvents} backups={backups} errors={errors} pilot={pilot} feedback={pilotFeedback} onChanged={loadData} />}
     </div>
@@ -146,7 +147,7 @@ function AdminReportsTab({ users, incidents, corrections, onChanged }: { users: 
 }
 
 function CustomersTab({ customers, onChanged }: { customers: Customer[]; onChanged: () => Promise<void> }) {
-  const [isAdding, setIsAdding] = useState(customers.length === 0);
+  const [isAdding, setIsAdding] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   
@@ -198,14 +199,14 @@ function CustomersTab({ customers, onChanged }: { customers: Customer[]; onChang
           className="ops-btn-primary space-x-2 px-5 text-sm"
         >
           <Plus className="w-4 h-4" />
-          <span>Nieuwe Klant</span>
+          <span>Klant aanmaken</span>
         </button>
       </div>
 
       {isAdding && (
         <form onSubmit={handleAdd} className="ops-card p-8 space-y-6 relative overflow-hidden">
           <div className="absolute top-0 left-0 w-1.5 h-full bg-zinc-900"></div>
-          <h3 className="font-bold text-lg text-zinc-800">Nieuwe Klant Toevoegen</h3>
+          <h3 className="font-bold text-lg text-zinc-800">Klant aanmaken</h3>
           {errorMsg && <div className="ops-panel p-3 text-sm text-red-300 border border-red-400/40" role="alert">{errorMsg}</div>}
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">

@@ -9,7 +9,7 @@ import NotificationCenter from './NotificationCenter';
 
 function monthStart() { const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`; }
 
-export default function ControlCenter({ users, plannedShifts, shifts, notifications, push, onChanged }: { users: User[]; plannedShifts: PlannedShift[]; shifts: Shift[]; notifications: TeamNotification[]; push: PushState; onChanged: () => Promise<void> }) {
+export default function ControlCenter({ users, plannedShifts, shifts, notifications, push, onChanged, onCreateCustomer }: { users: User[]; plannedShifts: PlannedShift[]; shifts: Shift[]; notifications: TeamNotification[]; push: PushState; onChanged: () => Promise<void>; onCreateCustomer?: () => void }) {
   const [busy, setBusy] = useState('');
   const [note, setNote] = useState('');
   const [startDate, setStartDate] = useState(monthStart);
@@ -42,6 +42,15 @@ export default function ControlCenter({ users, plannedShifts, shifts, notificati
 
   return <div className="space-y-8">
     <div><h2 className="ops-page-title">Planner-dashboard</h2><p className="ops-page-lead">Live controle op bezetting, aanwezigheid en goedkeuring.</p></div>
+    {onCreateCustomer && (
+      <button
+        type="button"
+        onClick={onCreateCustomer}
+        className="ops-btn-primary w-full py-5 text-lg font-extrabold flex items-center justify-center gap-2"
+      >
+        Klant aanmaken
+      </button>
+    )}
     {message && <div className="ops-panel p-3 text-sm font-semibold">{message}</div>}
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
       {[{ label: 'Gepland vandaag', value: todayShifts.reduce((sum, item) => sum + item.memberIds.length, 0), icon: Users }, { label: 'Nu ingeklokt', value: active.length, icon: Clock3 }, { label: 'Te laat / no-show', value: alerts.length, icon: AlertTriangle }, { label: 'Uren te controleren', value: pending.length, icon: CheckCircle }].map(item => <div key={item.label} className="ops-card p-4"><item.icon className="ops-metric-icon w-5 h-5" /><div className="ops-metric-value mt-3">{item.value}</div><div className="text-sm text-zinc-500 mt-1">{item.label}</div></div>)}
