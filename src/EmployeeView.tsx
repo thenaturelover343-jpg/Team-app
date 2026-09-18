@@ -259,14 +259,14 @@ function DashboardTab({ userId, shifts, breaks, assignments, plannedShifts, atta
       )}
 
       {todaysPlanned.length > 0 && <div className="ops-card p-5 space-y-3">
-        <h2 className="font-bold text-zinc-900">Vandaag gepland</h2>
+        <h2 className="ops-section-title">Vandaag gepland</h2>
         {todaysPlanned.map(item => <div key={item.id} className="ops-panel p-3 flex justify-between gap-3"><div><div className="font-bold">{item.title}</div><div className="text-sm text-zinc-500">{item.startTime}–{item.endTime}{item.customerName ? ` · ${item.customerName}` : ''}</div></div>{item.customerLatitude !== undefined && item.customerLongitude !== undefined && <a target="_blank" rel="noreferrer" href={`https://www.google.com/maps/dir/?api=1&destination=${item.customerLatitude},${item.customerLongitude}`} className="ops-btn-primary shrink-0 px-3 text-xs gap-1"><Navigation2 className="w-3.5 h-3.5" />Route</a>}</div>)}
       </div>}
 
       {/* Time Tracking Card */}
-      <div className="ops-card overflow-hidden">
+      <div className="ops-card employee-hero-clock overflow-hidden">
         <div className="p-8 text-center space-y-6">
-          <h2 className="text-xl font-bold text-zinc-800">Urenregistratie</h2>
+          <h2 className="ops-page-title text-xl">Urenregistratie</h2>
           
           {activeShift ? (
             <div className="space-y-6">
@@ -331,10 +331,10 @@ function DashboardTab({ userId, shifts, breaks, assignments, plannedShifts, atta
 
       {/* Assignments Card */}
       <div className="space-y-4">
-        <h2 className="text-xl font-bold text-zinc-800 px-2 pt-4">Mijn Planning Vandaag</h2>
+        <h2 className="ops-page-title text-xl px-2 pt-4">Mijn Planning Vandaag</h2>
         
         {myAssignments.length === 0 ? (
-          <div className="bg-zinc-100/50/50 border-2 border-dashed border-zinc-200/60 rounded-[24px] p-10 text-center text-zinc-500 font-medium">
+          <div className="ops-empty">
             Je hebt nog geen opdrachten voor vandaag.
           </div>
         ) : (

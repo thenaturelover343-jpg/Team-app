@@ -1,0 +1,234 @@
+<!DOCTYPE html><html lang="nl-BE" class="antialiased"><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Barlicious Operations - Login</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+  <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ops-bg: #071017;
+      --ops-bg-deep: #040a0f;
+      --ops-surface: #0d1821;
+      --ops-surface-raised: #12212c;
+      --ops-surface-soft: #172933;
+      --ops-text: #edf7f9;
+      --ops-text-muted: #9bb0ba;
+      --ops-text-subtle: #6f8792;
+      --ops-accent: #38bfd0;
+      --ops-accent-strong: #5ad4df;
+      --ops-accent-soft: rgba(56, 191, 208, 0.12);
+      --ops-border: rgba(151, 190, 202, 0.16);
+      --ops-border-strong: rgba(80, 196, 211, 0.34);
+      --ops-radius-sm: 0.625rem;
+      --ops-radius-md: 0.875rem;
+      --ops-radius-lg: 1.125rem;
+      --ops-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+      
+      --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+      --font-display: 'Outfit', ui-sans-serif, system-ui, sans-serif;
+    }
+
+    body {
+      background-color: var(--ops-bg-deep);
+      color: var(--ops-text);
+      font-family: var(--font-sans);
+      min-height: 100vh;
+      margin: 0;
+    }
+
+    .font-display {
+      font-family: var(--font-display);
+    }
+
+    .login-shell {
+      background:
+        radial-gradient(circle at 12% -10%, rgba(56, 191, 208, 0.13), transparent 32rem),
+        radial-gradient(circle at 90% 5%, rgba(42, 105, 140, 0.12), transparent 28rem),
+        linear-gradient(180deg, var(--ops-bg-deep), var(--ops-bg) 34%, #09141b);
+      min-height: 100vh;
+      position: relative;
+    }
+
+    .login-shell::before {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      content: "";
+      opacity: 0.18;
+      background-image: linear-gradient(rgba(104, 167, 184, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(104, 167, 184, 0.04) 1px, transparent 1px);
+      background-size: 48px 48px;
+      mask-image: linear-gradient(to bottom, black, transparent 75%);
+      -webkit-mask-image: linear-gradient(to bottom, black, transparent 75%);
+    }
+
+    .auth-card {
+      position: relative;
+      z-index: 1;
+      border: 1px solid var(--ops-border);
+      background: rgba(13, 24, 33, 0.82) !important;
+      box-shadow: var(--ops-shadow);
+      backdrop-filter: blur(18px) saturate(125%);
+      -webkit-backdrop-filter: blur(18px) saturate(125%);
+      border-radius: var(--ops-radius-lg);
+      overflow: hidden;
+    }
+
+    .auth-card::before {
+      position: absolute;
+      top: 0;
+      left: 12%;
+      width: 76%;
+      height: 1px;
+      content: "";
+      background: linear-gradient(90deg, transparent, var(--ops-accent), transparent);
+    }
+
+    .brand-mark-hero {
+      width: 7.25rem;
+      height: 7.25rem;
+      border-radius: 1.75rem;
+      padding: 0.35rem;
+      background: linear-gradient(160deg, rgba(56, 191, 208, 0.18), rgba(7, 16, 23, 0.92));
+      border: 1px solid var(--ops-border-strong);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 0 28px rgba(56, 191, 208, 0.14);
+    }
+
+    .ops-input {
+      width: 100%;
+      min-height: 2.9rem;
+      border: 1px solid var(--ops-border) !important;
+      border-radius: var(--ops-radius-sm) !important;
+      background: rgba(4, 12, 17, 0.64) !important;
+      color: var(--ops-text) !important;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+      transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+    }
+    .ops-input:focus {
+      outline: none;
+      border-color: var(--ops-accent) !important;
+      box-shadow: 0 0 0 3px rgba(56, 191, 208, 0.12) !important;
+    }
+    .ops-input::placeholder {
+      color: var(--ops-text-subtle);
+    }
+
+    .ops-btn-primary {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 3.1rem;
+      border-radius: var(--ops-radius-sm);
+      padding: 0.7rem 1rem;
+      font-weight: 750;
+      border: 1px solid rgba(108, 222, 232, 0.44);
+      background: linear-gradient(180deg, #49cad8, #2aa1b1);
+      color: #021014 !important;
+      box-shadow: 0 8px 22px rgba(29, 153, 169, 0.18);
+      transition: background 120ms ease;
+      font-size: 1.02rem;
+    }
+    .ops-btn-primary:active {
+      background: linear-gradient(180deg, #31b0bf, #2aa1b1);
+    }
+
+    .ops-btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 2.75rem;
+      border-radius: var(--ops-radius-sm);
+      padding: 0.7rem 1rem;
+      font-weight: 750;
+      border: 1px solid var(--ops-border);
+      background: rgba(18, 33, 44, 0.72);
+      color: var(--ops-text) !important;
+      transition: border-color 120ms ease, background 120ms ease;
+    }
+    .ops-btn-secondary:active {
+      background: rgba(26, 48, 61, 0.82);
+      border-color: var(--ops-border-strong);
+    }
+
+    .eyebrow {
+      color: var(--ops-accent-strong);
+      font-size: 0.72rem;
+      font-weight: 800;
+      letter-spacing: 0.18em;
+    }
+  </style>
+</head>
+<body>
+  <div class="w-full h-screen flex flex-col login-shell overflow-y-auto pt-14 pb-[34px] px-4 items-center justify-center" data-sd-id="1">
+    
+    <!-- Language Switch (Absolute top right) -->
+    <div class="absolute top-14 right-4 z-10 flex rounded-xl border border-[var(--ops-border)] bg-[var(--ops-surface-raised)] p-1" role="group" aria-label="Taal / Langue" data-sd-id="2">
+      <button type="button" class="min-h-9 px-3 rounded-lg text-xs font-bold bg-[rgba(18,33,44,0.92)] text-[var(--ops-text)]" data-sd-id="3">
+        NL
+      </button>
+      <button type="button" class="min-h-9 px-3 rounded-lg text-xs font-bold text-[var(--ops-text-muted)]" data-sd-id="4">
+        FR
+      </button>
+    </div>
+
+    <!-- Auth Card -->
+    <div class="auth-card w-full max-w-[343px] p-7 space-y-8 mt-8" data-sd-id="5">
+      
+      <!-- Header -->
+      <div class="text-center space-y-3" data-sd-id="6">
+        <div class="brand-mark-hero flex items-center justify-center mx-auto mb-2" data-sd-id="7">
+          <img src="https://vgbujcuwptvheqijyjbe.supabase.co/storage/v1/object/public/hmac-uploads/projects/f87bef03-7b2b-47c2-b4ec-676764892c59/brand-assets/public-brand-logo.svg/brand-logo.svg" alt="Barlicious Logo" class="w-[88%] h-[88%] object-contain" data-sd-id="8">
+        </div>
+        <div class="eyebrow font-display" data-sd-id="9">FIELD OPERATIONS</div>
+        <p class="text-[var(--ops-text-muted)] text-sm" data-sd-id="10">
+          Log in met uw uitgenodigde account
+        </p>
+      </div>
+
+      <!-- Form -->
+      <form class="space-y-4" data-sd-id="11">
+        <div data-sd-id="12">
+          <label class="block text-sm font-bold text-[var(--ops-text-muted)] mb-1.5" data-sd-id="13">E-mailadres</label>
+          <input type="email" placeholder="naam@bedrijf.be" required="" class="ops-input p-3.5 font-medium" data-sd-id="14">
+        </div>
+        <div data-sd-id="15">
+          <label class="block text-sm font-bold text-[var(--ops-text-muted)] mb-1.5" data-sd-id="16">Wachtwoord</label>
+          <input type="password" placeholder="••••••••" required="" class="ops-input p-3.5 font-medium" data-sd-id="17">
+        </div>
+        
+        <button type="button" class="ops-btn-primary w-full py-4 mt-2" data-sd-id="18">
+          <span data-sd-id="19">Inloggen</span>
+        </button>
+      </form>
+
+      <!-- Forgot Password -->
+      <button type="button" class="w-full text-sm font-bold text-[var(--ops-text-subtle)]" data-sd-id="20">
+        Wachtwoord vergeten?
+      </button>
+
+      <!-- Divider -->
+      <div class="flex items-center gap-3 text-[var(--ops-text-subtle)] text-sm" data-sd-id="21">
+        <span class="h-px flex-1 bg-[var(--ops-border)]" data-sd-id="22"></span>
+        <span data-sd-id="23">of</span>
+        <span class="h-px flex-1 bg-[var(--ops-border)]" data-sd-id="24"></span>
+      </div>
+
+      <!-- Google Auth -->
+      <button type="button" class="ops-btn-secondary w-full py-4 flex items-center justify-center gap-2" data-sd-id="25">
+        <iconify-icon icon="flat-color-icons:google" class="text-xl"></iconify-icon>
+        <span data-sd-id="26">Verder met Google</span>
+      </button>
+
+      <!-- Footer Note -->
+      <p class="text-center text-xs text-[var(--ops-text-subtle)] leading-relaxed" data-sd-id="27">
+        Nieuwe accounts worden uitsluitend door een beheerder aangemaakt.
+      </p>
+
+    </div>
+  </div>
+
+</body></html>

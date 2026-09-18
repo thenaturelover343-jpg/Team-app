@@ -1,0 +1,282 @@
+<!DOCTYPE html><html lang="nl"><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Barlicious Operations - Vandaag</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+  <link rel="preconnect" href="https://api.fontshare.com">
+  <link href="https://api.fontshare.com/v2/css?f[]=outfit@400,500,700,800&amp;f[]=plus-jakarta-sans@400,500,600,700,800&amp;display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+      --font-display: "Outfit", ui-sans-serif, system-ui, sans-serif;
+      --ops-bg: #071017;
+      --ops-bg-deep: #040a0f;
+      --ops-surface: #0d1821;
+      --ops-surface-raised: #12212c;
+      --ops-surface-soft: #172933;
+      --ops-text: #edf7f9;
+      --ops-text-muted: #9bb0ba;
+      --ops-text-subtle: #6f8792;
+      --ops-accent: #38bfd0;
+      --ops-accent-strong: #5ad4df;
+      --ops-accent-soft: rgba(56, 191, 208, 0.12);
+      --ops-success: #49ce93;
+      --ops-warning: #efb65f;
+      --ops-danger: #f0717e;
+      --ops-border: rgba(151, 190, 202, 0.16);
+      --ops-border-strong: rgba(80, 196, 211, 0.34);
+      --ops-radius-sm: 0.625rem;
+      --ops-radius-md: 0.875rem;
+      --ops-radius-lg: 1.125rem;
+      --ops-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+    }
+    
+    body {
+      background: var(--ops-bg);
+      color: var(--ops-text);
+      font-family: var(--font-sans);
+      -webkit-font-smoothing: antialiased;
+      margin: 0;
+    }
+
+    .font-display {
+      font-family: var(--font-display);
+    }
+
+    .app-shell {
+      background:
+        radial-gradient(circle at 12% -10%, rgba(56, 191, 208, 0.13), transparent 32rem),
+        radial-gradient(circle at 90% 5%, rgba(42, 105, 140, 0.12), transparent 28rem),
+        linear-gradient(180deg, var(--ops-bg-deep), var(--ops-bg) 34%, #09141b);
+    }
+
+    .app-shell::before {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      content: "";
+      opacity: 0.18;
+      background-image: linear-gradient(rgba(104, 167, 184, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(104, 167, 184, 0.04) 1px, transparent 1px);
+      background-size: 48px 48px;
+      mask-image: linear-gradient(to bottom, black, transparent 75%);
+      -webkit-mask-image: linear-gradient(to bottom, black, transparent 75%);
+    }
+
+    .topbar {
+      border-bottom: 1px solid var(--ops-border);
+      background: rgba(13, 24, 33, 0.82);
+      backdrop-filter: blur(18px) saturate(125%);
+      -webkit-backdrop-filter: blur(18px) saturate(125%);
+    }
+
+    .brand-mark {
+      border: 1px solid var(--ops-border-strong);
+      background: linear-gradient(145deg, rgba(56, 191, 208, 0.32), rgba(15, 45, 59, 0.72));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 0 28px rgba(56, 191, 208, 0.14);
+    }
+
+    .user-pill {
+      border: 1px solid var(--ops-border);
+      background: rgba(18, 33, 44, 0.76);
+    }
+
+    .ops-card {
+      border: 1px solid var(--ops-border);
+      background: linear-gradient(145deg, rgba(18, 33, 44, 0.94), rgba(11, 22, 30, 0.96));
+    }
+
+    .ops-panel {
+      border: 1px solid var(--ops-border);
+      background: rgba(22, 41, 52, 0.66);
+    }
+
+    .ops-input {
+      border: 1px solid var(--ops-border);
+      background: rgba(4, 12, 17, 0.64);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+      transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+    }
+
+    .ops-input:focus {
+      outline: none;
+      border-color: var(--ops-accent);
+      box-shadow: 0 0 0 3px rgba(56, 191, 208, 0.12);
+    }
+
+    .ops-btn-primary {
+      border: 1px solid rgba(108, 222, 232, 0.44);
+      background: linear-gradient(180deg, #49cad8, #2aa1b1);
+      color: #021014;
+      box-shadow: 0 8px 22px rgba(29, 153, 169, 0.18);
+      transition: background 120ms ease;
+    }
+
+    .ops-btn-primary:active {
+      background: linear-gradient(180deg, #64dce5, #31b0bf);
+    }
+
+    .employee-hero-clock {
+      border: 1px solid var(--ops-border-strong);
+      background:
+        radial-gradient(circle at 50% 0%, rgba(56, 191, 208, 0.16), transparent 55%),
+        linear-gradient(160deg, rgba(18, 33, 44, 0.98), rgba(8, 18, 25, 0.96));
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
+    }
+
+    .employee-nav {
+      border-top: 1px solid var(--ops-border);
+      background: rgba(8, 18, 25, 0.9);
+      box-shadow: 0 -18px 44px rgba(0, 0, 0, 0.42);
+      backdrop-filter: blur(18px) saturate(125%);
+      -webkit-backdrop-filter: blur(18px) saturate(125%);
+    }
+
+    .ops-nav-btn {
+      border: 1px solid transparent;
+      color: var(--ops-text-muted);
+    }
+
+    .ops-nav-btn-active {
+      border-color: rgba(84, 211, 224, 0.32);
+      background: var(--ops-accent-soft);
+      color: var(--ops-accent-strong);
+    }
+
+    .ops-chip-warning {
+      border: 1px solid rgba(239, 182, 95, 0.38);
+      background: rgba(239, 182, 95, 0.12);
+      color: #f8d59f;
+    }
+  </style>
+</head>
+<body>
+  <div class="w-full h-screen flex flex-col app-shell relative" data-sd-id="1">
+    
+    <!-- Header -->
+    <header class="shrink-0 pt-14 topbar relative z-50" data-sd-id="2">
+      <div class="px-4 h-[60px] flex items-center justify-between" data-sd-id="3">
+        <div class="flex items-center space-x-3" data-sd-id="4">
+          <div class="brand-mark w-9 h-9 rounded-xl flex items-center justify-center p-1.5" data-sd-id="5">
+            <img src="https://vgbujcuwptvheqijyjbe.supabase.co/storage/v1/object/public/hmac-uploads/projects/f87bef03-7b2b-47c2-b4ec-676764892c59/brand-assets/public-brand-logo.svg/brand-logo.svg" alt="Barlicious Logo" class="w-full h-full object-contain" data-sd-id="6">
+          </div>
+          <span class="font-display font-bold text-lg tracking-tight text-[var(--ops-text)]" data-sd-id="7">Team</span>
+        </div>
+        
+        <div class="flex items-center gap-3" data-sd-id="8">
+          <button class="w-8 h-8 rounded-full border border-[var(--ops-border)] flex items-center justify-center text-[var(--ops-text-muted)] text-sm font-bold" data-sd-id="9">
+            NL
+          </button>
+          <div class="user-pill rounded-full p-1 pr-3 flex items-center gap-2" data-sd-id="10">
+            <div class="w-7 h-7 rounded-full bg-[var(--ops-surface-soft)] flex items-center justify-center" data-sd-id="11">
+              <iconify-icon icon="lucide:user" class="text-[var(--ops-text-muted)]"></iconify-icon>
+            </div>
+            <iconify-icon icon="lucide:log-out" class="text-[var(--ops-text-muted)]"></iconify-icon>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 overflow-y-auto relative z-10 px-4 py-6 space-y-6 pb-28" data-sd-id="12">
+      
+      <!-- Offline Queue -->
+      <div class="ops-chip-warning rounded-full px-4 py-2.5 flex items-center gap-2 text-sm font-bold shadow-lg" data-sd-id="13">
+        <iconify-icon icon="lucide:wifi-off"></iconify-icon>
+        1 actie wacht op internet
+      </div>
+
+      <!-- Alerts -->
+      <div class="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-xl shadow-sm space-y-3" data-sd-id="14">
+        <div class="flex items-center gap-2 text-amber-900" data-sd-id="15">
+          <div class="w-5 h-5 bg-amber-500 rounded-full flex items-center justify-center text-[10px] font-bold text-white" data-sd-id="16">2</div>
+          <span class="font-bold text-sm" data-sd-id="17">Nieuwe opdrachten</span>
+        </div>
+        <div class="bg-white rounded-lg p-3 border border-amber-100 flex flex-col gap-3 shadow-sm" data-sd-id="18">
+          <div data-sd-id="19">
+            <div class="font-bold text-zinc-900 text-sm" data-sd-id="20">Tomorrowland - VIP Deck</div>
+            <div class="text-xs text-zinc-500" data-sd-id="21">Opbouw koelcellen zone A</div>
+          </div>
+          <button class="bg-amber-100 text-amber-900 w-full py-2 rounded-lg text-xs font-bold" data-sd-id="22">
+            Bevestig Ontvangst
+          </button>
+        </div>
+      </div>
+
+      <!-- Vandaag Gepland -->
+      <div class="ops-card rounded-[var(--ops-radius-lg)] p-5 space-y-3" data-sd-id="23">
+        <h2 class="font-display font-bold text-lg text-[var(--ops-text)]" data-sd-id="24">Vandaag gepland</h2>
+        <div class="ops-panel rounded-[var(--ops-radius-md)] p-3 flex justify-between items-center" data-sd-id="25">
+          <div data-sd-id="26">
+            <div class="font-bold text-[var(--ops-text)] text-sm" data-sd-id="27">Chauffeur - Koeltransport</div>
+            <div class="text-xs text-[var(--ops-text-muted)] mt-0.5" data-sd-id="28">08:00 – 17:00 · Tomorrowland</div>
+          </div>
+          <button class="ops-btn-primary rounded-[var(--ops-radius-sm)] px-3 py-1.5 flex items-center gap-1.5 text-xs font-bold" data-sd-id="29">
+            <iconify-icon icon="lucide:navigation" class="text-sm"></iconify-icon>
+            Route
+          </button>
+        </div>
+      </div>
+
+      <!-- Clock Hero -->
+      <div class="employee-hero-clock rounded-[var(--ops-radius-lg)] overflow-hidden" data-sd-id="30">
+        <div class="p-6 text-center space-y-5" data-sd-id="31">
+          <h2 class="font-display font-bold text-xl text-[var(--ops-text)]" data-sd-id="32">Urenregistratie</h2>
+          
+          <div class="space-y-4" data-sd-id="33">
+            <p class="text-[var(--ops-text-muted)] text-sm font-medium" data-sd-id="34">Je bent momenteel niet ingeklokt.</p>
+            
+            <select class="ops-input w-full p-3.5 rounded-[var(--ops-radius-sm)] text-sm font-semibold text-[var(--ops-text)] appearance-none" data-sd-id="35">
+              <option data-sd-id="36">08:00 — Chauffeur - Koeltransport</option>
+              <option data-sd-id="37">Algemene werkdag</option>
+            </select>
+
+            <button class="ops-btn-primary w-full py-4 rounded-[var(--ops-radius-sm)] flex items-center justify-center gap-3" data-sd-id="38">
+              <iconify-icon icon="lucide:play" class="text-xl"></iconify-icon>
+              <span class="font-bold text-[15px]" data-sd-id="39">Start Werkdag (Inklokken)</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Planning Section -->
+      <div class="space-y-4 pt-2" data-sd-id="40">
+        <h2 class="font-display font-bold text-lg text-[var(--ops-text)] px-1" data-sd-id="41">Mijn Planning Vandaag</h2>
+        <div class="ops-panel rounded-[var(--ops-radius-lg)] p-8 border-dashed flex items-center justify-center text-center" data-sd-id="42">
+          <span class="text-[var(--ops-text-subtle)] text-sm font-medium" data-sd-id="43">Geen specifieke opdrachten voor vandaag.</span>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- Bottom Nav -->
+    <footer class="shrink-0 employee-nav fixed bottom-0 w-full z-50 pb-[34px]" data-sd-id="44">
+      <div class="flex items-center justify-around p-2 gap-1" data-sd-id="45">
+        <button class="ops-nav-btn ops-nav-btn-active flex-1 flex flex-col items-center justify-center gap-1 py-2 rounded-xl relative" data-sd-id="46">
+          <iconify-icon icon="lucide:calendar-check-2" class="text-xl"></iconify-icon>
+          <span class="text-[10px] font-bold" data-sd-id="47">Vandaag</span>
+          <span class="absolute top-1 right-[25%] w-2 h-2 bg-red-500 rounded-full border border-[var(--ops-surface-soft)]" data-sd-id="48"></span>
+        </button>
+        <button class="ops-nav-btn flex-1 flex flex-col items-center justify-center gap-1 py-2 rounded-xl" data-sd-id="49">
+          <iconify-icon icon="lucide:calendar-days" class="text-xl"></iconify-icon>
+          <span class="text-[10px] font-bold" data-sd-id="50">Planning</span>
+        </button>
+        <button class="ops-nav-btn flex-1 flex flex-col items-center justify-center gap-1 py-2 rounded-xl" data-sd-id="51">
+          <iconify-icon icon="lucide:alert-triangle" class="text-xl"></iconify-icon>
+          <span class="text-[10px] font-bold" data-sd-id="52">Melden</span>
+        </button>
+        <button class="ops-nav-btn flex-1 flex flex-col items-center justify-center gap-1 py-2 rounded-xl relative" data-sd-id="53">
+          <iconify-icon icon="lucide:bell" class="text-xl"></iconify-icon>
+          <span class="text-[10px] font-bold" data-sd-id="54">Berichten</span>
+        </button>
+        <button class="ops-nav-btn flex-1 flex flex-col items-center justify-center gap-1 py-2 rounded-xl" data-sd-id="55">
+          <iconify-icon icon="lucide:user" class="text-xl"></iconify-icon>
+          <span class="text-[10px] font-bold" data-sd-id="56">Profiel</span>
+        </button>
+      </div>
+    </footer>
+
+  </div>
+
+</body></html>

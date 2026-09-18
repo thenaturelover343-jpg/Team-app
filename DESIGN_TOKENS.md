@@ -1,5 +1,7 @@
 # Barlicious Operations UI tokens
 
+- Typography: Outfit (display) + Plus Jakarta Sans (UI), loaded via Google Fonts in `app/layout.tsx`
+
 - Background: `#071017`; deep background: `#040a0f`
 - Surfaces: `#0d1821`, `#12212c`, `#172933`
 - Text: `#edf7f9`; muted: `#9bb0ba`; subtle: `#6f8792`

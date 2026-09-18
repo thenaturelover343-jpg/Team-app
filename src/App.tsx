@@ -101,7 +101,7 @@ function AppContent() {
             <div className="brand-mark brand-mark-hero flex items-center justify-center mx-auto mb-2">
               <img src="/brand-logo.svg" alt="Team" className="w-[88%] h-[88%] object-contain" />
             </div>
-            <div className="eyebrow">FIELD OPERATIONS</div>
+            <div className="eyebrow font-display">FIELD OPERATIONS</div>
             <p className="text-zinc-500">{fr ? 'Connectez-vous avec votre compte invité' : 'Log in met uw uitgenodigde account'}</p>
           </div>
 
@@ -175,8 +175,8 @@ function AppContent() {
                 <img src="/brand-logo.svg" alt="Barlicious Operations" className="w-full h-full object-contain rounded-[inherit]" />
               </div>
               <div className="min-w-0">
-                <span className="font-bold text-xl hidden sm:block tracking-tight text-zinc-900">Barlicious <span className="brand-subtitle">Operations</span></span>
-                <span className="font-bold text-lg sm:hidden tracking-tight text-zinc-900">Team</span>
+                <span className="font-display font-bold text-xl hidden sm:block tracking-tight text-zinc-900">Barlicious <span className="brand-subtitle">Operations</span></span>
+                <span className="font-display font-bold text-lg sm:hidden tracking-tight text-zinc-900">Team</span>
               </div>
             </div>
             

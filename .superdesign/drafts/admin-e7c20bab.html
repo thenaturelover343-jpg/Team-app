@@ -1,0 +1,444 @@
+<!DOCTYPE html><html lang="nl"><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Barlicious Operations - Admin Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+
+    :root {
+      --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+      --font-display: 'Outfit', ui-sans-serif, system-ui, sans-serif;
+      --ops-bg: #071017;
+      --ops-bg-deep: #040a0f;
+      --ops-surface: #0d1821;
+      --ops-surface-raised: #12212c;
+      --ops-surface-soft: #172933;
+      --ops-text: #edf7f9;
+      --ops-text-muted: #9bb0ba;
+      --ops-text-subtle: #6f8792;
+      --ops-accent: #38bfd0;
+      --ops-accent-strong: #5ad4df;
+      --ops-accent-soft: rgba(56, 191, 208, 0.12);
+      --ops-success: #49ce93;
+      --ops-warning: #efb65f;
+      --ops-danger: #f0717e;
+      --ops-border: rgba(151, 190, 202, 0.16);
+      --ops-border-strong: rgba(80, 196, 211, 0.34);
+      --ops-radius-sm: 0.625rem;
+      --ops-radius-md: 0.875rem;
+      --ops-radius-lg: 1.125rem;
+      --ops-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+    }
+
+    body {
+      background-color: var(--ops-bg-deep);
+      color: var(--ops-text);
+      font-family: var(--font-sans);
+      margin: 0;
+      min-width: 320px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    h1, h2, h3, h4, h5, h6 {
+      font-family: var(--font-display);
+      letter-spacing: -0.018em;
+    }
+
+    .app-shell {
+      background:
+        radial-gradient(circle at 12% -10%, rgba(56, 191, 208, 0.13), transparent 32rem),
+        radial-gradient(circle at 90% 5%, rgba(42, 105, 140, 0.12), transparent 28rem),
+        linear-gradient(180deg, var(--ops-bg-deep), var(--ops-bg) 34%, #09141b);
+      min-height: 100vh;
+      position: relative;
+    }
+
+    .app-shell::before {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      content: "";
+      opacity: 0.18;
+      background-image: linear-gradient(rgba(104, 167, 184, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(104, 167, 184, 0.04) 1px, transparent 1px);
+      background-size: 48px 48px;
+      mask-image: linear-gradient(to bottom, black, transparent 75%);
+      -webkit-mask-image: linear-gradient(to bottom, black, transparent 75%);
+    }
+
+    .topbar, .admin-nav {
+      border: 1px solid var(--ops-border);
+      background: rgba(13, 24, 33, 0.82);
+      box-shadow: var(--ops-shadow);
+      backdrop-filter: blur(18px) saturate(125%);
+      -webkit-backdrop-filter: blur(18px) saturate(125%);
+    }
+
+    .topbar {
+      border-width: 0 0 1px;
+      box-shadow: 0 12px 34px rgba(0, 0, 0, 0.18);
+    }
+
+    .brand-mark {
+      width: 2.5rem;
+      height: 2.5rem;
+      border: 1px solid var(--ops-border-strong);
+      border-radius: 0.75rem;
+      background: linear-gradient(145deg, rgba(56, 191, 208, 0.32), rgba(15, 45, 59, 0.72));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 0 28px rgba(56, 191, 208, 0.14);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    .user-pill {
+      border: 1px solid var(--ops-border);
+      border-radius: 0.875rem;
+      background: rgba(18, 33, 44, 0.76);
+    }
+
+    .ops-card {
+      border: 1px solid var(--ops-border);
+      border-radius: var(--ops-radius-lg);
+      background: linear-gradient(145deg, rgba(18, 33, 44, 0.94), rgba(11, 22, 30, 0.96));
+    }
+
+    .ops-panel {
+      border: 1px solid var(--ops-border);
+      border-radius: var(--ops-radius-md);
+      background: rgba(22, 41, 52, 0.66);
+    }
+
+    .ops-nav {
+      display: flex;
+      gap: 0.35rem;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .ops-nav::-webkit-scrollbar { display: none; }
+
+    .ops-nav-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      border: 1px solid transparent;
+      border-radius: var(--ops-radius-sm);
+      color: var(--ops-text-muted);
+      font-size: 0.875rem;
+      font-weight: 700;
+      transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+
+    .admin-nav.ops-nav {
+      gap: 0.4rem;
+      padding: 0.45rem;
+    }
+
+    .admin-nav > .ops-nav-btn {
+      flex-direction: column;
+      min-width: 5.75rem;
+      flex: 0 0 auto;
+      gap: 0.28rem;
+      padding: 0.55rem 0.65rem;
+      font-size: 0.8rem;
+      line-height: 1.2;
+      letter-spacing: 0.01em;
+    }
+
+    .admin-nav > .ops-nav-btn:hover {
+      background: rgba(26, 48, 61, 0.82);
+      color: var(--ops-text);
+    }
+
+    .ops-nav-btn-active, .admin-nav > .ops-nav-btn.ops-nav-btn-active:hover {
+      border-color: rgba(84, 211, 224, 0.32);
+      background: var(--ops-accent-soft);
+      color: var(--ops-accent-strong);
+    }
+
+    .ops-btn-primary, .ops-btn-secondary, .ops-btn-danger {
+      display: inline-flex;
+      min-height: 2.75rem;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      border-radius: var(--ops-radius-sm);
+      padding: 0.7rem 1rem;
+      font-weight: 700;
+      line-height: 1.15;
+      transition: border-color 120ms ease, background 120ms ease, color 120ms ease;
+      cursor: pointer;
+    }
+
+    .ops-btn-primary {
+      border: 1px solid rgba(108, 222, 232, 0.44);
+      background: linear-gradient(180deg, #49cad8, #2aa1b1);
+      color: #021014;
+      box-shadow: 0 8px 22px rgba(29, 153, 169, 0.18);
+    }
+    .ops-btn-primary:hover {
+      background: linear-gradient(180deg, #64dce5, #31b0bf);
+    }
+
+    .ops-btn-secondary {
+      border: 1px solid var(--ops-border);
+      background: rgba(18, 33, 44, 0.72);
+      color: var(--ops-text);
+    }
+    .ops-btn-secondary:hover {
+      border-color: var(--ops-border-strong);
+      background: rgba(26, 48, 61, 0.82);
+    }
+
+    .ops-btn-danger {
+      border: 1px solid rgba(240, 113, 126, 0.38);
+      background: rgba(240, 113, 126, 0.1);
+      color: #ffacb4;
+    }
+    .ops-btn-danger:hover {
+      background: rgba(240, 113, 126, 0.17);
+    }
+
+    .ops-input {
+      width: 100%;
+      min-height: 2.9rem;
+      border: 1px solid var(--ops-border);
+      border-radius: var(--ops-radius-sm);
+      background: rgba(4, 12, 17, 0.64);
+      color: var(--ops-text);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+      transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+      padding: 0 1rem;
+    }
+    .ops-input:focus {
+      outline: none;
+      border-color: var(--ops-accent);
+      box-shadow: 0 0 0 3px rgba(56, 191, 208, 0.12);
+    }
+
+    .ops-chip-info, .ops-chip-success {
+      display: inline-flex;
+      align-items: center;
+      border-width: 1px;
+      border-style: solid;
+      border-radius: 999px;
+      padding: 0.35rem 0.7rem;
+      font-size: 0.78rem;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+    .ops-chip-info {
+      border-color: rgba(56, 191, 208, 0.38);
+      background: rgba(56, 191, 208, 0.12);
+      color: #94e7ee;
+    }
+    .ops-chip-success {
+      border-color: rgba(73, 206, 147, 0.36);
+      background: rgba(73, 206, 147, 0.12);
+      color: #9aefc7;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell" data-sd-id="1">
+    <header class="topbar sticky top-0 z-50" data-sd-id="2">
+      <div class="max-w-6xl mx-auto px-4 md:px-8" data-sd-id="3">
+        <div class="h-[72px] flex items-center justify-between" data-sd-id="4">
+          <div class="flex items-center space-x-3" data-sd-id="5">
+            <div class="brand-mark" data-sd-id="6">
+              <img src="https://vgbujcuwptvheqijyjbe.supabase.co/storage/v1/object/public/hmac-uploads/projects/f87bef03-7b2b-47c2-b4ec-676764892c59/brand-assets/public-brand-logo.svg/brand-logo.svg" alt="Barlicious Logo" class="w-full h-full object-contain rounded-[inherit]" data-sd-id="7">
+            </div>
+            <div data-sd-id="8">
+              <span class="font-bold text-xl hidden sm:block tracking-tight text-[#edf7f9]" data-sd-id="9">Barlicious <span class="text-[#6f8792] font-medium" data-sd-id="10">Operations</span></span>
+              <span class="font-bold text-lg sm:hidden tracking-tight text-[#edf7f9]" data-sd-id="11">Team</span>
+            </div>
+          </div>
+          
+          <div class="header-actions flex items-center gap-2 sm:gap-3" data-sd-id="12">
+            <button class="text-[#9bb0ba] hover:text-[#edf7f9] text-sm font-semibold transition-colors px-2" data-sd-id="13">NL / FR</button>
+            <button class="ops-btn-secondary px-3 py-1.5 text-sm hidden md:flex" data-sd-id="14">
+              <iconify-icon icon="lucide:download"></iconify-icon> Installeer App
+            </button>
+            <button class="ops-btn-primary inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold shrink-0" data-sd-id="15">
+              <iconify-icon icon="lucide:eye"></iconify-icon>
+              <span data-sd-id="16">Werknemer</span>
+            </button>
+            <div class="user-pill flex items-center gap-3 pl-2 pr-3 py-1.5" data-sd-id="17">
+              <div class="ops-panel w-8 h-8 rounded-full flex items-center justify-center" data-sd-id="18">
+                <iconify-icon icon="lucide:user" class="text-[#9bb0ba]"></iconify-icon>
+              </div>
+              <div class="user-pill-copy flex flex-col pr-3 border-r border-[rgba(151,190,202,0.16)]" data-sd-id="19">
+                <span class="text-sm font-bold text-[#edf7f9] leading-tight truncate max-w-[100px]" data-sd-id="20">Admin User</span>
+                <span class="text-xs text-[#9bb0ba] leading-tight capitalize" data-sd-id="21">beheerder</span>
+              </div>
+              <button aria-label="Uitloggen" class="text-[#9bb0ba] hover:text-[#edf7f9] transition-colors" data-sd-id="22">
+                <iconify-icon icon="lucide:log-out" class="w-4 h-4"></iconify-icon>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 md:px-8 py-6 md:py-8" data-sd-id="23">
+      <div class="admin-shell space-y-7 pb-12" data-sd-id="24">
+        <button class="w-full rounded-[14px] px-4 py-3.5 text-left font-bold border ops-btn-secondary flex items-center justify-between gap-3" data-sd-id="25">
+          <span class="flex items-center gap-2" data-sd-id="26">
+            <iconify-icon icon="lucide:eye" class="w-5 h-5 shrink-0"></iconify-icon>
+            <span data-sd-id="27">Bekijk werknemerskant</span>
+          </span>
+          <span class="text-xs font-semibold opacity-80 text-[#9bb0ba]" data-sd-id="28">Open Vandaag / clock-in</span>
+        </button>
+
+        <div class="admin-nav ops-nav p-1.5 rounded-[0.875rem]" data-sd-id="29">
+          <button class="ops-nav-btn ops-nav-btn-active relative" data-sd-id="30">
+            <iconify-icon icon="lucide:shield-check" class="w-[1.05rem] h-[1.05rem]"></iconify-icon>
+            <span data-sd-id="31">Controle</span>
+          </button>
+          <button class="ops-nav-btn" data-sd-id="32">
+            <iconify-icon icon="lucide:calendar-days" class="w-[1.05rem] h-[1.05rem]"></iconify-icon>
+            <span data-sd-id="33">Weekplanner</span>
+          </button>
+          <button class="ops-nav-btn" data-sd-id="34">
+            <iconify-icon icon="lucide:settings" class="w-[1.05rem] h-[1.05rem]"></iconify-icon>
+            <span data-sd-id="35">Kwaliteit</span>
+          </button>
+          <button class="ops-nav-btn" data-sd-id="36">
+            <iconify-icon icon="lucide:calendar" class="w-[1.05rem] h-[1.05rem]"></iconify-icon>
+            <span data-sd-id="37">Opdrachten</span>
+          </button>
+          <button class="ops-nav-btn" data-sd-id="38">
+            <iconify-icon icon="lucide:clock" class="w-[1.05rem] h-[1.05rem]"></iconify-icon>
+            <span data-sd-id="39">Urenregistratie (GPS)</span>
+          </button>
+          <button class="ops-nav-btn" data-sd-id="40">
+            <iconify-icon icon="lucide:users" class="w-[1.05rem] h-[1.05rem]"></iconify-icon>
+            <span data-sd-id="41">Klantenbeheer</span>
+          </button>
+          <button class="ops-nav-btn" data-sd-id="42">
+            <iconify-icon icon="lucide:alert-triangle" class="w-[1.05rem] h-[1.05rem]"></iconify-icon>
+            <span data-sd-id="43">Meldingen</span>
+          </button>
+          <button class="ops-nav-btn" data-sd-id="44">
+            <iconify-icon icon="lucide:user" class="w-[1.05rem] h-[1.05rem]"></iconify-icon>
+            <span data-sd-id="45">Team</span>
+          </button>
+        </div>
+
+        <div class="space-y-8" data-sd-id="46">
+          <div data-sd-id="47">
+            <h2 class="text-2xl font-bold text-[#edf7f9]" data-sd-id="48">Planner-dashboard</h2>
+            <p class="text-sm text-[#9bb0ba] mt-1" data-sd-id="49">Live controle op bezetting, aanwezigheid en goedkeuring.</p>
+          </div>
+
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-3" data-sd-id="50">
+            <div class="ops-card p-4" data-sd-id="51">
+              <iconify-icon icon="lucide:users" class="w-5 h-5 text-[#9bb0ba]"></iconify-icon>
+              <div class="text-3xl font-black mt-3" data-sd-id="52">12</div>
+              <div class="text-sm text-[#9bb0ba] mt-1" data-sd-id="53">Gepland vandaag</div>
+            </div>
+            <div class="ops-card p-4" data-sd-id="54">
+              <iconify-icon icon="lucide:clock-3" class="w-5 h-5 text-[#9bb0ba]"></iconify-icon>
+              <div class="text-3xl font-black mt-3" data-sd-id="55">8</div>
+              <div class="text-sm text-[#9bb0ba] mt-1" data-sd-id="56">Nu ingeklokt</div>
+            </div>
+            <div class="ops-card p-4" data-sd-id="57">
+              <iconify-icon icon="lucide:alert-triangle" class="w-5 h-5 text-[#9bb0ba]"></iconify-icon>
+              <div class="text-3xl font-black mt-3 text-[#efb65f]" data-sd-id="58">1</div>
+              <div class="text-sm text-[#9bb0ba] mt-1" data-sd-id="59">Te laat / no-show</div>
+            </div>
+            <div class="ops-card p-4" data-sd-id="60">
+              <iconify-icon icon="lucide:check-circle" class="w-5 h-5 text-[#9bb0ba]"></iconify-icon>
+              <div class="text-3xl font-black mt-3 text-[#38bfd0]" data-sd-id="61">4</div>
+              <div class="text-sm text-[#9bb0ba] mt-1" data-sd-id="62">Uren te controleren</div>
+            </div>
+          </div>
+
+          <section class="space-y-3" data-sd-id="63">
+            <h3 class="font-bold text-lg" data-sd-id="64">Bezetting vandaag</h3>
+            <article class="ops-card p-4" data-sd-id="65">
+              <div class="flex justify-between gap-3" data-sd-id="66">
+                <div data-sd-id="67">
+                  <div class="font-bold" data-sd-id="68">08:00–16:00 · Barbezetting Festival</div>
+                  <div class="text-sm text-[#9bb0ba]" data-sd-id="69">Main Stage Events B.V.</div>
+                </div>
+                <span class="text-sm font-bold" data-sd-id="70">3 medewerkers</span>
+              </div>
+              <div class="mt-3 flex flex-wrap gap-2" data-sd-id="71">
+                <span class="ops-chip-success" data-sd-id="72">Jan Peeters · ingeklokt</span>
+                <span class="ops-chip-success" data-sd-id="73">Sophie Visser · ingeklokt</span>
+                <span class="ops-chip-info" data-sd-id="74">Tom de Vries · verwacht</span>
+              </div>
+            </article>
+            <article class="ops-card p-4" data-sd-id="75">
+              <div class="flex justify-between gap-3" data-sd-id="76">
+                <div data-sd-id="77">
+                  <div class="font-bold" data-sd-id="78">14:00–22:00 · VIP Lounge Catering</div>
+                  <div class="text-sm text-[#9bb0ba]" data-sd-id="79">Corporate Solutions</div>
+                </div>
+                <span class="text-sm font-bold" data-sd-id="80">2 medewerkers</span>
+              </div>
+              <div class="mt-3 flex flex-wrap gap-2" data-sd-id="81">
+                <span class="ops-chip-info" data-sd-id="82">Lisa Jansen · verwacht</span>
+                <span class="ops-chip-info" data-sd-id="83">Mark Smeets · verwacht</span>
+              </div>
+            </article>
+          </section>
+
+          <section class="space-y-3" data-sd-id="84">
+            <h3 class="font-bold text-lg" data-sd-id="85">Openstaande urencontrole</h3>
+            <article class="ops-card p-4 space-y-3" data-sd-id="86">
+              <div class="flex justify-between gap-3" data-sd-id="87">
+                <div data-sd-id="88">
+                  <div class="font-bold" data-sd-id="89">Klaas de Jong</div>
+                  <div class="text-sm text-[#9bb0ba]" data-sd-id="90">Gisteren · 09:00–17:30</div>
+                </div>
+                <span class="font-bold text-[#5ad4df]" data-sd-id="91">8u 30m</span>
+              </div>
+              <input type="text" placeholder="Opmerking bij afwijzing (optioneel)" class="ops-input w-full p-3 text-sm" data-sd-id="92">
+              <div class="grid grid-cols-2 gap-3" data-sd-id="93">
+                <button class="ops-btn-danger" data-sd-id="94">Afwijzen</button>
+                <button class="ops-btn-primary" data-sd-id="95">Goedkeuren</button>
+              </div>
+            </article>
+          </section>
+
+          <section class="ops-card p-5 space-y-4" data-sd-id="96">
+            <div data-sd-id="97">
+              <h3 class="font-bold text-lg" data-sd-id="98">Loon- en facturatie-export</h3>
+              <p class="text-sm text-[#9bb0ba]" data-sd-id="99">Alleen goedgekeurde, afgesloten tijdregistraties worden opgenomen.</p>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" data-sd-id="100">
+              <label class="text-sm font-bold text-[#edf7f9]" data-sd-id="101">
+                Van
+                <input type="date" class="ops-input mt-1.5 w-full p-3" value="2023-10-01" data-sd-id="102">
+              </label>
+              <label class="text-sm font-bold text-[#edf7f9]" data-sd-id="103">
+                Tot
+                <input type="date" class="ops-input mt-1.5 w-full p-3" value="2023-10-31" data-sd-id="104">
+              </label>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" data-sd-id="105">
+              <button class="ops-btn-primary gap-2" data-sd-id="106">
+                <iconify-icon icon="lucide:download" class="w-4 h-4"></iconify-icon>
+                Loonexport CSV
+              </button>
+              <button class="ops-btn-secondary gap-2" data-sd-id="107">
+                <iconify-icon icon="lucide:download" class="w-4 h-4"></iconify-icon>
+                Facturatie CSV
+              </button>
+            </div>
+          </section>
+
+        </div>
+      </div>
+    </main>
+  </div>
+
+</body></html>

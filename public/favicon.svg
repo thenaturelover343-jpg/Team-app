@@ -1,6 +1,37 @@
-<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M22 19.2727C22 20.779 20.779 22 19.2727 22H14.7273C13.221 22 12 20.779 12 19.2727V12H19.2727C20.779 12 22 13.221 22 14.7273V19.2727Z" fill="#68C4FF"/>
-<path d="M20 2C21.1046 2 22 2.89543 22 4V7C22 8.10457 21.1046 9 20 9H17C15.8954 9 15 8.10457 15 7V4C15 2.89543 15.8954 2 17 2H20Z" fill="#0C79D8"/>
-<path d="M7 15C8.10457 15 9 15.8954 9 17V20C9 21.1046 8.10457 22 7 22H4C2.89543 22 2 21.1046 2 20V17C2 15.8954 2.89543 15 4 15H7Z" fill="#0C79D8"/>
-<path d="M12 12H4.72727C3.22104 12 2 10.779 2 9.27273V4.72727C2 3.22104 3.22104 2 4.72727 2H9.27273C10.779 2 12 3.22104 12 4.72727V12Z" fill="#2E9EFF"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Team App field operations mark</title>
+  <desc id="desc">A futuristic cyan and teal route compass with connected field nodes on a dark rounded square.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#071923"/>
+      <stop offset="1" stop-color="#102f3a"/>
+    </linearGradient>
+    <linearGradient id="cyan" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#16d6c3"/>
+      <stop offset="1" stop-color="#57e8ff"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <path d="M256 82 402 166v180L256 430 110 346V166L256 82Z" fill="none" stroke="#1b5661" stroke-width="5" opacity=".9"/>
+  <path d="M256 118 370 184v144l-114 66-114-66V184l114-66Z" fill="none" stroke="#123e4b" stroke-width="3"/>
+  <g fill="none" stroke="url(#cyan)" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)">
+    <path d="M153 307 210 211l75 42 74-82" stroke-width="18" opacity=".22"/>
+    <path d="M153 307 210 211l75 42 74-82" stroke-width="9"/>
+    <path d="m273 190 12 63-63-24" stroke-width="9"/>
+  </g>
+  <g fill="#071923" stroke="url(#cyan)" stroke-width="9">
+    <circle cx="153" cy="307" r="23"/>
+    <circle cx="210" cy="211" r="23"/>
+    <circle cx="285" cy="253" r="23"/>
+    <circle cx="359" cy="171" r="23"/>
+  </g>
+  <circle cx="153" cy="307" r="7" fill="#57e8ff"/>
+  <circle cx="210" cy="211" r="7" fill="#57e8ff"/>
+  <circle cx="285" cy="253" r="7" fill="#57e8ff"/>
+  <circle cx="359" cy="171" r="7" fill="#57e8ff"/>
+  <path d="M139 369h234" stroke="#16d6c3" stroke-width="4" stroke-linecap="round" opacity=".65"/>
 </svg>
