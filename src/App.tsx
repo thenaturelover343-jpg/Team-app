@@ -2,13 +2,14 @@ import React, { useState } from 'react';
 import EmployeeView from './EmployeeView';
 import AdminView from './AdminView';
 import { UserCircle, Loader2, LogOut, Eye, EyeOff } from 'lucide-react';
-import { PWAInstallButton, PWAInstallBanner } from './components/PWAInstallButton';
+import { PWAInstallButton } from './components/PWAInstallButton';
+import { AppUpdateBanner } from './components/AppUpdateBanner';
 import { AuthProvider, useAuth } from './hooks/useAuth';
-import { loginWithEmail, loginWithGoogle, logout, resetPassword } from './lib/firebase';
+import { loginWithEmail, loginWithGoogle, logout, resetPassword, mapAuthErrorToDutch } from './lib/firebase';
 import { LanguageProvider, LanguageSwitch, useLanguage } from './i18n';
 
 function AppContent() {
-  const { user, loading, accessError } = useAuth();
+  const { user, loading, accessError, redirectAuthError } = useAuth();
   const { locale } = useLanguage(); const fr = locale === 'fr';
   
   // Auth Form State
@@ -65,20 +66,17 @@ function AppContent() {
     }
   };
 
+
   const handleGoogleAuth = async () => {
     setAuthError('');
     setAuthNotice('');
     setIsSubmitting(true);
     try {
       await loginWithGoogle();
+      // Redirect flow navigates away; popup resolves here.
     } catch (err: unknown) {
       console.error(err);
-      const code = typeof err === 'object' && err !== null && 'code' in err ? String(err.code) : '';
-      if (code === 'auth/popup-blocked') {
-        setAuthError('Sta pop-ups toe voor deze app en probeer opnieuw.');
-      } else if (code !== 'auth/popup-closed-by-user') {
-        setAuthError('Google-inloggen is mislukt. Probeer opnieuw.');
-      }
+      setAuthError(mapAuthErrorToDutch(err));
     } finally {
       setIsSubmitting(false);
     }
@@ -95,7 +93,9 @@ function AppContent() {
 
   if (!user) {
     return (
-      <div className="login-shell min-h-screen flex items-center justify-center p-4 sm:p-6 relative overflow-x-hidden"><div className="login-language absolute top-4 right-4 z-10"><LanguageSwitch /></div>
+      <div className="login-shell min-h-screen flex items-center justify-center p-4 sm:p-6 relative overflow-x-hidden">
+        <AppUpdateBanner />
+        <div className="login-language absolute top-4 right-4 z-10"><LanguageSwitch /></div>
         <div className="auth-card ops-card max-w-md w-full p-5 sm:p-9 space-y-6 sm:space-y-8">
           <div className="text-center space-y-3">
             <div className="brand-mark brand-mark-hero flex items-center justify-center mx-auto mb-2">
@@ -105,9 +105,9 @@ function AppContent() {
             <p className="text-zinc-500">{fr ? 'Connectez-vous avec votre compte invité' : 'Log in met uw uitgenodigde account'}</p>
           </div>
 
-          {(authError || accessError) && (
+          {(authError || accessError || redirectAuthError) && (
             <div className="p-3 bg-red-50 text-red-700 rounded-[12px] text-sm font-medium text-center border border-red-100">
-              {authError || accessError}
+              {authError || accessError || redirectAuthError}
             </div>
           )}
           {authNotice && (
@@ -213,7 +213,8 @@ function AppContent() {
         </div>
       </header>
 
-      <PWAInstallBanner />
+      <AppUpdateBanner />
+
 
       <main id="main-content" tabIndex={-1} className="content-shell max-w-6xl mx-auto px-4 sm:px-6 md:px-8 py-6 md:py-8">
         {user.role === 'admin' && !viewAsEmployee ? <AdminView /> : <EmployeeView />}
