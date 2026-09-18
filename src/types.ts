@@ -119,6 +119,9 @@ export interface PlannedShift {
   customerAddress?: string;
   customerLatitude?: number;
   customerLongitude?: number;
+  siteAddress?: string;
+  siteLatitude?: number;
+  siteLongitude?: number;
   date: string;
   startTime: string;
   endTime: string;
@@ -164,11 +167,12 @@ export interface CorrectionRequest {
 export interface Attachment {
   id: string;
   userId: string;
-  entityType: 'planned_shift' | 'incident';
+  entityType: 'planned_shift' | 'incident' | 'assignment';
   entityId: string;
   filename: string;
   mimeType: string;
   size: number;
+  storage?: 'inline' | 'r2';
   createdAt: number;
 }
 
@@ -183,6 +187,10 @@ export interface Assignment {
   userId: string;
   customerId: string;
   customerName: string;
+  customerAddress?: string;
+  siteAddress?: string;
+  siteLatitude?: number;
+  siteLongitude?: number;
   description: string;
   date: string; // YYYY-MM-DD
   startTime?: string; // HH:mm
@@ -190,6 +198,8 @@ export interface Assignment {
   arrivalTime?: number;
   departureTime?: number;
   workNotes?: string;
+  materials?: string;
+  completionNotes?: string;
   tasks?: AssignmentTask[];
   acknowledged?: boolean;
   arrivalLoc?: GeoLocation;

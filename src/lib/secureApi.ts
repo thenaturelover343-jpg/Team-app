@@ -6,10 +6,10 @@ type InviteInput = { email: string; name: string; phone?: string; role?: 'admin'
 type InviteResult = { uid: string; resetLink: string };
 type AccessInput = { uid: string; role: 'admin' | 'employee'; active: boolean };
 type ClockOutInput = { location: GeoLocation; notes: string; statusTag: string };
-type AssignmentTransitionInput = { assignmentId: string; status: 'arrived' | 'completed'; location: GeoLocation; notes?: string };
+type AssignmentTransitionInput = { assignmentId: string; status: 'arrived' | 'completed'; location: GeoLocation; notes?: string; workNotes?: string; materials?: string; completionNotes?: string };
 type CustomerInput = { id?: string; name: string; address: string; phone?: string; email?: string; btwNumber?: string; latitude?: number | ''; longitude?: number | '' };
-type AssignmentInput = { id?: string; userId: string; customerId: string; date: string; startTime: string; description: string };
-type PlannedShiftInput = { title: string; customerId?: string; date: string; startTime: string; endTime: string; breakMinutes: number; notes?: string; memberIds: string[]; repeatWeeks: number; checklist: string[] };
+type AssignmentInput = { id?: string; userId: string; customerId: string; date: string; startTime: string; description: string; siteAddress?: string; siteLatitude?: number | ''; siteLongitude?: number | '' };
+type PlannedShiftInput = { title: string; customerId?: string; siteAddress?: string; siteLatitude?: number | ''; siteLongitude?: number | ''; date: string; startTime: string; endTime: string; breakMinutes: number; notes?: string; memberIds: string[]; repeatWeeks: number; checklist: string[] };
 export type TeamSnapshot = { user: User; users: User[]; shifts: Shift[]; assignments: Assignment[]; customers: Customer[]; plannedShifts: PlannedShift[]; breaks: ShiftBreak[]; incidents: Incident[]; correctionRequests: CorrectionRequest[]; attachments: Attachment[]; notifications: TeamNotification[]; push: PushState; privacy: PrivacySettings; auditEvents: AuditEvent[]; accessEvents: AccessEvent[]; backups: BackupRun[]; errors: ErrorEvent[]; pilot: PilotProgram | null; pilotFeedback: PilotFeedback[] };
 
 async function call<T>(action: string, input: Record<string, unknown> = {}): Promise<{ data: T }> {
@@ -43,7 +43,7 @@ async function queueable(action: string, input: Record<string, unknown>) {
   }
 }
 
-async function uploadAttachment(entityType: 'planned_shift' | 'incident', entityId: string, file: File) {
+async function uploadAttachment(entityType: 'planned_shift' | 'incident' | 'assignment', entityId: string, file: File) {
   const current = auth.currentUser;
   if (!current) throw new Error('U bent niet aangemeld.');
   const form = new FormData();
@@ -108,6 +108,7 @@ export const secureApi = {
   acknowledgeAssignment: (assignmentId: string) => call<{ ok: boolean }>('acknowledgeAssignment', { assignmentId }),
   transitionAssignment: (input: AssignmentTransitionInput) => call<{ ok: boolean }>('transitionAssignment', input),
   updateProfile: (input: { name: string; phone: string; availability: string; availabilitySchedule: WeeklyAvailability }) => call<{ ok: boolean }>('updateProfile', input),
-  updateAssignmentDetails: (assignmentId: string, tasks: AssignmentTask[], workNotes: string) =>
-    call<{ ok: boolean }>('updateAssignmentDetails', { assignmentId, tasks, workNotes }),
+  updateAssignmentDetails: (assignmentId: string, tasks: AssignmentTask[], workNotes: string, materials = '', completionNotes = '') =>
+    call<{ ok: boolean }>('updateAssignmentDetails', { assignmentId, tasks, workNotes, materials, completionNotes }),
 };
+

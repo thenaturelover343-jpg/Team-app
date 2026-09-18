@@ -21,6 +21,7 @@ export const customers = sqliteTable("customers", {
 
 export const plannedShifts = sqliteTable("planned_shifts", {
   id: text("id").primaryKey(), title: text("title").notNull(), customerId: text("customer_id"),
+  siteAddress: text("site_address"), siteLatitude: real("site_latitude"), siteLongitude: real("site_longitude"),
   date: text("date").notNull(), startTime: text("start_time").notNull(), endTime: text("end_time").notNull(),
   breakMinutes: integer("break_minutes").notNull().default(0), notes: text("notes"),
   status: text("status").notNull().default("draft"), recurrenceGroupId: text("recurrence_group_id"),
@@ -44,9 +45,11 @@ export const plannedShiftMembers = sqliteTable("planned_shift_members", {
 export const assignments = sqliteTable("assignments", {
   id: text("id").primaryKey(), userId: text("user_id").notNull(), customerId: text("customer_id").notNull(),
   description: text("description").notNull(), date: text("date").notNull(), startTime: text("start_time"),
+  siteAddress: text("site_address"), siteLatitude: real("site_latitude"), siteLongitude: real("site_longitude"),
   status: text("status").notNull().default("pending"), arrivalTime: integer("arrival_time"), departureTime: integer("departure_time"),
   arrivalLat: real("arrival_lat"), arrivalLng: real("arrival_lng"), departureLat: real("departure_lat"), departureLng: real("departure_lng"),
-  workNotes: text("work_notes"), tasksJson: text("tasks_json").notNull().default("[]"), acknowledged: integer("acknowledged").notNull().default(0),
+  workNotes: text("work_notes"), materials: text("materials"), completionNotes: text("completion_notes"),
+  tasksJson: text("tasks_json").notNull().default("[]"), acknowledged: integer("acknowledged").notNull().default(0),
   createdAt: integer("created_at").notNull(), updatedAt: integer("updated_at").notNull(),
 }, table => [index("idx_assignments_user_date").on(table.userId, table.date), index("idx_assignments_status").on(table.status)]);
 
@@ -95,7 +98,8 @@ export const correctionRequests = sqliteTable("correction_requests", {
 export const attachments = sqliteTable("attachments", {
   id: text("id").primaryKey(), userId: text("user_id").notNull(), entityType: text("entity_type").notNull(),
   entityId: text("entity_id").notNull(), objectKey: text("object_key").notNull(), filename: text("filename").notNull(),
-  mimeType: text("mime_type").notNull(), size: integer("size").notNull(), createdAt: integer("created_at").notNull(),
+  mimeType: text("mime_type").notNull(), size: integer("size").notNull(), dataUrl: text("data_url"),
+  createdAt: integer("created_at").notNull(),
 }, table => [index("idx_attachments_entity").on(table.entityType, table.entityId), index("idx_attachments_user").on(table.userId)]);
 
 export const notifications = sqliteTable("notifications", {

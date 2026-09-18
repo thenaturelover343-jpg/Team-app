@@ -95,8 +95,8 @@ function AppContent() {
 
   if (!user) {
     return (
-      <div className="login-shell min-h-screen flex items-center justify-center p-4 relative"><div className="login-language absolute top-4 right-4"><LanguageSwitch /></div>
-        <div className="auth-card ops-card max-w-md w-full p-7 sm:p-9 space-y-8">
+      <div className="login-shell min-h-screen flex items-center justify-center p-4 sm:p-6 relative overflow-x-hidden"><div className="login-language absolute top-4 right-4 z-10"><LanguageSwitch /></div>
+        <div className="auth-card ops-card max-w-md w-full p-5 sm:p-9 space-y-6 sm:space-y-8">
           <div className="text-center space-y-3">
             <div className="brand-mark brand-mark-hero flex items-center justify-center mx-auto mb-2">
               <img src="/brand-logo.svg" alt="Team" className="w-[88%] h-[88%] object-contain" />
@@ -169,18 +169,18 @@ function AppContent() {
       <a href="#main-content" className="skip-link">{fr ? 'Aller au contenu' : 'Ga naar inhoud'}</a>
       <header className="topbar sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-4 md:px-8">
-          <div className="h-[72px] flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="brand-mark flex items-center justify-center font-bold">
+          <div className="min-h-[72px] py-2.5 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
+              <div className="brand-mark flex items-center justify-center font-bold shrink-0">
                 <img src="/brand-logo.svg" alt="Barlicious Operations" className="w-full h-full object-contain rounded-[inherit]" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <span className="font-bold text-xl hidden sm:block tracking-tight text-zinc-900">Barlicious <span className="brand-subtitle">Operations</span></span>
                 <span className="font-bold text-lg sm:hidden tracking-tight text-zinc-900">Team</span>
               </div>
             </div>
             
-            <div className="header-actions flex items-center gap-2 sm:gap-3">
+            <div className="header-actions flex flex-wrap items-center justify-end gap-2 sm:gap-3 max-w-full">
               <LanguageSwitch />
               <PWAInstallButton />
               {user.role === 'admin' && (
@@ -191,14 +191,14 @@ function AppContent() {
                   title={viewAsEmployee ? 'Terug naar beheer' : 'Bekijk als werknemer'}
                 >
                   {viewAsEmployee ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  <span>{viewAsEmployee ? 'Beheer' : 'Werknemer'}</span>
+                  <span className="hidden xs:inline">{viewAsEmployee ? 'Beheer' : 'Werknemer'}</span>
                 </button>
               )}
-              <div className="user-pill flex items-center gap-3 pl-2 pr-3 py-1.5">
+              <div className="user-pill flex items-center gap-2 sm:gap-3 pl-2 pr-2 sm:pr-3 py-1.5 shrink-0">
                 <div className="ops-panel w-8 h-8 rounded-full flex items-center justify-center">
                   <UserCircle className="w-5 h-5 text-zinc-500" />
                 </div>
-                <div className="user-pill-copy flex flex-col pr-3 border-r border-zinc-200">
+                <div className="user-pill-copy flex flex-col pr-2 sm:pr-3 border-r border-zinc-200">
                   <span className="text-sm font-bold text-zinc-900 leading-tight truncate max-w-[100px]">{user.name}</span>
                   <span className="text-xs text-zinc-400 leading-tight capitalize">
                     {user.role === 'admin' && viewAsEmployee ? 'beheerder · preview' : user.role}

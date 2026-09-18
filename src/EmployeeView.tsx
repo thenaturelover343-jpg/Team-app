@@ -110,7 +110,7 @@ export default function EmployeeView() {
         </button>
       </div>
 
-      {activeTab === 'dashboard' && <DashboardTab userId={user.id} shifts={shifts} breaks={breaks} assignments={assignments} plannedShifts={plannedShifts} loading={loading} onChanged={loadData} />}
+      {activeTab === 'dashboard' && <DashboardTab userId={user.id} shifts={shifts} breaks={breaks} assignments={assignments} plannedShifts={plannedShifts} attachments={attachments} loading={loading} onChanged={loadData} />}
       {activeTab === 'planning' && <EmployeePlanningTab userId={user.id} shifts={plannedShifts} attachments={attachments} onChanged={loadData} />}
       {activeTab === 'reports' && <ReportsTab shifts={shifts} plannedShifts={plannedShifts} incidents={incidents} corrections={correctionRequests} onChanged={loadData} />}
       {activeTab === 'notifications' && <NotificationCenter notifications={notifications} push={push} onChanged={loadData} />}
@@ -119,7 +119,7 @@ export default function EmployeeView() {
   );
 }
 
-function DashboardTab({ userId, shifts, breaks, assignments, plannedShifts, loading, onChanged }: { userId: string; shifts: Shift[]; breaks: ShiftBreak[]; assignments: Assignment[]; plannedShifts: PlannedShift[]; loading: boolean; onChanged: () => Promise<void> }) {
+function DashboardTab({ userId, shifts, breaks, assignments, plannedShifts, attachments, loading, onChanged }: { userId: string; shifts: Shift[]; breaks: ShiftBreak[]; assignments: Assignment[]; plannedShifts: PlannedShift[]; attachments: Attachment[]; loading: boolean; onChanged: () => Promise<void> }) {
   const [isLocating, setIsLocating] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [shiftNotes, setShiftNotes] = useState('');
@@ -340,7 +340,7 @@ function DashboardTab({ userId, shifts, breaks, assignments, plannedShifts, load
         ) : (
           <div className="space-y-4">
             {myAssignments.map(assignment => (
-              <AssignmentCard key={assignment.id} assignment={assignment} />
+              <AssignmentCard key={assignment.id} assignment={assignment} attachments={attachments.filter(item => item.entityType === 'assignment' && item.entityId === assignment.id)} onChanged={onChanged} />
             ))}
           </div>
         )}
@@ -389,7 +389,7 @@ function EmployeePlanningTab({ userId, shifts, attachments, onChanged }: { userI
       return <article key={shift.id} className="bg-white border border-zinc-200 rounded-[24px] p-5 shadow-sm space-y-4">
         <div className="flex items-start justify-between gap-3"><div><div className="text-xs uppercase tracking-wide font-bold text-zinc-400">{formatDate(shift.date)}</div><h3 className="text-lg font-extrabold text-zinc-900 mt-1">{shift.title}</h3></div><span className={`text-xs font-bold px-3 py-1.5 rounded-full ${confirmation === 'confirmed' ? 'bg-emerald-100 text-emerald-700' : confirmation === 'declined' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'}`}>{confirmation === 'confirmed' ? 'Bevestigd' : confirmation === 'declined' ? 'Geweigerd' : 'Antwoord nodig'}</span></div>
         <div className="grid grid-cols-2 gap-3 text-sm"><div className="bg-zinc-50 rounded-xl p-3"><span className="block text-xs text-zinc-400 font-bold uppercase mb-1">Uren</span><span className="font-bold">{shift.startTime}–{shift.endTime}</span></div><div className="bg-zinc-50 rounded-xl p-3"><span className="block text-xs text-zinc-400 font-bold uppercase mb-1">Pauze</span><span className="font-bold">{shift.breakMinutes} min.</span></div></div>
-        {shift.customerName && <div className="flex items-start gap-2 text-sm text-zinc-600"><MapPin className="w-4 h-4 mt-0.5 shrink-0" /><div><div className="font-bold text-zinc-800">{shift.customerName}</div><div>{shift.customerAddress}</div>{shift.customerLatitude !== undefined && shift.customerLongitude !== undefined && <a className="text-zinc-900 underline font-semibold" target="_blank" rel="noreferrer" href={`https://www.google.com/maps/search/?api=1&query=${shift.customerLatitude},${shift.customerLongitude}`}>Open locatie</a>}</div></div>}
+        {shift.customerName && <div className="flex items-start gap-2 text-sm text-zinc-600"><MapPin className="w-4 h-4 mt-0.5 shrink-0" /><div><div className="font-bold text-zinc-800">{shift.customerName}</div><div className="text-[11px] uppercase tracking-wider text-zinc-400 font-bold mt-1">Opdrachtadres</div><div>{shift.siteAddress || shift.customerAddress}</div>{shift.customerAddress && shift.siteAddress && shift.siteAddress !== shift.customerAddress && <div className="text-xs text-zinc-500 mt-1">Klantadres: {shift.customerAddress}</div>}{((shift.siteLatitude ?? shift.customerLatitude) !== undefined && (shift.siteLongitude ?? shift.customerLongitude) !== undefined) && <a className="text-zinc-900 underline font-semibold" target="_blank" rel="noreferrer" href={`https://www.google.com/maps/search/?api=1&query=${shift.siteLatitude ?? shift.customerLatitude},${shift.siteLongitude ?? shift.customerLongitude}`}>Open locatie</a>}</div></div>}
         {shift.notes && <p className="text-sm text-zinc-600 bg-zinc-50 rounded-xl p-3">{shift.notes}</p>}
         {shift.checklist.length > 0 && <div className="border border-zinc-200 rounded-xl p-3 space-y-2"><div className="text-xs uppercase font-bold tracking-wide text-zinc-400 flex items-center gap-2"><ClipboardList className="w-4 h-4" />Checklist</div>{shift.checklist.map((task, index) => { const taskId=String(index); const done=(shift.checklistStates[userId] || []).includes(taskId); return <label key={taskId} className="flex items-start gap-3 text-sm font-semibold cursor-pointer"><input type="checkbox" checked={done} disabled={busyId === shift.id} onChange={() => toggleTask(shift, taskId)} className="mt-0.5 w-4 h-4 accent-zinc-900" /><span className={done ? 'line-through text-zinc-400' : 'text-zinc-700'}>{task}</span></label>; })}</div>}
         <div className="border border-zinc-200 rounded-xl p-3 space-y-2"><div className="text-xs uppercase font-bold tracking-wide text-zinc-400">Foto’s en documenten</div>{attachments.filter(item => item.entityType === 'planned_shift' && item.entityId === shift.id).map(item => <button key={item.id} type="button" onClick={() => download(item)} className="w-full text-left flex items-center gap-2 text-sm font-semibold text-zinc-700 bg-zinc-50 rounded-lg p-2"><Download className="w-4 h-4" /><span className="truncate">{item.filename}</span></button>)}<label className="flex items-center justify-center gap-2 border border-dashed border-zinc-300 rounded-lg p-3 text-sm font-bold text-zinc-600 cursor-pointer"><Upload className="w-4 h-4" />Bestand toevoegen<input type="file" accept="image/*,.pdf,.doc,.docx,.txt" multiple className="hidden" onChange={event => upload(shift.id, event.target.files)} /></label></div>
@@ -663,25 +663,40 @@ function ProfileTab({ user }: { user: User }) {
   )
 }
 
-function AssignmentCard({ assignment }: { assignment: Assignment; key?: string | number }) {
+function AssignmentCard({ assignment, attachments, onChanged }: { assignment: Assignment; attachments: Attachment[]; onChanged: () => Promise<void>; key?: string | number }) {
   const [notes, setNotes] = useState(assignment.workNotes || '');
+  const [materials, setMaterials] = useState(assignment.materials || '');
+  const [completionNotes, setCompletionNotes] = useState(assignment.completionNotes || '');
   const [tasks, setTasks] = useState<AssignmentTask[]>(assignment.tasks || []);
   const [newTaskText, setNewTaskText] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
+  const [photoError, setPhotoError] = useState('');
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setTasks(assignment.tasks || []), 0);
+    const timer = window.setTimeout(() => {
+      setTasks(assignment.tasks || []);
+      setNotes(assignment.workNotes || '');
+      setMaterials(assignment.materials || '');
+      setCompletionNotes(assignment.completionNotes || '');
+    }, 0);
     return () => window.clearTimeout(timer);
-  }, [assignment.tasks]);
+  }, [assignment.tasks, assignment.workNotes, assignment.materials, assignment.completionNotes]);
 
-  const handleUpdate = async (updates: Partial<Assignment>) => {
+  const jobAddress = assignment.siteAddress || assignment.customerAddress || '';
+
+  const persistDetails = async (nextTasks = tasks, nextNotes = notes, nextMaterials = materials, nextCompletion = completionNotes) => {
+    await secureApi.updateAssignmentDetails(assignment.id, nextTasks, nextNotes, nextMaterials, nextCompletion);
+  };
+
+  const handleUpdate = async (updates: Partial<{ tasks: AssignmentTask[]; workNotes: string; materials: string; completionNotes: string }>) => {
     setIsUpdating(true);
     try {
-      await secureApi.updateAssignmentDetails(
-        assignment.id,
-        (updates.tasks as AssignmentTask[] | undefined) || tasks,
-        typeof updates.workNotes === 'string' ? updates.workNotes : notes,
-      );
+      const nextTasks = updates.tasks || tasks;
+      const nextNotes = typeof updates.workNotes === 'string' ? updates.workNotes : notes;
+      const nextMaterials = typeof updates.materials === 'string' ? updates.materials : materials;
+      const nextCompletion = typeof updates.completionNotes === 'string' ? updates.completionNotes : completionNotes;
+      await persistDetails(nextTasks, nextNotes, nextMaterials, nextCompletion);
+      await onChanged();
     } catch (err) {
       console.error(err);
     } finally {
@@ -716,16 +731,53 @@ function AssignmentCard({ assignment }: { assignment: Assignment; key?: string |
     try {
       const location = await getCurrentLocation();
       await secureApi.transitionAssignment({ assignmentId: assignment.id, status: 'arrived', location });
+      await onChanged();
     } finally {
       setIsUpdating(false);
     }
   };
 
+  const uploadPhotos = async (files: FileList | null) => {
+    if (!files?.length) return;
+    setPhotoError('');
+    setIsUpdating(true);
+    try {
+      for (const file of Array.from(files).slice(0, 5)) {
+        await secureApi.uploadAttachment('assignment', assignment.id, file);
+      }
+      await onChanged();
+    } catch (err) {
+      setPhotoError(err instanceof Error ? err.message : 'Uploaden mislukt.');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const downloadPhoto = async (item: Attachment) => {
+    const blob = await secureApi.downloadAttachment(item.id);
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = item.filename;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   const handleComplete = async () => {
     setIsUpdating(true);
     try {
+      await persistDetails();
       const location = await getCurrentLocation();
-      await secureApi.transitionAssignment({ assignmentId: assignment.id, status: 'completed', location, notes });
+      await secureApi.transitionAssignment({
+        assignmentId: assignment.id,
+        status: 'completed',
+        location,
+        notes,
+        workNotes: notes,
+        materials,
+        completionNotes,
+      });
+      await onChanged();
     } finally {
       setIsUpdating(false);
     }
@@ -733,19 +785,31 @@ function AssignmentCard({ assignment }: { assignment: Assignment; key?: string |
 
   return (
     <div className={`ops-card overflow-hidden transition-all ${assignment.status === 'completed' ? 'border-emerald-400/60' : ''}`}>
-      <div className="p-6 space-y-5">
-        <div className="flex justify-between items-start">
-          <div>
-            <div className="flex items-center space-x-2 mb-1">
-              <h3 className="font-bold text-lg text-zinc-900">{assignment.customerName || 'Onbekende Klant'}</h3>
+      <div className="p-5 sm:p-6 space-y-5">
+        <div className="flex justify-between items-start gap-3">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2 mb-1">
+              <h3 className="font-bold text-lg text-zinc-900 break-words">{assignment.customerName || 'Onbekende Klant'}</h3>
               {assignment.startTime && (
-                <span className="bg-zinc-100 text-zinc-600 text-xs font-bold px-2 py-1 rounded-md flex items-center space-x-1">
+                <span className="bg-zinc-100 text-zinc-600 text-xs font-bold px-2 py-1 rounded-md inline-flex items-center gap-1">
                   <Clock className="w-3.5 h-3.5" />
                   <span>{assignment.startTime}</span>
                 </span>
               )}
             </div>
-            <p className="text-zinc-500 mt-1.5 leading-relaxed">{assignment.description}</p>
+            {jobAddress && (
+              <div className="text-sm text-zinc-500 mt-2 flex items-start gap-1.5">
+                <MapPin className="w-4 h-4 mt-0.5 shrink-0" />
+                <div>
+                  <div className="text-[11px] uppercase tracking-wider text-zinc-400 font-bold">Opdrachtadres</div>
+                  <div className="break-words">{jobAddress}</div>
+                  {assignment.customerAddress && assignment.siteAddress && assignment.siteAddress !== assignment.customerAddress && (
+                    <div className="text-xs mt-1">Klantadres: {assignment.customerAddress}</div>
+                  )}
+                </div>
+              </div>
+            )}
+            <p className="text-zinc-500 mt-1.5 leading-relaxed break-words">{assignment.description}</p>
           </div>
           {assignment.status === 'completed' && (
             <span className="bg-green-100 text-green-700 p-2 rounded-full shrink-0">
@@ -787,19 +851,19 @@ function AssignmentCard({ assignment }: { assignment: Assignment; key?: string |
               {tasks.length > 0 && (
                 <div className="space-y-2 mb-3">
                   {tasks.map(task => (
-                    <div key={task.id} className="ops-panel flex items-center justify-between p-3">
-                      <label className="flex items-center space-x-3 cursor-pointer flex-1">
+                    <div key={task.id} className="ops-panel flex items-center justify-between gap-2 p-3">
+                      <label className="flex items-center space-x-3 cursor-pointer flex-1 min-w-0">
                         <input 
                           type="checkbox" 
                           checked={task.completed} 
                           onChange={() => handleToggleTask(task.id)}
-                          className="w-5 h-5 text-zinc-900 rounded border-zinc-200 focus:ring-zinc-900/10 cursor-pointer"
+                          className="w-5 h-5 text-zinc-900 rounded border-zinc-200 focus:ring-zinc-900/10 cursor-pointer shrink-0"
                         />
-                        <span className={`text-sm font-medium ${task.completed ? 'text-zinc-400 line-through' : 'text-zinc-700'}`}>
+                        <span className={`text-sm font-medium break-words ${task.completed ? 'text-zinc-400 line-through' : 'text-zinc-700'}`}>
                           {task.text}
                         </span>
                       </label>
-                      <button onClick={() => handleDeleteTask(task.id)} className="text-zinc-400 hover:text-red-500 transition-colors p-1" title="Taak verwijderen">
+                      <button onClick={() => handleDeleteTask(task.id)} className="text-zinc-400 hover:text-red-500 transition-colors p-1 shrink-0" title="Taak verwijderen">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
@@ -807,15 +871,15 @@ function AssignmentCard({ assignment }: { assignment: Assignment; key?: string |
                 </div>
               )}
 
-              <form onSubmit={handleAddTask} className="flex items-center space-x-2">
+              <form onSubmit={handleAddTask} className="flex items-center gap-2">
                 <input 
                   type="text" 
                   value={newTaskText} 
                   onChange={e => setNewTaskText(e.target.value)}
                   placeholder="Nieuwe taak toevoegen..."
-                  className="ops-input flex-1 p-3 text-sm"
+                  className="ops-input flex-1 min-w-0 p-3 text-sm"
                 />
-                <button type="submit" disabled={!newTaskText.trim() || isUpdating} className="ops-btn-primary min-w-11 p-3">
+                <button type="submit" disabled={!newTaskText.trim() || isUpdating} className="ops-btn-primary min-w-11 p-3 shrink-0">
                   <Plus className="w-5 h-5" />
                 </button>
               </form>
@@ -824,15 +888,58 @@ function AssignmentCard({ assignment }: { assignment: Assignment; key?: string |
             <div className="space-y-2.5 pt-2 border-t border-zinc-200">
               <label className="text-sm font-bold text-zinc-800 flex items-center space-x-2">
                 <FileText className="w-4 h-4 text-zinc-400" />
-                <span>Overige notities</span>
+                <span>Wat is er gedaan?</span>
               </label>
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
+                onBlur={() => handleUpdate({ workNotes: notes })}
                 className="ops-input w-full p-4 resize-none"
                 rows={3}
-                placeholder="Details over levering, opmerkingen klant..."
+                placeholder="Korte uitleg van het uitgevoerde werk..."
               />
+            </div>
+
+            <div className="space-y-2.5">
+              <label className="text-sm font-bold text-zinc-800">Gebruikte materialen</label>
+              <textarea
+                value={materials}
+                onChange={(e) => setMaterials(e.target.value)}
+                onBlur={() => handleUpdate({ materials })}
+                className="ops-input w-full p-4 resize-none"
+                rows={2}
+                placeholder="Bv. 2x slang 10m, afdichtmiddel..."
+              />
+            </div>
+
+            <div className="space-y-2.5">
+              <label className="text-sm font-bold text-zinc-800">Vrije notities</label>
+              <textarea
+                value={completionNotes}
+                onChange={(e) => setCompletionNotes(e.target.value)}
+                onBlur={() => handleUpdate({ completionNotes })}
+                className="ops-input w-full p-4 resize-none"
+                rows={2}
+                placeholder="Opmerkingen klant, aandachtspunten..."
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-zinc-800 flex items-center gap-2"><Upload className="w-4 h-4 text-zinc-400" />Foto’s van de opdracht</label>
+              {attachments.length > 0 && (
+                <div className="space-y-2">
+                  {attachments.map(item => (
+                    <button key={item.id} type="button" onClick={() => downloadPhoto(item)} className="w-full text-left flex items-center gap-2 text-sm font-semibold text-zinc-700 ops-panel rounded-lg p-2">
+                      <Download className="w-4 h-4 shrink-0" /><span className="truncate">{item.filename}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <label className="flex items-center justify-center gap-2 border border-dashed border-zinc-300 rounded-lg p-3 text-sm font-bold text-zinc-600 cursor-pointer w-full">
+                <Upload className="w-4 h-4" />Foto toevoegen
+                <input type="file" accept="image/*" multiple className="hidden" onChange={event => uploadPhotos(event.target.files)} />
+              </label>
+              {photoError && <div className="ops-chip-danger w-full justify-start p-2 text-xs">{photoError}</div>}
             </div>
             
             <div className="pt-2">
@@ -843,7 +950,7 @@ function AssignmentCard({ assignment }: { assignment: Assignment; key?: string |
             <button
               onClick={handleComplete}
               disabled={isUpdating}
-              className="ops-btn-primary w-full space-x-2 py-4 mt-4"
+              className="ops-btn-primary w-full space-x-2 py-4 mt-2"
             >
               {isUpdating ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle className="w-5 h-5" />}
               <span>Opdracht Afronden & Vertrekken</span>
@@ -880,8 +987,30 @@ function AssignmentCard({ assignment }: { assignment: Assignment; key?: string |
 
             {assignment.workNotes && (
               <div className="ops-panel mt-3 p-4 text-zinc-700 leading-relaxed">
-                <span className="text-xs font-bold text-zinc-400 block mb-2 uppercase tracking-wider">Notities</span>
+                <span className="text-xs font-bold text-zinc-400 block mb-2 uppercase tracking-wider">Uitgevoerd werk</span>
                 {assignment.workNotes}
+              </div>
+            )}
+            {assignment.materials && (
+              <div className="ops-panel mt-3 p-4 text-zinc-700 leading-relaxed">
+                <span className="text-xs font-bold text-zinc-400 block mb-2 uppercase tracking-wider">Materialen</span>
+                {assignment.materials}
+              </div>
+            )}
+            {assignment.completionNotes && (
+              <div className="ops-panel mt-3 p-4 text-zinc-700 leading-relaxed">
+                <span className="text-xs font-bold text-zinc-400 block mb-2 uppercase tracking-wider">Extra notities</span>
+                {assignment.completionNotes}
+              </div>
+            )}
+            {attachments.length > 0 && (
+              <div className="ops-panel mt-3 p-4 space-y-2">
+                <span className="text-xs font-bold text-zinc-400 block uppercase tracking-wider">Foto’s</span>
+                {attachments.map(item => (
+                  <button key={item.id} type="button" onClick={() => downloadPhoto(item)} className="w-full text-left flex items-center gap-2 text-sm font-semibold">
+                    <Download className="w-4 h-4" /><span className="truncate">{item.filename}</span>
+                  </button>
+                ))}
               </div>
             )}
           </div>
