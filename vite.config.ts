@@ -4,8 +4,15 @@ import hostingConfig from "./.openai/hosting.json";
 import { readExecutionProfile } from "./scripts/execution-profile.mjs";
 import { sites } from "./build/sites-vite-plugin";
 
-const SITE_CREATOR_PLACEHOLDER_DATABASE_ID =
-  "00000000-0000-4000-8000-000000000000";
+// Production D1 — NEVER use empty d1_databases or a placeholder id in deploy
+// artifacts. Empty bindings wipe the live Worker DB and break login
+// ("De beveiligde database is tijdelijk niet beschikbaar.").
+const PRODUCTION_D1_DATABASE_ID =
+  hostingConfig.d1_database_id || "73a03a39-22d7-4c60-b263-320b42a2f4dd";
+const PRODUCTION_D1_DATABASE_NAME =
+  hostingConfig.d1_database_name || "team-app";
+const PRODUCTION_BOOTSTRAP_ADMIN_EMAIL =
+  hostingConfig.vars?.BOOTSTRAP_ADMIN_EMAIL || "thenaturelover343@gmail.com";
 
 const { d1, r2 } = hostingConfig;
 
@@ -14,14 +21,18 @@ const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === "seatbelt";
 const managedLinux = readExecutionProfile() === "managed-linux";
 
 const localBindingConfig = {
-  main: "vinext/server/fetch-handler",
+  // Custom entry proxies /__/auth/* first-party for iOS PWA Firebase redirect.
+  main: "./worker/firebase-auth-proxy.ts",
   compatibility_flags: ["nodejs_compat"],
+  vars: {
+    BOOTSTRAP_ADMIN_EMAIL: PRODUCTION_BOOTSTRAP_ADMIN_EMAIL,
+  },
   d1_databases: d1
     ? [
         {
           binding: d1,
-          database_name: "site-creator-d1",
-          database_id: SITE_CREATOR_PLACEHOLDER_DATABASE_ID,
+          database_name: PRODUCTION_D1_DATABASE_NAME,
+          database_id: PRODUCTION_D1_DATABASE_ID,
         },
       ]
     : [],
