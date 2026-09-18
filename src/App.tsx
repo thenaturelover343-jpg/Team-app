@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import EmployeeView from './EmployeeView';
 import AdminView from './AdminView';
 import { UserCircle, Loader2, LogOut, Eye, EyeOff } from 'lucide-react';
-import { PWAInstallButton } from './components/PWAInstallButton';
+import { PWAInstallButton, PWAInstallBanner } from './components/PWAInstallButton';
+import AppUpdateBanner from './components/AppUpdateBanner';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { loginWithEmail, loginWithGoogle, logout, resetPassword } from './lib/firebase';
 import { LanguageProvider, LanguageSwitch, useLanguage } from './i18n';
@@ -21,6 +22,11 @@ function AppContent() {
     if (typeof sessionStorage === 'undefined') return false;
     return sessionStorage.getItem('adminViewAsEmployee') === '1';
   });
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
+    void navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => undefined);
+  }, []);
 
   const toggleEmployeePreview = () => {
     setViewAsEmployee(prev => {
@@ -187,11 +193,11 @@ function AppContent() {
                 <button
                   type="button"
                   onClick={toggleEmployeePreview}
-                  className="ops-btn-primary inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold shrink-0"
+                  className="ops-btn-primary inline-flex items-center justify-center p-2 shrink-0"
                   title={viewAsEmployee ? 'Terug naar beheer' : 'Bekijk als werknemer'}
+                  aria-label={viewAsEmployee ? 'Terug naar beheer' : 'Bekijk als werknemer'}
                 >
                   {viewAsEmployee ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  <span className="hidden xs:inline">{viewAsEmployee ? 'Beheer' : 'Werknemer'}</span>
                 </button>
               )}
               <div className="user-pill flex items-center gap-2 sm:gap-3 pl-2 pr-2 sm:pr-3 py-1.5 shrink-0">
@@ -213,23 +219,11 @@ function AppContent() {
         </div>
       </header>
 
-      {user.role === 'admin' && (
-        <div className="content-shell max-w-6xl mx-auto px-4 sm:px-6 md:px-8 pt-4">
-          <button
-            type="button"
-            onClick={toggleEmployeePreview}
-            className={`w-full rounded-[14px] px-4 py-3.5 text-left font-bold border ${viewAsEmployee ? 'ops-btn-secondary' : 'ops-btn-primary'} flex items-center justify-between gap-3`}
-          >
-            <span className="flex items-center gap-2">
-              {viewAsEmployee ? <EyeOff className="w-5 h-5 shrink-0" /> : <Eye className="w-5 h-5 shrink-0" />}
-              <span>{viewAsEmployee ? 'Terug naar beheer' : 'Bekijk werknemerskant'}</span>
-            </span>
-            <span className="text-xs font-semibold opacity-80">{viewAsEmployee ? 'Nu: werknemer-preview' : 'Open Vandaag / clock-in'}</span>
-          </button>
-        </div>
-      )}
+      <PWAInstallBanner />
+      <AppUpdateBanner />
+
       <main id="main-content" tabIndex={-1} className="content-shell max-w-6xl mx-auto px-4 sm:px-6 md:px-8 py-6 md:py-8">
-        {user.role === 'admin' && !viewAsEmployee ? <AdminView onViewAsEmployee={toggleEmployeePreview} /> : <EmployeeView />}
+        {user.role === 'admin' && !viewAsEmployee ? <AdminView /> : <EmployeeView />}
       </main>
     </div>
   );
