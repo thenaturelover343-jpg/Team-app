@@ -9,7 +9,7 @@ import ControlCenter from './components/ControlCenter';
 import QualityCenter from './components/QualityCenter';
 import { useLanguage } from './i18n';
 
-export default function AdminView({ onViewAsEmployee }: { onViewAsEmployee?: () => void } = {}) {
+export default function AdminView() {
   const { locale } = useLanguage(); const fr = locale === 'fr';
   const [activeTab, setActiveTab] = useState<'control' | 'week' | 'planning' | 'timesheets' | 'reports' | 'customers' | 'team' | 'quality'>('control');
   
@@ -63,15 +63,6 @@ export default function AdminView({ onViewAsEmployee }: { onViewAsEmployee?: () 
 
   return (
     <div className="admin-shell max-w-6xl mx-auto w-full space-y-7 pb-12">
-      {onViewAsEmployee && (
-        <button
-          type="button"
-          onClick={onViewAsEmployee}
-          className="ops-btn-primary w-full py-4 text-base font-bold flex items-center justify-center gap-2"
-        >
-          Bekijk werknemerskant
-        </button>
-      )}
       <div className="admin-nav ops-nav p-1.5">
         <button onClick={() => setActiveTab('control')} className={`ops-nav-btn relative ${activeTab === 'control' ? 'ops-nav-btn-active' : ''}`}><ShieldCheck className="w-4 h-4" /><span>Controle</span>{notifications.some(item => !item.readAt) && <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full" />}</button>
         <button
