@@ -263,7 +263,7 @@ export const getCurrentLocation = (): Promise<GeoLocation> => {
         }
         reject(err instanceof Error ? err : new Error('Kon locatie niet ophalen.'));
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
     );
   });
 };

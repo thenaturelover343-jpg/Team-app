@@ -1008,7 +1008,7 @@ function TeamTab({ users }: { users: User[] }) {
       </form>
       {inviteLink && (
         <div className="p-4 bg-green-50 text-green-800 rounded-[12px] border border-green-200 text-sm break-all">
-          De uitnodiging is verstuurd. De persoon kan nu met dit Google-e-mailadres aanmelden.
+          Uitnodiging opgeslagen. Er wordt geen e-mail verstuurd — de persoon meldt zich aan met dit Google-e-mailadres.
         </div>
       )}
       {errorMsg && (
