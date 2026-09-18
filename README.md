@@ -100,6 +100,20 @@ Use SIWC for account pages, user-specific dashboards, saved records, and write a
 
 ## Local D1 migrations
 
+## Production D1 binding (critical)
+
+Live Worker `barlicious-team-app` must always ship with:
+
+```json
+"d1_databases": [{
+  "binding": "DB",
+  "database_name": "team-app",
+  "database_id": "73a03a39-22d7-4c60-b263-320b42a2f4dd"
+}]
+```
+
+plus plain var `BOOTSTRAP_ADMIN_EMAIL`. Source of truth: `.openai/hosting.json` → `vite.config.ts` → `dist/server/wrangler.json`. After every build, `npm run ensure:d1` (chained from `npm run build`) re-asserts the binding so icon/PWA deploys cannot wipe D1 again. Never deploy with `"d1_databases": []`.
+
 For a D1-backed local preview, generate SQL with `npm run db:generate`. Build once through the Sites skill's build entrypoint (or `npm run build` for standalone use) to generate `dist/server/wrangler.json`, rebuilding if bindings change. From the project root, apply each pending migration in order:
 
 ```sh

@@ -1,5 +1,10 @@
 {
   "project_id": "appgprj_6aab25af4ad081918e1b20a36d51d555",
   "d1": "DB",
-  "r2": "BUCKET"
+  "d1_database_name": "team-app",
+  "d1_database_id": "73a03a39-22d7-4c60-b263-320b42a2f4dd",
+  "r2": "BUCKET",
+  "vars": {
+    "BOOTSTRAP_ADMIN_EMAIL": "thenaturelover343@gmail.com"
+  }
 }
