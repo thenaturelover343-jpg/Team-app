@@ -9,7 +9,7 @@ import ControlCenter from './components/ControlCenter';
 import QualityCenter from './components/QualityCenter';
 import { useLanguage } from './i18n';
 
-export default function AdminView() {
+export default function AdminView({ onViewAsEmployee }: { onViewAsEmployee?: () => void } = {}) {
   const { locale } = useLanguage(); const fr = locale === 'fr';
   const [activeTab, setActiveTab] = useState<'control' | 'week' | 'planning' | 'timesheets' | 'reports' | 'customers' | 'team' | 'quality'>('control');
   
@@ -63,6 +63,15 @@ export default function AdminView() {
 
   return (
     <div className="admin-shell max-w-6xl mx-auto w-full space-y-7 pb-12">
+      {onViewAsEmployee && (
+        <button
+          type="button"
+          onClick={onViewAsEmployee}
+          className="ops-btn-primary w-full py-4 text-base font-bold flex items-center justify-center gap-2"
+        >
+          Bekijk werknemerskant
+        </button>
+      )}
       <div className="admin-nav ops-nav p-1.5">
         <button onClick={() => setActiveTab('control')} className={`ops-nav-btn relative ${activeTab === 'control' ? 'ops-nav-btn-active' : ''}`}><ShieldCheck className="w-4 h-4" /><span>Controle</span>{notifications.some(item => !item.readAt) && <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full" />}</button>
         <button
@@ -85,14 +94,14 @@ export default function AdminView() {
           className={`ops-nav-btn ${activeTab === 'timesheets' ? 'ops-nav-btn-active' : ''}`}
         >
           <Clock className="w-4 h-4" />
-          <span>Urenregistratie (GPS)</span>
+          <span>Uren</span>
         </button>
         <button
           onClick={() => setActiveTab('customers')}
           className={`ops-nav-btn ${activeTab === 'customers' ? 'ops-nav-btn-active' : ''}`}
         >
           <Users className="w-4 h-4" />
-          <span>Klantenbeheer</span>
+          <span>Klanten</span>
         </button>
         <button onClick={() => setActiveTab('reports')} className={`ops-nav-btn ${activeTab === 'reports' ? 'ops-nav-btn-active' : ''}`}><AlertTriangle className="w-4 h-4" /><span>Meldingen</span></button>
         <button
@@ -280,9 +289,16 @@ function PlanningTab({ users, assignments, customers }: { users: User[], assignm
   const [date, setDate] = useState(localDateKey());
   const [startTime, setStartTime] = useState('09:00');
   const [customerId, setCustomerId] = useState('');
+  const [siteAddress, setSiteAddress] = useState('');
   const [description, setDescription] = useState('');
 
   const employees = users.filter(u => u.role === 'employee');
+
+  const selectCustomer = (id: string) => {
+    setCustomerId(id);
+    const selected = customers.find(c => c.id === id);
+    setSiteAddress(selected?.address || '');
+  };
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -293,8 +309,9 @@ function PlanningTab({ users, assignments, customers }: { users: User[], assignm
 
     setIsSubmitting(true);
     try {
-      await secureApi.saveAssignment({ userId, date, startTime, customerId, description });
+      await secureApi.saveAssignment({ userId, date, startTime, customerId, description, siteAddress: siteAddress.trim() || selectedCustomer.address });
       setCustomerId('');
+      setSiteAddress('');
       setDescription('');
       setIsAdding(false);
     } catch (err) {
@@ -308,11 +325,11 @@ function PlanningTab({ users, assignments, customers }: { users: User[], assignm
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center px-1">
-        <h2 className="text-2xl font-bold text-zinc-800 tracking-tight">Alle Opdrachten</h2>
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 px-1">
+        <h2 className="ops-page-title tracking-tight">Alle Opdrachten</h2>
         <button 
           onClick={() => setIsAdding(!isAdding)}
-          className="ops-btn-primary space-x-2 px-5 text-sm"
+          className="ops-btn-primary w-full sm:w-auto space-x-2 px-5 text-sm"
         >
           <Plus className="w-4 h-4" />
           <span>Nieuwe Opdracht</span>
@@ -360,14 +377,25 @@ function PlanningTab({ users, assignments, customers }: { users: User[], assignm
                   />
                 </div>
                 <div className="md:col-span-3">
-                  <label className="block text-sm font-bold text-zinc-700 mb-1.5">Klant / Locatie</label>
+                  <label className="block text-sm font-bold text-zinc-700 mb-1.5">Klant</label>
                   <select 
-                    value={customerId} onChange={e => setCustomerId(e.target.value)} required
+                    value={customerId} onChange={e => selectCustomer(e.target.value)} required
                     className="ops-input w-full p-3.5 font-medium"
                   >
                     <option value="">Selecteer klant...</option>
                     {customers.map(c => <option key={c.id} value={c.id}>{c.name} - {c.address}</option>)}
                   </select>
+                </div>
+                <div className="md:col-span-3">
+                  <label className="block text-sm font-bold text-zinc-700 mb-1.5">Opdrachtadres</label>
+                  <input
+                    type="text"
+                    value={siteAddress}
+                    onChange={e => setSiteAddress(e.target.value)}
+                    placeholder="Adres waar de job plaatsvindt (mag afwijken van klantadres)"
+                    className="ops-input w-full p-3.5 font-medium"
+                  />
+                  <p className="text-xs text-zinc-500 mt-1.5">Standaard het klantadres. Pas aan als de job elders uitgevoerd wordt.</p>
                 </div>
                 <div className="md:col-span-2">
                   <label className="block text-sm font-bold text-zinc-700 mb-1.5">Beschrijving / Instructies</label>
@@ -416,6 +444,7 @@ function AdminAssignmentCard({ assignment, users, customers }: { assignment: Ass
   const [editDate, setEditDate] = useState(assignment.date);
   const [editStartTime, setEditStartTime] = useState(assignment.startTime || '09:00');
   const [editCustomerId, setEditCustomerId] = useState(assignment.customerId);
+  const [editSiteAddress, setEditSiteAddress] = useState(assignment.siteAddress || assignment.customerAddress || '');
   const [editDescription, setEditDescription] = useState(assignment.description);
 
   const emp = users.find(u => u.id === assignment.userId);
@@ -437,7 +466,8 @@ function AdminAssignmentCard({ assignment, users, customers }: { assignment: Ass
         date: editDate,
         startTime: editStartTime,
         customerId: editCustomerId,
-        description: editDescription
+        description: editDescription,
+        siteAddress: editSiteAddress.trim() || selectedCustomer.address,
       });
       setIsEditing(false);
     } catch (err) {
@@ -485,14 +515,28 @@ function AdminAssignmentCard({ assignment, users, customers }: { assignment: Ass
               />
             </div>
             <div className="md:col-span-3">
-              <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-1.5">Klant / Locatie</label>
+              <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-1.5">Klant</label>
               <select 
-                value={editCustomerId} onChange={e => setEditCustomerId(e.target.value)} required
-                className="w-full border border-zinc-200 rounded-[12px] p-3 focus:ring-4 focus:ring-zinc-900/10 focus:border-zinc-900 outline-none bg-white transition-all font-medium text-sm"
+                value={editCustomerId} onChange={e => {
+                  const id = e.target.value;
+                  setEditCustomerId(id);
+                  const selected = customers.find(c => c.id === id);
+                  if (selected) setEditSiteAddress(selected.address);
+                }} required
+                className="ops-input w-full p-3 font-medium text-sm"
               >
                 <option value="">Selecteer klant...</option>
                 {customers.map(c => <option key={c.id} value={c.id}>{c.name} - {c.address}</option>)}
               </select>
+            </div>
+            <div className="md:col-span-3">
+              <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-1.5">Opdrachtadres</label>
+              <input
+                type="text"
+                value={editSiteAddress}
+                onChange={e => setEditSiteAddress(e.target.value)}
+                className="ops-input w-full p-3 font-medium text-sm"
+              />
             </div>
             <div className="md:col-span-2">
               <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-1.5">Beschrijving / Instructies</label>
@@ -528,12 +572,20 @@ function AdminAssignmentCard({ assignment, users, customers }: { assignment: Ass
             {assignment.status === 'completed' ? 'Afgewerkt' : assignment.status === 'arrived' ? 'Ter plaatse' : 'Gepland'}
           </span>
         </div>
-        {customer && (
-          <div className="text-sm font-medium text-zinc-500 mb-3 flex items-center space-x-1.5">
-            <MapPin className="w-3.5 h-3.5" />
-            <span>{customer.address}</span>
-          </div>
-        )}
+        <div className="text-sm font-medium text-zinc-500 mb-3 space-y-1">
+          {(assignment.siteAddress || customer?.address) && (
+            <div className="flex items-start gap-1.5">
+              <MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+              <div>
+                <div className="text-[11px] uppercase tracking-wider text-zinc-400 font-bold">Opdrachtadres</div>
+                <span>{assignment.siteAddress || customer?.address}</span>
+              </div>
+            </div>
+          )}
+          {customer?.address && assignment.siteAddress && assignment.siteAddress !== customer.address && (
+            <div className="text-xs text-zinc-500 pl-5">Klantadres: {customer.address}</div>
+          )}
+        </div>
         <p className="text-zinc-600 mb-4 leading-relaxed">{assignment.description}</p>
         
         <div className="flex flex-wrap items-center gap-4 text-sm font-semibold text-zinc-500 bg-[#FAFAFA] inline-flex px-4 py-2 rounded-[12px] border border-zinc-200">
@@ -595,10 +647,24 @@ function AdminAssignmentCard({ assignment, users, customers }: { assignment: Ass
             </div>
           )}
 
-          <div className="text-zinc-600 leading-relaxed relative group">
-            <span className="font-bold text-zinc-400 block text-xs uppercase tracking-wider mb-1">Notities</span>
-            “{assignment.workNotes}”
-          </div>
+          {assignment.workNotes && (
+            <div className="text-zinc-600 leading-relaxed mb-2">
+              <span className="font-bold text-zinc-400 block text-xs uppercase tracking-wider mb-1">Uitgevoerd werk</span>
+              {assignment.workNotes}
+            </div>
+          )}
+          {assignment.materials && (
+            <div className="text-zinc-600 leading-relaxed mb-2">
+              <span className="font-bold text-zinc-400 block text-xs uppercase tracking-wider mb-1">Materialen</span>
+              {assignment.materials}
+            </div>
+          )}
+          {assignment.completionNotes && (
+            <div className="text-zinc-600 leading-relaxed">
+              <span className="font-bold text-zinc-400 block text-xs uppercase tracking-wider mb-1">Extra notities</span>
+              {assignment.completionNotes}
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -109,7 +109,7 @@ function ShiftCard({ shift, users, onChanged }: { shift: PlannedShift; users: Us
       </div>
       <div className="flex items-center gap-1.5 font-bold text-zinc-700"><Clock3 className="w-3.5 h-3.5" />{shift.startTime}–{shift.endTime}</div>
       {shift.breakMinutes > 0 && <div className="text-zinc-500">Pauze: {shift.breakMinutes} min.</div>}
-      {shift.customerName && <div className="flex items-start gap-1.5 text-zinc-600"><MapPin className="w-3.5 h-3.5 shrink-0" /><span>{shift.customerName}</span></div>}
+      {shift.customerName && <div className="flex items-start gap-1.5 text-zinc-600"><MapPin className="w-3.5 h-3.5 shrink-0" /><span>{shift.customerName}{shift.siteAddress ? ` · ${shift.siteAddress}` : shift.customerAddress ? ` · ${shift.customerAddress}` : ''}</span></div>}
       <div className="flex items-start gap-1.5 text-zinc-600"><Users className="w-3.5 h-3.5 shrink-0" /><span>{memberNames.join(', ')}</span></div>
       <div className="pt-1 border-t border-black/5 font-semibold text-zinc-600">
         {shift.status === 'draft' ? 'Concept' : `${confirmed}/${shift.memberIds.length} bevestigd${declined ? ` · ${declined} geweigerd` : ''}`}
@@ -121,6 +121,7 @@ function ShiftCard({ shift, users, onChanged }: { shift: PlannedShift; users: Us
 function ShiftForm({ employees, customers, initialDate, onCancel, onSaved }: { employees: User[]; customers: Customer[]; initialDate: string; onCancel: () => void; onSaved: () => Promise<void> }) {
   const [title, setTitle] = useState('Werkdienst');
   const [customerId, setCustomerId] = useState('');
+  const [siteAddress, setSiteAddress] = useState('');
   const [date, setDate] = useState(initialDate);
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('17:00');
@@ -134,7 +135,7 @@ function ShiftForm({ employees, customers, initialDate, onCancel, onSaved }: { e
   const toggle = (id: string) => setMemberIds(current => current.includes(id) ? current.filter(value => value !== id) : [...current, id]);
   const submit = async (event: React.FormEvent) => {
     event.preventDefault(); setBusy(true); setError('');
-    try { await secureApi.savePlannedShift({ title, customerId, date, startTime, endTime, breakMinutes, memberIds, repeatWeeks, notes, checklist: checklistText.split('\n').map(item => item.trim()).filter(Boolean) }); await onSaved(); }
+    try { await secureApi.savePlannedShift({ title, customerId, siteAddress: siteAddress.trim() || undefined, date, startTime, endTime, breakMinutes, memberIds, repeatWeeks, notes, checklist: checklistText.split('\n').map(item => item.trim()).filter(Boolean) }); await onSaved(); }
     catch (reason) { setError(reason instanceof Error ? reason.message : 'De dienst kon niet worden opgeslagen.'); }
     finally { setBusy(false); }
   };
@@ -144,7 +145,8 @@ function ShiftForm({ employees, customers, initialDate, onCancel, onSaved }: { e
       {error && <div className="ops-chip-danger w-full justify-start p-3 text-sm">{error}</div>}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <label className="md:col-span-2 text-sm font-bold text-zinc-700">Titel<input value={title} onChange={event => setTitle(event.target.value)} required className="ops-input mt-1.5 w-full p-3 font-medium" /></label>
-        <label className="md:col-span-2 text-sm font-bold text-zinc-700">Klantlocatie<select value={customerId} onChange={event => setCustomerId(event.target.value)} className="ops-input mt-1.5 w-full p-3 font-medium"><option value="">Geen klantlocatie</option>{customers.map(customer => <option key={customer.id} value={customer.id}>{customer.name} — {customer.address}</option>)}</select></label>
+        <label className="md:col-span-2 text-sm font-bold text-zinc-700">Klant<select value={customerId} onChange={event => { const id = event.target.value; setCustomerId(id); const selected = customers.find(c => c.id === id); setSiteAddress(selected?.address || ''); }} className="ops-input mt-1.5 w-full p-3 font-medium"><option value="">Geen klant</option>{customers.map(customer => <option key={customer.id} value={customer.id}>{customer.name} — {customer.address}</option>)}</select></label>
+        <label className="md:col-span-4 text-sm font-bold text-zinc-700">Opdrachtadres<input value={siteAddress} onChange={event => setSiteAddress(event.target.value)} placeholder="Adres van de job (mag afwijken van klantadres)" className="ops-input mt-1.5 w-full p-3 font-medium" /></label>
         <label className="text-sm font-bold text-zinc-700">Datum<input type="date" value={date} onChange={event => setDate(event.target.value)} required className="ops-input mt-1.5 w-full p-3 font-medium" /></label>
         <label className="text-sm font-bold text-zinc-700">Start<input type="time" value={startTime} onChange={event => setStartTime(event.target.value)} required className="ops-input mt-1.5 w-full p-3 font-medium" /></label>
         <label className="text-sm font-bold text-zinc-700">Einde<input type="time" value={endTime} onChange={event => setEndTime(event.target.value)} required className="ops-input mt-1.5 w-full p-3 font-medium" /></label>

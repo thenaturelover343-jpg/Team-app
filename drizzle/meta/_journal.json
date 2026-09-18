@@ -50,6 +50,13 @@
       "when": 1789707504733,
       "tag": "0006_customers_btw_number",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1789710000000,
+      "tag": "0007_job_site_completion",
+      "breakpoints": true
     }
   ]
 }
