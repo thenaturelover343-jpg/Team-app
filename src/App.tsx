@@ -17,17 +17,16 @@ function AppContent() {
   const [authError, setAuthError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [authNotice, setAuthNotice] = useState('');
-  const [viewAsEmployee, setViewAsEmployee] = useState(() => {
-    if (typeof sessionStorage === 'undefined') return false;
-    return sessionStorage.getItem('adminViewAsEmployee') === '1';
-  });
+  // Admins always land in beheer. Preview is session-only UI state (not persisted),
+  // so a sticky adminViewAsEmployee=1 can never trap them on EmployeeView after login.
+  const [viewAsEmployee, setViewAsEmployee] = useState(false);
+
+  React.useEffect(() => {
+    try { sessionStorage.removeItem('adminViewAsEmployee'); } catch { /* ignore */ }
+  }, []);
 
   const toggleEmployeePreview = () => {
-    setViewAsEmployee(prev => {
-      const next = !prev;
-      try { sessionStorage.setItem('adminViewAsEmployee', next ? '1' : '0'); } catch { /* ignore */ }
-      return next;
-    });
+    setViewAsEmployee(prev => !prev);
   };
 
   const handleEmailAuth = async (e: React.FormEvent) => {
