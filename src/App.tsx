@@ -4,11 +4,11 @@ import AdminView from './AdminView';
 import { UserCircle, Loader2, LogOut, Eye, EyeOff } from 'lucide-react';
 import { PWAInstallButton, PWAInstallBanner } from './components/PWAInstallButton';
 import { AuthProvider, useAuth } from './hooks/useAuth';
-import { loginWithEmail, loginWithGoogle, logout, resetPassword } from './lib/firebase';
+import { loginWithEmail, loginWithGoogle, logout, resetPassword, mapAuthErrorToDutch } from './lib/firebase';
 import { LanguageProvider, LanguageSwitch, useLanguage } from './i18n';
 
 function AppContent() {
-  const { user, loading, accessError } = useAuth();
+  const { user, loading, accessError, redirectAuthError } = useAuth();
   const { locale } = useLanguage(); const fr = locale === 'fr';
   
   // Auth Form State
@@ -71,14 +71,10 @@ function AppContent() {
     setIsSubmitting(true);
     try {
       await loginWithGoogle();
+      // Redirect flow navigates away; popup resolves here.
     } catch (err: unknown) {
       console.error(err);
-      const code = typeof err === 'object' && err !== null && 'code' in err ? String(err.code) : '';
-      if (code === 'auth/popup-blocked') {
-        setAuthError('Sta pop-ups toe voor deze app en probeer opnieuw.');
-      } else if (code !== 'auth/popup-closed-by-user') {
-        setAuthError('Google-inloggen is mislukt. Probeer opnieuw.');
-      }
+      setAuthError(mapAuthErrorToDutch(err));
     } finally {
       setIsSubmitting(false);
     }
@@ -105,9 +101,9 @@ function AppContent() {
             <p className="text-zinc-500">{fr ? 'Connectez-vous avec votre compte invité' : 'Log in met uw uitgenodigde account'}</p>
           </div>
 
-          {(authError || accessError) && (
+          {(authError || accessError || redirectAuthError) && (
             <div className="p-3 bg-red-50 text-red-700 rounded-[12px] text-sm font-medium text-center border border-red-100">
-              {authError || accessError}
+              {authError || accessError || redirectAuthError}
             </div>
           )}
           {authNotice && (
