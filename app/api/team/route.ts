@@ -426,6 +426,7 @@ async function snapshot(user: AppUser) {
     assignments: (assignmentsResult.results as Json[]).map(mapAssignment),
     customers: (customersResult.results as Json[]).map(row => ({
       id: row.id, name: row.name, address: row.address, phone: row.phone || "", email: row.email || "",
+      btwNumber: row.btw_number ? String(row.btw_number) : undefined,
       latitude: row.latitude ?? undefined, longitude: row.longitude ?? undefined, createdAt: Number(row.created_at),
     })),
     plannedShifts: mapPlannedShifts(plannedResult.results as Json[]),
@@ -574,12 +575,13 @@ async function act(user: AppUser, action: string, input: Json) {
     const targetEmail = email(input.email);
     const name = clean(input.name, 160);
     if (!targetEmail || !name) throw new Error("Naam en e-mailadres zijn verplicht.");
+    const inviteRole = input.role === "admin" ? "admin" : "employee";
     const inviteId = id();
     await db.prepare(`INSERT INTO invites (id, email, name, phone, role, status, invited_by, created_at)
-      VALUES (?, ?, ?, ?, 'employee', 'pending', ?, ?)
-      ON CONFLICT(email) DO UPDATE SET name = excluded.name, phone = excluded.phone, status = 'pending', invited_by = excluded.invited_by, created_at = excluded.created_at, accepted_at = NULL`)
-      .bind(inviteId, targetEmail, name, clean(input.phone, 80) || null, user.uid, now).run();
-    await audit(db, user.uid, "employee.invited", "invite", targetEmail);
+      VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)
+      ON CONFLICT(email) DO UPDATE SET name = excluded.name, phone = excluded.phone, role = excluded.role, status = 'pending', invited_by = excluded.invited_by, created_at = excluded.created_at, accepted_at = NULL`)
+      .bind(inviteId, targetEmail, name, clean(input.phone, 80) || null, inviteRole, user.uid, now).run();
+    await audit(db, user.uid, "employee.invited", "invite", targetEmail, { role: inviteRole });
     return { uid: `invite:${targetEmail}`, resetLink: "" };
   }
 
@@ -601,6 +603,7 @@ async function act(user: AppUser, action: string, input: Json) {
     const name = clean(input.name, 200);
     const address = clean(input.address, 500);
     if (!name || !address) throw new Error("Naam en adres zijn verplicht.");
+    const btwNumber = clean(input.btwNumber, 40) || null;
     const hasLatitude = input.latitude !== "" && input.latitude !== null && input.latitude !== undefined;
     const hasLongitude = input.longitude !== "" && input.longitude !== null && input.longitude !== undefined;
     if (hasLatitude !== hasLongitude) throw new Error("Vul zowel breedte- als lengtegraad in.");
@@ -609,10 +612,10 @@ async function act(user: AppUser, action: string, input: Json) {
     if (latitude !== null && (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude! < -180 || longitude! > 180)) {
       throw new Error("De coördinaten zijn ongeldig.");
     }
-    await db.prepare(`INSERT INTO customers (id, name, address, phone, email, latitude, longitude, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    await db.prepare(`INSERT INTO customers (id, name, address, phone, email, btw_number, latitude, longitude, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET name=excluded.name, address=excluded.address, phone=excluded.phone, email=excluded.email,
-        latitude=excluded.latitude, longitude=excluded.longitude, updated_at=excluded.updated_at`)
-      .bind(customerId, name, address, clean(input.phone, 80) || null, email(input.email) || null, latitude, longitude, now, now).run();
+        btw_number=excluded.btw_number, latitude=excluded.latitude, longitude=excluded.longitude, updated_at=excluded.updated_at`)
+      .bind(customerId, name, address, clean(input.phone, 80) || null, email(input.email) || null, btwNumber, latitude, longitude, now, now).run();
     await audit(db, user.uid, "customer.saved", "customer", customerId);
     return { id: customerId };
   }

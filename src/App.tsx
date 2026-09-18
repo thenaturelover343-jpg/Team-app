@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import EmployeeView from './EmployeeView';
 import AdminView from './AdminView';
-import { UserCircle, Loader2, LogOut } from 'lucide-react';
+import { UserCircle, Loader2, LogOut, Eye, EyeOff } from 'lucide-react';
 import { PWAInstallButton } from './components/PWAInstallButton';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { loginWithEmail, loginWithGoogle, logout, resetPassword } from './lib/firebase';
@@ -17,6 +17,18 @@ function AppContent() {
   const [authError, setAuthError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [authNotice, setAuthNotice] = useState('');
+  const [viewAsEmployee, setViewAsEmployee] = useState(() => {
+    if (typeof sessionStorage === 'undefined') return false;
+    return sessionStorage.getItem('adminViewAsEmployee') === '1';
+  });
+
+  const toggleEmployeePreview = () => {
+    setViewAsEmployee(prev => {
+      const next = !prev;
+      try { sessionStorage.setItem('adminViewAsEmployee', next ? '1' : '0'); } catch { /* ignore */ }
+      return next;
+    });
+  };
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -171,13 +183,26 @@ function AppContent() {
             <div className="header-actions flex items-center gap-2 sm:gap-3">
               <LanguageSwitch />
               <PWAInstallButton />
+              {user.role === 'admin' && (
+                <button
+                  type="button"
+                  onClick={toggleEmployeePreview}
+                  className="ops-btn-secondary inline-flex items-center gap-2 px-3 py-2 text-xs font-bold"
+                  title={viewAsEmployee ? 'Terug naar beheer' : 'Bekijk als werknemer'}
+                >
+                  {viewAsEmployee ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  <span className="hidden sm:inline">{viewAsEmployee ? 'Terug naar beheer' : 'Bekijk als werknemer'}</span>
+                </button>
+              )}
               <div className="user-pill flex items-center gap-3 pl-2 pr-3 py-1.5">
                 <div className="ops-panel w-8 h-8 rounded-full flex items-center justify-center">
                   <UserCircle className="w-5 h-5 text-zinc-500" />
                 </div>
                 <div className="user-pill-copy flex flex-col pr-3 border-r border-zinc-200">
                   <span className="text-sm font-bold text-zinc-900 leading-tight truncate max-w-[100px]">{user.name}</span>
-                  <span className="text-xs text-zinc-400 leading-tight capitalize">{user.role}</span>
+                  <span className="text-xs text-zinc-400 leading-tight capitalize">
+                    {user.role === 'admin' && viewAsEmployee ? 'beheerder · preview' : user.role}
+                  </span>
                 </div>
                 <button onClick={logout} aria-label={fr ? 'Se déconnecter' : 'Uitloggen'} className="text-zinc-400 hover:text-zinc-900 transition-colors" title={fr ? 'Se déconnecter' : 'Uitloggen'}>
                   <LogOut className="w-4 h-4" />
@@ -189,7 +214,7 @@ function AppContent() {
       </header>
 
       <main id="main-content" tabIndex={-1} className="content-shell max-w-6xl mx-auto px-4 sm:px-6 md:px-8 py-6 md:py-8">
-        {user.role === 'admin' ? <AdminView /> : <EmployeeView />}
+        {user.role === 'admin' && !viewAsEmployee ? <AdminView /> : <EmployeeView />}
       </main>
     </div>
   );
