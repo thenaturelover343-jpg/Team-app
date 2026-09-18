@@ -43,7 +43,7 @@ function appUrl(): string {
   return window.location.origin + '/';
 }
 
-function CopyLinkButton() {
+function CopyLinkButton({ label = 'Kopieer link' }: { label?: string }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => {
     const url = appUrl();
@@ -60,23 +60,85 @@ function CopyLinkButton() {
     }
   };
   return (
-    <button type="button" onClick={() => void copy()} className="ops-btn-secondary w-full py-3 text-sm gap-2">
-      {copied ? <Check className="w-4 h-4" /> : <Link2 className="w-4 h-4" />}
-      {copied ? 'Link gekopieerd' : 'Kopieer link'}
+    <button type="button" onClick={() => void copy()} className="ops-btn-primary w-full py-3.5 text-base font-extrabold gap-2">
+      {copied ? <Check className="w-5 h-5" /> : <Link2 className="w-5 h-5" />}
+      {copied ? 'Link gekopieerd' : label}
     </button>
   );
 }
 
-/** Large always-visible iPhone install card — not a modal. */
+/** Card when user is NOT in real Safari (Grok/Chrome/WebView): no Deel icon exists. */
+function IOSOpenInSafariCard({
+  id = 'ios-install-guide',
+  onDismiss,
+}: {
+  id?: string;
+  onDismiss?: () => void;
+}) {
+  return (
+    <div
+      id={id}
+      className="ops-card border-2 border-amber-400/80 bg-amber-50 p-5 sm:p-6 space-y-5 shadow-lg scroll-mt-24"
+    >
+      <div className="flex gap-3 items-start">
+        <div className="shrink-0 rounded-2xl bg-white border border-amber-300/80 p-3 text-zinc-900">
+          <Smartphone className="w-11 h-11" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <h2 className="font-extrabold text-xl sm:text-2xl text-zinc-900 leading-tight">
+            Open deze link in Safari
+          </h2>
+          <p className="text-sm text-zinc-700 mt-1 font-semibold">
+            Open deze link in Safari (niet in Grok/Chrome). Alleen Safari heeft het Deel-icoon om de app op je beginscherm te zetten.
+          </p>
+        </div>
+        {onDismiss && (
+          <button type="button" aria-label="Sluiten" onClick={onDismiss} className="text-zinc-400 hover:text-zinc-700 shrink-0">
+            <X className="w-5 h-5" />
+          </button>
+        )}
+      </div>
+
+      <CopyLinkButton label="Kopieer link" />
+
+      <ol className="space-y-3 text-zinc-800 font-semibold text-base leading-snug">
+        <li className="flex gap-3 items-start">
+          <span className="shrink-0 w-8 h-8 rounded-full bg-zinc-900 text-white font-extrabold flex items-center justify-center text-sm">1</span>
+          <span className="pt-1">Tik <strong>Kopieer link</strong> hierboven</span>
+        </li>
+        <li className="flex gap-3 items-start">
+          <span className="shrink-0 w-8 h-8 rounded-full bg-zinc-900 text-white font-extrabold flex items-center justify-center text-sm">2</span>
+          <span className="pt-1">Open <strong>Safari</strong> (blauw kompas-icoon)</span>
+        </li>
+        <li className="flex gap-3 items-start">
+          <span className="shrink-0 w-8 h-8 rounded-full bg-zinc-900 text-white font-extrabold flex items-center justify-center text-sm">3</span>
+          <span className="pt-1">Plak de link in de adresbalk en open de app</span>
+        </li>
+        <li className="flex gap-3 items-start">
+          <span className="shrink-0 w-8 h-8 rounded-full bg-zinc-900 text-white font-extrabold flex items-center justify-center text-sm">4</span>
+          <span className="pt-1">In Safari: Deel → Zet op beginscherm → Voeg toe</span>
+        </li>
+      </ol>
+    </div>
+  );
+}
+
+/** Large always-visible iPhone install card — Safari Deel steps ONLY in real Safari. */
 export function IOSInstallCard({
   id = 'ios-install-guide',
   showCopyLink = true,
   onDismiss,
+  isSafari = true,
 }: {
   id?: string;
   showCopyLink?: boolean;
   onDismiss?: () => void;
+  isSafari?: boolean;
 }) {
+  if (!isSafari) {
+    return <IOSOpenInSafariCard id={id} onDismiss={onDismiss} />;
+  }
+
   return (
     <div
       id={id}
@@ -152,13 +214,11 @@ export const PWAInstallButton: React.FC<{ compact?: boolean }> = ({ compact = fa
   if (isInstalled) return null;
 
   const handleClick = async () => {
-    // Android / Chromium native prompt — keep as-is
     if (isInstallable) {
       await install();
       return;
     }
 
-    // iOS: never a fake install — jump to steps or /install
     if (isIOS) {
       try {
         sessionStorage.removeItem('pwaInstallDismissed');
@@ -166,7 +226,6 @@ export const PWAInstallButton: React.FC<{ compact?: boolean }> = ({ compact = fa
         /* ignore */
       }
       window.dispatchEvent(new Event(PWA_REVEAL_IOS_INSTALL));
-      // Let banner remount/reveal first, then scroll; fallback to /install
       window.setTimeout(() => {
         if (!scrollToIosGuide()) {
           window.location.assign('/install');
@@ -175,7 +234,6 @@ export const PWAInstallButton: React.FC<{ compact?: boolean }> = ({ compact = fa
       return;
     }
 
-    // Desktop / other: open install help page
     window.location.assign('/install');
   };
 
@@ -193,9 +251,9 @@ export const PWAInstallButton: React.FC<{ compact?: boolean }> = ({ compact = fa
   );
 };
 
-/** Full-width banner after login. On iPhone: always-visible numbered steps. */
+/** Full-width banner after login. On iPhone: Safari steps or open-in-Safari guide. */
 export function PWAInstallBanner() {
-  const { isInstallable, isInstalled, isIOS, install } = usePWAInstall();
+  const { isInstallable, isInstalled, isIOS, isIOSSafari, install } = usePWAInstall();
   const [dismissed, setDismissed] = useState(false);
   const [forceShow, setForceShow] = useState(false);
 
@@ -232,16 +290,14 @@ export function PWAInstallBanner() {
   if (isInstalled) return null;
   if (dismissed && !forceShow) return null;
 
-  // iPhone / iPad: always show the large step card (no modal, no hidden button)
   if (isIOS) {
     return (
       <div className="mx-auto max-w-6xl px-4 md:px-8 pt-3">
-        <IOSInstallCard onDismiss={dismiss} />
+        <IOSInstallCard onDismiss={dismiss} isSafari={isIOSSafari} />
       </div>
     );
   }
 
-  // Android with native install prompt
   if (isInstallable) {
     return (
       <div className="mx-auto max-w-6xl px-4 md:px-8 pt-3">
@@ -276,7 +332,6 @@ export function PWAInstallBanner() {
     );
   }
 
-  // Desktop / other browsers without install prompt
   return (
     <div className="mx-auto max-w-6xl px-4 md:px-8 pt-3">
       <div className="ops-card border-cyan-300/70 bg-cyan-50/80 p-4 flex gap-3 items-start">
@@ -284,8 +339,7 @@ export function PWAInstallBanner() {
         <div className="flex-1 min-w-0 space-y-1">
           <div className="font-extrabold text-zinc-900">Installeer als telefoon-app</div>
           <p className="text-sm text-zinc-600">
-            Open deze site op je telefoon (Chrome of Safari). Op Android: tik{' '}
-            <strong>Installeer app</strong>. Op iPhone: zie de stappen op{' '}
+            Open deze site op je telefoon in <strong>Safari</strong> (iPhone) of Chrome (Android). Op iPhone:{' '}
             <a href="/install" className="underline font-bold text-zinc-900">
               /install
             </a>
