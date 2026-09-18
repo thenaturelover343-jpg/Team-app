@@ -7,29 +7,61 @@ import { secureApi } from '../lib/secureApi';
 interface AuthContextType { user: User | null; loading: boolean; accessError: string; refreshUser: () => Promise<void> }
 export const AuthContext = createContext<AuthContextType>({ user: null, loading: true, accessError: '', refreshUser: async () => {} });
 
+/** True access denials — only these should clear the Firebase session. */
+function isAccessDenied(message: string): boolean {
+  return /niet aangemeld|geen toegang|uitgenodigd|niet actief|niet gemachtigd|unauthorized|forbidden|invalid.?token|id.?token/i.test(message);
+}
+
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [accessError, setAccessError] = useState('');
 
   const load = async (fbUser?: FirebaseUser | null) => {
-    if (!fbUser && !auth.currentUser) { setUser(null); setLoading(false); return; }
+    const firebaseUser = fbUser === undefined ? auth.currentUser : fbUser;
+    if (!firebaseUser) {
+      setUser(null);
+      setLoading(false);
+      return;
+    }
     try {
       setAccessError('');
       const result = await secureApi.snapshot();
       setUser(result.data.user);
     } catch (error) {
-      setUser(null);
-      setAccessError(error instanceof Error ? error.message : 'Uw account heeft geen toegang.');
-      await signOut(auth);
+      const message = error instanceof Error ? error.message : 'Uw account heeft geen toegang.';
+      setAccessError(message);
+      if (isAccessDenied(message)) {
+        // Real auth/permission failure — clear session so login form can show.
+        setUser(null);
+        try {
+          await signOut(auth);
+        } catch {
+          /* ignore */
+        }
+      }
+      // Transient errors (network, temporary DB): keep Firebase session; do NOT sign out.
+      // User stays "signed in" at Firebase level; UI may show accessError while we keep loading false.
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => onIdTokenChanged(auth, current => { setLoading(true); void load(current); }), []);
+  useEffect(() => {
+    // Stay in loading until Firebase restores persistence from IndexedDB/localStorage.
+    setLoading(true);
+    const unsub = onIdTokenChanged(auth, (current) => {
+      setLoading(true);
+      void load(current);
+    });
+    return unsub;
+  }, []);
 
-  return <AuthContext.Provider value={{ user, loading, accessError, refreshUser: () => load(auth.currentUser) }}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={{ user, loading, accessError, refreshUser: () => load(auth.currentUser) }}>
+      {children}
+    </AuthContext.Provider>
+  );
 };
 
 export const useAuth = () => useContext(AuthContext);

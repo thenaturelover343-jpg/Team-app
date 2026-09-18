@@ -1,6 +1,9 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps } from 'firebase/app';
 import {
+  initializeAuth,
   getAuth,
+  indexedDBLocalPersistence,
+  browserLocalPersistence,
   GoogleAuthProvider,
   signOut,
   signInWithEmailAndPassword,
@@ -9,8 +12,25 @@ import {
 } from 'firebase/auth';
 import firebaseConfig from '../../firebase-applet-config.json';
 
-const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
+const app = getApps().length ? getApps()[0]! : initializeApp(firebaseConfig);
+
+/**
+ * Persist session in IndexedDB (preferred) with localStorage fallback so
+ * reopening the installed PWA / Safari homescreen keeps the user signed in.
+ * Do not use browserSessionPersistence — that clears on every app reopen.
+ */
+function createAuth() {
+  try {
+    return initializeAuth(app, {
+      persistence: [indexedDBLocalPersistence, browserLocalPersistence],
+    });
+  } catch {
+    // Already initialized (HMR / duplicate import) — reuse existing instance.
+    return getAuth(app);
+  }
+}
+
+export const auth = createAuth();
 
 export const loginWithEmail = (email: string, pass: string) => signInWithEmailAndPassword(auth, email, pass);
 export const loginWithGoogle = () => signInWithPopup(auth, new GoogleAuthProvider());
