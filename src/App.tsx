@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import EmployeeView from './EmployeeView';
 import AdminView from './AdminView';
 import { UserCircle, Loader2, LogOut, Eye, EyeOff } from 'lucide-react';
-import { PWAInstallButton } from './components/PWAInstallButton';
+import { PWAInstallButton, PWAInstallBanner } from './components/PWAInstallButton';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { loginWithEmail, loginWithGoogle, logout, resetPassword } from './lib/firebase';
 import { LanguageProvider, LanguageSwitch, useLanguage } from './i18n';
@@ -212,6 +212,8 @@ function AppContent() {
           </div>
         </div>
       </header>
+
+      <PWAInstallBanner />
 
       {user.role === 'admin' && (
         <div className="content-shell max-w-6xl mx-auto px-4 sm:px-6 md:px-8 pt-4">
