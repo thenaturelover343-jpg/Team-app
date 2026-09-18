@@ -1,1 +1,1 @@
-2026-09-18-banner-cleanup-safari
+2026-09-18-ios-pwa-google-redirect-geo-v1

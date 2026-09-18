@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
-import { User, Shift, ShiftBreak, Assignment, Attachment, CorrectionRequest, Incident, PlannedShift, PushState, TeamNotification, WeeklyAvailability, PrivacySettings, AccessEvent, PilotProgram, PilotFeedback, getCurrentLocation, formatTime, formatDate, AssignmentTask, localDateKey } from './types';
-import { MapPin, Clock, CheckCircle, Play, Square, Navigation2, FileText, Loader2, User as UserIcon, Calendar, History, Save, Plus, Trash2, CheckSquare, CalendarDays, XCircle, AlertTriangle, ClipboardList, WifiOff, Coffee, Upload, Download, Bell } from 'lucide-react';
+import { User, Shift, ShiftBreak, Assignment, Attachment, CorrectionRequest, Incident, PlannedShift, PushState, TeamNotification, WeeklyAvailability, PrivacySettings, AccessEvent, PilotProgram, PilotFeedback, getCurrentLocation, formatTime, formatDate, AssignmentTask, localDateKey, isGeoBlockedError, openDeviceLocationSettings, detectGeoPlatform, queryLocationPermission, iosLocationStepsCopy, androidLocationStepsCopy } from './types';
+import { MapPin, Clock, CheckCircle, Play, Square, Navigation2, FileText, Loader2, User as UserIcon, Calendar, History, Save, Plus, Trash2, CheckSquare, CalendarDays, XCircle, AlertTriangle, ClipboardList, WifiOff, Coffee, Upload, Download, Bell, Settings } from 'lucide-react';
 import { useAuth } from './hooks/useAuth';
 import { handleFirestoreError, OperationType } from './lib/firebase';
 import { secureApi } from './lib/secureApi';
@@ -122,6 +122,8 @@ export default function EmployeeView() {
 function DashboardTab({ userId, shifts, breaks, assignments, plannedShifts, attachments, loading, onChanged }: { userId: string; shifts: Shift[]; breaks: ShiftBreak[]; assignments: Assignment[]; plannedShifts: PlannedShift[]; attachments: Attachment[]; loading: boolean; onChanged: () => Promise<void> }) {
   const [isLocating, setIsLocating] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [showLocationHelp, setShowLocationHelp] = useState(false);
+  const [geoPlatform] = useState(() => detectGeoPlatform());
   const [shiftNotes, setShiftNotes] = useState('');
   const [shiftStatus, setShiftStatus] = useState<'Normaal' | 'Vertraagd' | 'Gedeeltelijk afgerond' | 'Probleem gemeld'>('Normaal');
 
@@ -146,6 +148,28 @@ function DashboardTab({ userId, shifts, breaks, assignments, plannedShifts, atta
     return order[a.status] - order[b.status];
   });
 
+  const openLocationBlockedUi = () => {
+    setShowLocationHelp(true);
+    setErrorMsg('');
+  };
+
+  const requireLocationOrHelp = async () => {
+    const permission = await queryLocationPermission();
+    if (permission === 'denied' || permission === 'unsupported') {
+      openLocationBlockedUi();
+      throw new Error('LOC_BLOCKED');
+    }
+    try {
+      return await getCurrentLocation();
+    } catch (err: unknown) {
+      if (isGeoBlockedError(err)) {
+        openLocationBlockedUi();
+        throw new Error('LOC_BLOCKED');
+      }
+      throw err;
+    }
+  };
+
   if (loading) {
     return <div className="flex justify-center p-8"><Loader2 className="w-6 h-6 animate-spin text-zinc-900" /></div>;
   }
@@ -154,17 +178,47 @@ function DashboardTab({ userId, shifts, breaks, assignments, plannedShifts, atta
     setIsLocating(true);
     setErrorMsg('');
     try {
-      const loc = await getCurrentLocation();
+      const loc = await requireLocationOrHelp();
       const result = await secureApi.clockIn(loc, selectedPlannedShiftId || undefined);
+      setShowLocationHelp(false);
       setErrorMsg(result.queued ? 'Inklokactie staat offline klaar en wordt automatisch verzonden.' : '');
       setShiftNotes('');
       setShiftStatus('Normaal');
       await onChanged();
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Kon locatie niet ophalen. Zorg dat locatievoorzieningen aan staan.');
+      if (err instanceof Error && err.message === 'LOC_BLOCKED') {
+        /* modal already shown */
+      } else {
+        setErrorMsg(err instanceof Error ? err.message : 'Kon locatie niet ophalen. Zorg dat locatievoorzieningen aan staan.');
+      }
     } finally {
       setIsLocating(false);
     }
+  };
+
+  const handleRetryLocation = async () => {
+    setIsLocating(true);
+    setErrorMsg('');
+    try {
+      // Re-request position — triggers the system permission prompt when possible.
+      await getCurrentLocation();
+      setShowLocationHelp(false);
+    } catch (err: unknown) {
+      if (isGeoBlockedError(err)) {
+        openLocationBlockedUi();
+        return;
+      }
+      setErrorMsg(err instanceof Error ? err.message : 'Kon locatie niet ophalen.');
+      return;
+    } finally {
+      setIsLocating(false);
+    }
+    if (activeShift) await handleClockOut();
+    else await handleClockIn();
+  };
+
+  const handleOpenSettings = () => {
+    openDeviceLocationSettings();
   };
 
   const handleClockOut = async () => {
@@ -172,16 +226,21 @@ function DashboardTab({ userId, shifts, breaks, assignments, plannedShifts, atta
     setIsLocating(true);
     setErrorMsg('');
     try {
-      const loc = await getCurrentLocation();
+      const loc = await requireLocationOrHelp();
       const result = await secureApi.queueClockOut({
         location: loc,
         notes: shiftNotes,
         statusTag: shiftStatus
       });
+      setShowLocationHelp(false);
       setErrorMsg(result.queued ? 'Uitklokactie staat offline klaar en wordt automatisch verzonden.' : '');
       await onChanged();
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Kon locatie niet ophalen. Zorg dat locatievoorzieningen aan staan.');
+      if (err instanceof Error && err.message === 'LOC_BLOCKED') {
+        /* modal already shown */
+      } else {
+        setErrorMsg(err instanceof Error ? err.message : 'Kon locatie niet ophalen. Zorg dat locatievoorzieningen aan staan.');
+      }
     } finally {
       setIsLocating(false);
     }
@@ -213,11 +272,62 @@ function DashboardTab({ userId, shifts, breaks, assignments, plannedShifts, atta
     }
   };
 
+  const locationSteps =
+    geoPlatform === 'ios'
+      ? iosLocationStepsCopy()
+      : geoPlatform === 'android'
+        ? androidLocationStepsCopy()
+        : 'Zet locatievoorzieningen aan in de instellingen van uw toestel en geef deze app toegang.';
+
   return (
     <div className="space-y-6">
       {errorMsg && (
         <div className="p-4 bg-red-50 text-red-700 rounded-[12px] border border-red-200 text-sm font-medium">
           {errorMsg}
+        </div>
+      )}
+
+      {showLocationHelp && (
+        <div className="ops-card border border-amber-200 bg-amber-50/80 p-5 space-y-4 shadow-[0_4px_14px_0_rgb(0,0,0,0.03)]" role="dialog" aria-labelledby="locatie-uit-title">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-800">
+              <MapPin className="w-5 h-5" />
+            </div>
+            <div className="space-y-1.5 min-w-0">
+              <h3 id="locatie-uit-title" className="text-lg font-bold text-zinc-900">Locatie staat uit</h3>
+              <p className="text-sm text-zinc-700 font-medium">
+                Om in te klokken moet locatie aan staan en toegang hebben. Zonder GPS kunnen we uw aanwezigheid niet registreren.
+              </p>
+              <p className="text-xs text-zinc-600 leading-relaxed pt-1">
+                <span className="font-bold text-zinc-800">Stappen{geoPlatform === 'ios' ? ' (iPhone)' : geoPlatform === 'android' ? ' (Android)' : ''}:</span>{' '}
+                {locationSteps}
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={handleOpenSettings}
+              className="ops-btn-primary w-full py-3.5 gap-2"
+            >
+              <Settings className="w-4 h-4" />
+              Open Instellingen
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleRetryLocation()}
+              disabled={isLocating}
+              className="ops-btn-secondary w-full py-3.5 gap-2 disabled:opacity-50"
+            >
+              {isLocating ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              Opnieuw proberen
+            </button>
+          </div>
+          {geoPlatform === 'ios' && (
+            <p className="text-xs text-zinc-500">
+              Op iPhone opent &quot;Open Instellingen&quot; indien mogelijk Instellingen. Lukt dat niet (Safari/PWA), volg dan handmatig: {iosLocationStepsCopy()}.
+            </p>
+          )}
         </div>
       )}
 

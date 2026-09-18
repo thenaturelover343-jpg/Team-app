@@ -1,3 +1,6 @@
+import { LocationAccessError } from './lib/geolocation';
+export { LocationAccessError, isGeoBlockedError, openDeviceLocationSettings, detectGeoPlatform, queryLocationPermission, iosLocationStepsCopy, androidLocationStepsCopy } from './lib/geolocation';
+
 export type Role = 'admin' | 'employee';
 
 export interface User {
@@ -230,8 +233,8 @@ export interface AppState {
 
 export const getCurrentLocation = (): Promise<GeoLocation> => {
   return new Promise((resolve, reject) => {
-    if (!navigator.geolocation) {
-      reject(new Error("Geolocation not supported by this browser."));
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      reject(new LocationAccessError('UNSUPPORTED', 'Locatievoorzieningen worden niet ondersteund op dit toestel.'));
       return;
     }
     navigator.geolocation.getCurrentPosition(
@@ -241,7 +244,22 @@ export const getCurrentLocation = (): Promise<GeoLocation> => {
         accuracy: pos.coords.accuracy,
         capturedAt: pos.timestamp,
       }),
-      (err) => reject(err),
+      (err) => {
+        const code = typeof err?.code === 'number' ? err.code : 0;
+        if (code === 1) {
+          reject(new LocationAccessError('PERMISSION_DENIED', 'Locatietoegang is geweigerd. Zet locatie aan om in te klokken.'));
+          return;
+        }
+        if (code === 2) {
+          reject(new LocationAccessError('POSITION_UNAVAILABLE', 'Locatie is niet beschikbaar. Zet locatievoorzieningen aan.'));
+          return;
+        }
+        if (code === 3) {
+          reject(new LocationAccessError('TIMEOUT', 'Locatie ophalen duurde te lang. Probeer opnieuw.'));
+          return;
+        }
+        reject(err instanceof Error ? err : new Error('Kon locatie niet ophalen.'));
+      },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   });
