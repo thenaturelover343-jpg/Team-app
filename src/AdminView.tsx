@@ -138,6 +138,7 @@ function CustomersTab({ customers }: { customers: Customer[] }) {
   const [address, setAddress] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  const [btwNumber, setBtwNumber] = useState('');
   const [latitude, setLatitude] = useState('');
   const [longitude, setLongitude] = useState('');
 
@@ -147,11 +148,12 @@ function CustomersTab({ customers }: { customers: Customer[] }) {
     
     setIsSubmitting(true);
     try {
-      await secureApi.saveCustomer({ name, address, phone, email, latitude: latitude === '' ? '' : Number(latitude), longitude: longitude === '' ? '' : Number(longitude) });
+      await secureApi.saveCustomer({ name, address, phone, email, btwNumber, latitude: latitude === '' ? '' : Number(latitude), longitude: longitude === '' ? '' : Number(longitude) });
       setName('');
       setAddress('');
       setPhone('');
       setEmail('');
+      setBtwNumber('');
       setLatitude('');
       setLongitude('');
       setIsAdding(false);
@@ -212,6 +214,14 @@ function CustomersTab({ customers }: { customers: Customer[] }) {
               />
             </div>
             <div>
+              <label className="block text-sm font-bold text-zinc-700 mb-1.5">BTW-nummer</label>
+              <input 
+                type="text" value={btwNumber} onChange={e => setBtwNumber(e.target.value)}
+                placeholder="BE0123456789"
+                className="ops-input w-full p-3.5 font-medium"
+              />
+            </div>
+            <div>
               <label className="block text-sm font-bold text-zinc-700 mb-1.5">Breedtegraad (GPS)</label>
               <input type="number" step="any" min="-90" max="90" value={latitude} onChange={e => setLatitude(e.target.value)} placeholder="50.8503" className="ops-input w-full p-3.5 font-medium" />
             </div>
@@ -250,6 +260,7 @@ function CustomersTab({ customers }: { customers: Customer[] }) {
               <div className="flex flex-col md:items-end text-sm text-zinc-600 font-medium space-y-1">
                 {c.phone && <div>Tel: {c.phone}</div>}
                 {c.email && <div>E-mail: {c.email}</div>}
+                {c.btwNumber && <div>BTW-nummer: {c.btwNumber}</div>}
                 {c.latitude !== undefined && c.longitude !== undefined && <div>GPS: {c.latitude.toFixed(5)}, {c.longitude.toFixed(5)}</div>}
               </div>
             </div>
@@ -874,6 +885,7 @@ function TeamTab({ users }: { users: User[] }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [inviteRole, setInviteRole] = useState<'admin' | 'employee'>('employee');
   const [inviteLink, setInviteLink] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -885,11 +897,12 @@ function TeamTab({ users }: { users: User[] }) {
     setInviteLink('');
     setIsSubmitting(true);
     try {
-      const result = await secureApi.inviteEmployee({ name, email, phone });
+      const result = await secureApi.inviteEmployee({ name, email, phone, role: inviteRole });
       setInviteLink(result.data.resetLink || 'uitgenodigd');
       setName('');
       setEmail('');
       setPhone('');
+      setInviteRole('employee');
     } catch (error: unknown) {
       setErrorMsg(message(error));
     } finally {
@@ -919,17 +932,26 @@ function TeamTab({ users }: { users: User[] }) {
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-bold text-zinc-900">Team Beheer</h2>
       </div>
-      <form onSubmit={invite} className="bg-white p-6 rounded-[24px] border border-zinc-200 grid grid-cols-1 md:grid-cols-4 gap-3">
+      <form onSubmit={invite} className="bg-white p-6 rounded-[24px] border border-zinc-200 grid grid-cols-1 md:grid-cols-5 gap-3">
         <input value={name} onChange={event => setName(event.target.value)} required placeholder="Volledige naam" className="border border-zinc-200 rounded-[12px] p-3" />
         <input value={email} onChange={event => setEmail(event.target.value)} required type="email" placeholder="E-mailadres" className="border border-zinc-200 rounded-[12px] p-3" />
         <input value={phone} onChange={event => setPhone(event.target.value)} type="tel" placeholder="Telefoon (optioneel)" className="border border-zinc-200 rounded-[12px] p-3" />
+        <select
+          value={inviteRole}
+          onChange={event => setInviteRole(event.target.value === 'admin' ? 'admin' : 'employee')}
+          className="border border-zinc-200 rounded-[12px] p-3 bg-white font-medium"
+          aria-label="Rol"
+        >
+          <option value="employee">Medewerker</option>
+          <option value="admin">Beheerder</option>
+        </select>
         <button disabled={isSubmitting} className="bg-zinc-900 text-white font-bold rounded-[12px] p-3 disabled:opacity-50">
-          {isSubmitting ? 'Bezig…' : 'Medewerker uitnodigen'}
+          {isSubmitting ? 'Bezig…' : 'Uitnodigen'}
         </button>
       </form>
       {inviteLink && (
         <div className="p-4 bg-green-50 text-green-800 rounded-[12px] border border-green-200 text-sm break-all">
-          De medewerker is uitgenodigd en kan nu met dit Google-e-mailadres aanmelden.
+          De uitnodiging is verstuurd. De persoon kan nu met dit Google-e-mailadres aanmelden.
         </div>
       )}
       {errorMsg && (

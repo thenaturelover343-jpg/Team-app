@@ -14,7 +14,8 @@ export const invites = sqliteTable("invites", {
 
 export const customers = sqliteTable("customers", {
   id: text("id").primaryKey(), name: text("name").notNull(), address: text("address").notNull(),
-  phone: text("phone"), email: text("email"), latitude: real("latitude"), longitude: real("longitude"),
+  phone: text("phone"), email: text("email"), btwNumber: text("btw_number"),
+  latitude: real("latitude"), longitude: real("longitude"),
   createdAt: integer("created_at").notNull(), updatedAt: integer("updated_at").notNull(),
 });
 

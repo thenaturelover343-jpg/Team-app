@@ -2,12 +2,12 @@ import type { AccessEvent, Assignment, AssignmentTask, Attachment, AuditEvent, B
 import { auth } from './firebase';
 import { enqueueOfflineAction, flushOfflineQueue } from './offlineQueue';
 
-type InviteInput = { email: string; name: string; phone?: string };
+type InviteInput = { email: string; name: string; phone?: string; role?: 'admin' | 'employee' };
 type InviteResult = { uid: string; resetLink: string };
 type AccessInput = { uid: string; role: 'admin' | 'employee'; active: boolean };
 type ClockOutInput = { location: GeoLocation; notes: string; statusTag: string };
 type AssignmentTransitionInput = { assignmentId: string; status: 'arrived' | 'completed'; location: GeoLocation; notes?: string };
-type CustomerInput = { id?: string; name: string; address: string; phone?: string; email?: string; latitude?: number | ''; longitude?: number | '' };
+type CustomerInput = { id?: string; name: string; address: string; phone?: string; email?: string; btwNumber?: string; latitude?: number | ''; longitude?: number | '' };
 type AssignmentInput = { id?: string; userId: string; customerId: string; date: string; startTime: string; description: string };
 type PlannedShiftInput = { title: string; customerId?: string; date: string; startTime: string; endTime: string; breakMinutes: number; notes?: string; memberIds: string[]; repeatWeeks: number; checklist: string[] };
 export type TeamSnapshot = { user: User; users: User[]; shifts: Shift[]; assignments: Assignment[]; customers: Customer[]; plannedShifts: PlannedShift[]; breaks: ShiftBreak[]; incidents: Incident[]; correctionRequests: CorrectionRequest[]; attachments: Attachment[]; notifications: TeamNotification[]; push: PushState; privacy: PrivacySettings; auditEvents: AuditEvent[]; accessEvents: AccessEvent[]; backups: BackupRun[]; errors: ErrorEvent[]; pilot: PilotProgram | null; pilotFeedback: PilotFeedback[] };

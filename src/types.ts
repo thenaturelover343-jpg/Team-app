@@ -103,6 +103,7 @@ export interface Customer {
   address: string;
   phone: string;
   email: string;
+  btwNumber?: string;
   createdAt: number;
   latitude?: number;
   longitude?: number;
