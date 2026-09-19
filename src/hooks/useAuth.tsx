@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { onIdTokenChanged, signOut, type User as FirebaseUser } from 'firebase/auth';
 import type { User } from '../types';
 import { auth, completeGoogleRedirect, mapAuthErrorToDutch } from '../lib/firebase';
 import { secureApi } from '../lib/secureApi';
+import { clearSessionHint, writeSessionHint } from '../lib/sessionHint';
 
 interface AuthContextType {
   user: User | null;
@@ -29,11 +30,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const [accessError, setAccessError] = useState('');
   const [redirectAuthError, setRedirectAuthError] = useState('');
+  const userRef = useRef<User | null>(null);
+  userRef.current = user;
 
   const load = async (fbUser?: FirebaseUser | null) => {
     const firebaseUser = fbUser === undefined ? auth.currentUser : fbUser;
     if (!firebaseUser) {
       setUser(null);
+      clearSessionHint();
       setLoading(false);
       return;
     }
@@ -41,12 +45,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setAccessError('');
       const result = await secureApi.snapshot();
       setUser(result.data.user);
+      writeSessionHint(result.data.user);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Uw account heeft geen toegang.';
       setAccessError(message);
       if (isAccessDenied(message)) {
         // Real auth/permission failure — clear session so login form can show.
         setUser(null);
+        clearSessionHint();
         try {
           await signOut(auth);
         } catch {
@@ -60,9 +66,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   useEffect(() => {
-    // Stay in loading until Firebase restores persistence + any Google redirect result
-    // (critical for installed iPhone PWA cold start after signInWithRedirect).
-    // Call getRedirectResult exactly once here — App must not call it again.
+    // Boot: wait for Google redirect + persistence, then subscribe.
+    // Do NOT setLoading(true) on every later id-token refresh — that blanked the tree for seconds.
     setLoading(true);
     let unsub = () => {};
     let cancelled = false;
@@ -76,7 +81,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
       if (cancelled) return;
       unsub = onIdTokenChanged(auth, (current) => {
-        setLoading(true);
+        // Only re-enter "loading" when we have no in-memory user yet (cold boot / logout→login).
+        // Token refresh while signed in must not blank Admin/Employee.
+        if (!userRef.current) {
+          setLoading(true);
+        }
         void load(current);
       });
     })();
