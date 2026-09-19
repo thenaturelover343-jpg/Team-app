@@ -1,5 +1,5 @@
 /* global self */
-const CACHE = 'barlicious-team-v2026-09-18-compass-pwa-icons';
+const CACHE = 'barlicious-team-v2026-09-19-perf-lazy';
 const PRECACHE = [
   '/',
   '/install',
@@ -27,11 +27,22 @@ self.addEventListener('activate', event => {
   );
 });
 
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
 /** Network-first for install + version so update banner / install steps stay fresh. */
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
   if (event.request.method !== 'GET') return;
   if (url.origin !== self.location.origin) return;
+
+  // Never cache API / auth proxy — always network.
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/__/')) {
+    return;
+  }
 
   const isInstallOrVersion =
     url.pathname === '/install' ||
@@ -39,7 +50,8 @@ self.addEventListener('fetch', event => {
     url.pathname === '/install.html' ||
     url.pathname === '/install/index.html' ||
     url.pathname === '/app-version.txt' ||
-    url.pathname === '/manifest.webmanifest';
+    url.pathname === '/manifest.webmanifest' ||
+    url.pathname === '/sw.js';
 
   if (isInstallOrVersion) {
     event.respondWith(
@@ -52,6 +64,41 @@ self.addEventListener('fetch', event => {
         .catch(() => caches.match(event.request))
     );
     return;
+  }
+
+  // Hashed Vite/Next static assets: cache-first (immutable filenames).
+  if (url.pathname.startsWith('/_next/static/')) {
+    event.respondWith(
+      caches.open(CACHE).then(async cache => {
+        const cached = await cache.match(event.request);
+        if (cached) return cached;
+        try {
+          const res = await fetch(event.request);
+          if (res.ok) {
+            cache.put(event.request, res.clone()).catch(() => undefined);
+          }
+          return res;
+        } catch (err) {
+          const fallback = await cache.match(event.request);
+          if (fallback) return fallback;
+          throw err;
+        }
+      })
+    );
+    return;
+  }
+
+  // App shell HTML: network-first so deploy + update banner stay honest.
+  if (event.request.mode === 'navigate' || url.pathname === '/' || url.pathname === '') {
+    event.respondWith(
+      fetch(event.request)
+        .then(res => {
+          const copy = res.clone();
+          caches.open(CACHE).then(cache => cache.put(event.request, copy)).catch(() => undefined);
+          return res;
+        })
+        .catch(() => caches.match(event.request).then(r => r || caches.match('/')))
+    );
   }
 });
 

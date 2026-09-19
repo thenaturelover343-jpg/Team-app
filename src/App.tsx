@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
-import EmployeeView from './EmployeeView';
-import AdminView from './AdminView';
+import React, { Suspense, lazy, useState } from 'react';
 import { UserCircle, Loader2, LogOut, Eye, EyeOff } from 'lucide-react';
 import { PWAInstallButton } from './components/PWAInstallButton';
 import { AppUpdateBanner } from './components/AppUpdateBanner';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { loginWithEmail, loginWithGoogle, logout, resetPassword, mapAuthErrorToDutch } from './lib/firebase';
 import { LanguageProvider, LanguageSwitch, useLanguage } from './i18n';
+
+const EmployeeView = lazy(() => import('./EmployeeView'));
+const AdminView = lazy(() => import('./AdminView'));
 
 function AppContent() {
   const { user, loading, accessError, redirectAuthError } = useAuth();
@@ -217,7 +218,16 @@ function AppContent() {
 
 
       <main id="main-content" tabIndex={-1} className="content-shell max-w-6xl mx-auto px-4 sm:px-6 md:px-8 py-6 md:py-8">
-        {user.role === 'admin' && !viewAsEmployee ? <AdminView /> : <EmployeeView />}
+        <Suspense
+          fallback={
+            <div className="flex min-h-[40vh] flex-col items-center justify-center space-y-3">
+              <Loader2 className="h-8 w-8 animate-spin text-zinc-900" />
+              <p className="font-medium tracking-wide text-zinc-500">{fr ? 'Chargement…' : 'Bezig met laden...'}</p>
+            </div>
+          }
+        >
+          {user.role === 'admin' && !viewAsEmployee ? <AdminView /> : <EmployeeView />}
+        </Suspense>
       </main>
     </div>
   );

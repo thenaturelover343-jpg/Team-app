@@ -2,12 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { User, Assignment, Shift, Customer, CorrectionRequest, Incident, PlannedShift, PushState, TeamNotification, PrivacySettings, AuditEvent, AccessEvent, BackupRun, ErrorEvent, PilotProgram, PilotFeedback, formatDate, formatTime, localDateKey } from './types';
 import { Calendar, Clock, MapPin, Plus, User as UserIcon, ListTodo, Loader2, Users, CheckSquare, Square, Download, BarChart2, CalendarDays, AlertTriangle, ShieldCheck, Settings } from 'lucide-react';
 import { handleFirestoreError, OperationType } from './lib/firebase';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { secureApi } from './lib/secureApi';
-import WeekPlanner from './components/WeekPlanner';
-import ControlCenter from './components/ControlCenter';
-import QualityCenter from './components/QualityCenter';
 import { useLanguage } from './i18n';
+
+const HoursBarChart = React.lazy(() => import('./components/HoursBarChart'));
+const WeekPlanner = React.lazy(() => import('./components/WeekPlanner'));
+const ControlCenter = React.lazy(() => import('./components/ControlCenter'));
+const QualityCenter = React.lazy(() => import('./components/QualityCenter'));
+
+function TabSuspense({ children }: { children: React.ReactNode }) {
+  return (
+    <React.Suspense fallback={<div className="min-h-[30vh] animate-pulse rounded-[16px] bg-zinc-100" />}>
+      {children}
+    </React.Suspense>
+  );
+}
 
 export default function AdminView() {
   const { locale } = useLanguage(); const fr = locale === 'fr';
@@ -104,14 +113,14 @@ export default function AdminView() {
         </button>
       </div>
 
-      {activeTab === 'control' && <ControlCenter users={users} plannedShifts={plannedShifts} shifts={shifts} notifications={notifications} push={push} onChanged={loadData} />}
-      {activeTab === 'week' && <WeekPlanner users={users} customers={customers} shifts={plannedShifts} onChanged={loadData} />}
+      {activeTab === 'control' && <TabSuspense><ControlCenter users={users} plannedShifts={plannedShifts} shifts={shifts} notifications={notifications} push={push} onChanged={loadData} /></TabSuspense>}
+      {activeTab === 'week' && <TabSuspense><WeekPlanner users={users} customers={customers} shifts={plannedShifts} onChanged={loadData} /></TabSuspense>}
       {activeTab === 'planning' && <PlanningTab users={users} assignments={assignments} customers={customers} />}
       {activeTab === 'timesheets' && <TimesheetsTab users={users} shifts={shifts} assignments={assignments} />}
       {activeTab === 'reports' && <AdminReportsTab users={users} incidents={incidents} corrections={correctionRequests} onChanged={loadData} />}
       {activeTab === 'customers' && <CustomersTab customers={customers} />}
       {activeTab === 'team' && <TeamTab users={users} />}
-      {activeTab === 'quality' && <QualityCenter users={users} privacy={privacy} auditEvents={auditEvents} accessEvents={accessEvents} backups={backups} errors={errors} pilot={pilot} feedback={pilotFeedback} onChanged={loadData} />}
+      {activeTab === 'quality' && <TabSuspense><QualityCenter users={users} privacy={privacy} auditEvents={auditEvents} accessEvents={accessEvents} backups={backups} errors={errors} pilot={pilot} feedback={pilotFeedback} onChanged={loadData} /></TabSuspense>}
     </div>
   );
 }
@@ -826,34 +835,9 @@ function TimesheetsTab({ users, shifts, assignments = [] }: { users: User[], shi
         
         {chartData.length > 0 ? (
           <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis 
-                  dataKey="name" 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{ fontSize: 12, fill: '#64748b', fontWeight: 600 }}
-                  dy={10}
-                />
-                <YAxis 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{ fontSize: 12, fill: '#94a3b8' }}
-                />
-                <Tooltip 
-                  cursor={{ fill: '#f8fafc' }}
-                  contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                />
-                <Bar 
-                  dataKey="uren" 
-                  name="Gewerkte Uren"
-                  fill="#3b82f6" 
-                  radius={[6, 6, 0, 0]} 
-                  barSize={40}
-                />
-              </BarChart>
-            </ResponsiveContainer>
+            <React.Suspense fallback={<div className="h-72 w-full animate-pulse rounded-[12px] bg-zinc-100" />}>
+              <HoursBarChart data={chartData} />
+            </React.Suspense>
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center h-48 text-zinc-400">
@@ -1008,7 +992,7 @@ function TeamTab({ users }: { users: User[] }) {
       </form>
       {inviteLink && (
         <div className="p-4 bg-green-50 text-green-800 rounded-[12px] border border-green-200 text-sm break-all">
-          De uitnodiging is verstuurd. De persoon kan nu met dit Google-e-mailadres aanmelden.
+          Uitnodiging opgeslagen. Er wordt geen e-mail verstuurd — de persoon meldt zich aan met dit Google-e-mailadres.
         </div>
       )}
       {errorMsg && (
