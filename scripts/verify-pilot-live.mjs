@@ -29,6 +29,44 @@ async function fetchText(url) {
   return { text: await res.text(), url: res.url, status: res.status };
 }
 
+/** Collect page + lazy/dynamic chunks so code-split builds still verify UI markers. */
+async function collectAppJs(live, pageChunk) {
+  const queue = [pageChunk];
+  const seen = new Set();
+  const parts = [];
+  const loaded = [];
+
+  while (queue.length) {
+    const name = queue.shift();
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    const { text } = await fetchText(`${live}/_next/static/chunks/${name}`);
+    parts.push(text);
+    loaded.push(name);
+
+    for (const m of text.matchAll(
+      /(?:^|["'`/,])((?:EmployeeView|AdminView|HoursBarChart|LiveLocationMap|WeekPlanner|ControlCenter|QualityCenter|page)[A-Za-z0-9_-]*\.js)/g,
+    )) {
+      queue.push(m[1]);
+    }
+    for (const m of text.matchAll(
+      /_next\/static\/chunks\/([A-Za-z0-9_-]+\.js)/g,
+    )) {
+      const chunk = m[1];
+      // Skip shared runtime/framework noise unless named as app views above.
+      if (
+        /^(EmployeeView|AdminView|HoursBarChart|LiveLocationMap|WeekPlanner|ControlCenter|QualityCenter|page)-/.test(
+          chunk,
+        )
+      ) {
+        queue.push(chunk);
+      }
+    }
+  }
+
+  return { body: parts.join("\n"), loaded };
+}
+
 async function main() {
   console.log(`[verify-pilot-live] probing ${LIVE}`);
 
@@ -55,14 +93,17 @@ async function main() {
   if (!/const CACHE\s*=\s*['"]barlicious-team-/.test(sw.text)) {
     fail("sw.js missing barlicious-team CACHE name");
   }
-  ok("sw.js push + CACHE + app-version wiring present");
+  if (!sw.text.includes("/_next/static/")) {
+    fail("sw.js missing /_next/static/ cache-first path");
+  }
+  ok("sw.js push + CACHE + app-version + static cache wiring present");
 
-  const js = await fetchText(`${LIVE}/_next/static/chunks/${pageChunk}`);
-  const body = js.text;
+  const { body, loaded } = await collectAppJs(LIVE, pageChunk);
+  ok(`scanned chunks → ${loaded.join(", ")}`);
 
   const forbidden = ["Mijn Beschikbaarheid", "Beschikbaarheid"];
   for (const needle of forbidden) {
-    if (body.includes(needle)) fail(`stale marker ${JSON.stringify(needle)} still in ${pageChunk}`);
+    if (body.includes(needle)) fail(`stale marker ${JSON.stringify(needle)} still in app chunks`);
   }
   ok(`no forbidden markers (${forbidden.join(", ")})`);
 
@@ -76,7 +117,7 @@ async function main() {
   ];
   for (const needle of required) {
     if (!body.includes(needle)) {
-      fail(`missing required string ${JSON.stringify(needle)} in ${pageChunk}`);
+      fail(`missing required string ${JSON.stringify(needle)} across scanned chunks`);
     }
   }
   ok(`required UI strings present (${required.join(", ")})`);
@@ -91,7 +132,7 @@ async function main() {
   if (apiRes.status >= 500) fail(`anonymous /api/team returned ${apiRes.status}`);
   ok(`api/team rejects anonymous → HTTP ${apiRes.status}`);
 
-  if (body.includes("splitName")) fail(`splitName still present in ${pageChunk}`);
+  if (body.includes("splitName")) fail("splitName still present in app chunks");
   ok("no splitName");
 
   console.log(
@@ -99,18 +140,19 @@ async function main() {
       {
         live: LIVE,
         pageChunk,
+        scannedChunks: loaded,
         appVersion: ver,
         counts: Object.fromEntries(
           [...required, ...forbidden].map((needle) => [
             needle,
             (body.match(new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g")) || [])
               .length,
-          ])
+          ]),
         ),
       },
       null,
-      2
-    )
+      2,
+    ),
   );
   console.log("[verify-pilot-live] SUCCESS — live pilot UI/SW/version OK");
 }
