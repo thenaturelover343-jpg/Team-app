@@ -1,5 +1,5 @@
 /* global self */
-const CACHE = 'barlicious-team-v2026-09-19-perf-lazy';
+const CACHE = 'barlicious-team-v2026-09-19-first-paint';
 const PRECACHE = [
   '/',
   '/install',
