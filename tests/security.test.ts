@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { cleanText, distanceMeters, isAllowedTransition, normalizeEmail, validateGeofence, validateLocation } from '../server/policy.ts';
+import { cleanText, distanceMeters, inviteAcceptsUnverified, isAllowedTransition, mayCreateAdminSession, normalizeEmail, validateGeofence, validateLocation } from '../server/policy.ts';
 import { addWeeks, availabilityConflict, overlaps, validateShiftWindow } from '../server/planning.ts';
 import { attendanceEvents, csv, workedMinutes } from '../server/phase4.ts';
 
@@ -71,3 +71,16 @@ test('gewerkte minuten trekken de pauze af en CSV ontsnapt velden', () => {
   assert.equal(workedMinutes(0, 8 * 60 * 60 * 1000, 30), 450);
   assert.equal(csv([['Naam', 'Notitie'], ['A', 'tekst, met komma']]), '\uFEFFNaam;Notitie\r\nA;"tekst, met komma"\r\n');
 });
+
+test('eerste gebruiker of bootstrap-mail wordt admin, anderen niet', () => {
+  assert.equal(mayCreateAdminSession(0, 'qa@outlook.com', 'thenaturelover343@gmail.com'), true);
+  assert.equal(mayCreateAdminSession(1, 'thenaturelover343@gmail.com', 'thenaturelover343@gmail.com'), true);
+  assert.equal(mayCreateAdminSession(1, 'qa@outlook.com', 'thenaturelover343@gmail.com'), false);
+});
+
+test('onbevestigde mail mag alleen met uitnodigingslink', () => {
+  assert.equal(inviteAcceptsUnverified(true, ''), true);
+  assert.equal(inviteAcceptsUnverified(false, 'token'), true);
+  assert.equal(inviteAcceptsUnverified(false, ''), false);
+});
+

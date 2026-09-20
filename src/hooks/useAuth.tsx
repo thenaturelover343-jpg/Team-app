@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onIdTokenChanged, signOut, type User as FirebaseUser } from 'firebase/auth';
 import type { User } from '../types';
-import { auth, completeGoogleRedirect, mapAuthErrorToDutch } from '../lib/firebase';
+import { auth, completeGoogleRedirect, completeEmailLinkSignIn, mapAuthErrorToDutch } from '../lib/firebase';
 import { secureApi } from '../lib/secureApi';
+import { readInviteTokenFromLocation } from '../lib/inviteLink';
 
 interface AuthContextType {
   user: User | null;
@@ -19,9 +20,8 @@ export const AuthContext = createContext<AuthContextType>({
   refreshUser: async () => {},
 });
 
-/** True access denials — only these should clear the Firebase session. */
 function isAccessDenied(message: string): boolean {
-  return /niet aangemeld|geen toegang|uitgenodigd|niet actief|niet gemachtigd|unauthorized|forbidden|invalid.?token|id.?token/i.test(message);
+  return /niet aangemeld|geen toegang|uitgenodigd|niet actief|niet gemachtigd|unauthorized|forbidden|invalid.?token|id.?token|ander e-mailadres/i.test(message);
 }
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
@@ -39,37 +39,34 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
     try {
       setAccessError('');
-      const result = await secureApi.snapshot();
+      const result = await secureApi.snapshot(readInviteTokenFromLocation() || undefined);
       setUser(result.data.user);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Uw account heeft geen toegang.';
       setAccessError(message);
       if (isAccessDenied(message)) {
-        // Real auth/permission failure — clear session so login form can show.
         setUser(null);
-        try {
-          await signOut(auth);
-        } catch {
-          /* ignore */
-        }
+        try { await signOut(auth); } catch { /* ignore */ }
       }
-      // Transient errors (network, temporary DB): keep Firebase session; do NOT sign out.
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    // Stay in loading until Firebase restores persistence + any Google redirect result
-    // (critical for installed iPhone PWA cold start after signInWithRedirect).
-    // Call getRedirectResult exactly once here — App must not call it again.
     setLoading(true);
     let unsub = () => {};
     let cancelled = false;
     (async () => {
       try {
+        await completeEmailLinkSignIn();
+      } catch (error) {
+        console.error('Email link result', error);
+        if (!cancelled) setRedirectAuthError(mapAuthErrorToDutch(error));
+      }
+      try {
         await completeGoogleRedirect();
-        if (!cancelled) setRedirectAuthError('');
+        if (!cancelled) setRedirectAuthError(prev => prev);
       } catch (error) {
         console.error('Google redirect result', error);
         if (!cancelled) setRedirectAuthError(mapAuthErrorToDutch(error));

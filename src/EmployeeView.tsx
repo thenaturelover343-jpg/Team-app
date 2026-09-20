@@ -9,12 +9,13 @@ import { readOfflineQueue } from './lib/offlineQueue';
 import NotificationCenter from './components/NotificationCenter';
 import PrivacyPanel from './components/PrivacyPanel';
 import { useLanguage } from './i18n';
+import { useLiveRefresh } from './hooks/useLiveRefresh';
 
 const LiveLocationMap = dynamic(() => import('./components/LiveLocationMap'), { ssr: false });
 
 export default function EmployeeView() {
   const { user } = useAuth();
-  const { locale } = useLanguage(); const fr = locale === 'fr';
+  const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<'dashboard' | 'planning' | 'reports' | 'notifications' | 'profile'>('dashboard');
 
   const [shifts, setShifts] = useState<Shift[]>([]);
@@ -31,31 +32,26 @@ export default function EmployeeView() {
   const [privacy, setPrivacy] = useState<PrivacySettings>({ controllerName: 'Barlicious & Koelverhuur', contactEmail: '', locationDays: 90, notificationDays: 180, auditDays: 730, errorDays: 180, backupDays: 365 });
   const [accessEvents, setAccessEvents] = useState<AccessEvent[]>([]); const [pilot, setPilot] = useState<PilotProgram | null>(null); const [pilotFeedback, setPilotFeedback] = useState<PilotFeedback[]>([]);
   const loadData = React.useCallback(async () => {
-    const { data } = await secureApi.snapshot();
-    setShifts(data.shifts);
-    setAssignments(data.assignments.filter(item => item.date === localDateKey()));
-    setPlannedShifts(data.plannedShifts);
-    setBreaks(data.breaks);
-    setAttachments(data.attachments);
-    setIncidents(data.incidents);
-    setCorrectionRequests(data.correctionRequests);
-    setNotifications(data.notifications);
-    setPush(data.push);
-    setPrivacy(data.privacy); setAccessEvents(data.accessEvents); setPilot(data.pilot); setPilotFeedback(data.pilotFeedback);
-    setLoading(false);
+    try {
+      const { data } = await secureApi.snapshot();
+      setShifts(data.shifts);
+      setAssignments(data.assignments.filter(item => item.date === localDateKey()));
+      setPlannedShifts(data.plannedShifts);
+      setBreaks(data.breaks);
+      setAttachments(data.attachments);
+      setIncidents(data.incidents);
+      setCorrectionRequests(data.correctionRequests);
+      setNotifications(data.notifications);
+      setPush(data.push);
+      setPrivacy(data.privacy); setAccessEvents(data.accessEvents); setPilot(data.pilot); setPilotFeedback(data.pilotFeedback);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  useEffect(() => {
-    if (!user) return;
-    let active = true;
-    const load = async () => {
-      try { if (active) await loadData(); }
-      catch (error) { console.error(error); if (active) setLoading(false); }
-    };
-    void load();
-    const timer = window.setInterval(load, 5000);
-    return () => { active = false; window.clearInterval(timer); };
-  }, [user, loadData]);
+  useLiveRefresh(loadData, Boolean(user), 30_000);
 
   useEffect(() => {
     const updateCount = () => setQueueCount(readOfflineQueue().length);
@@ -85,7 +81,7 @@ export default function EmployeeView() {
           className={`ops-nav-btn flex-col gap-1 relative ${activeTab === 'dashboard' ? 'ops-nav-btn-active' : ''}`}
         >
           <Calendar className="w-4 h-4" />
-          <span>{fr ? "Aujourd'hui" : 'Vandaag'}</span>
+          <span>{t('today')}</span>
           {unacknowledgedCount > 0 && (
             <span className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white ring-2 ring-white">
               {unacknowledgedCount}
@@ -97,16 +93,16 @@ export default function EmployeeView() {
           className={`ops-nav-btn flex-col gap-1 ${activeTab === 'planning' ? 'ops-nav-btn-active' : ''}`}
         >
           <CalendarDays className="w-4 h-4" />
-          <span>Planning</span>
+          <span>{t('planning')}</span>
         </button>
-        <button onClick={() => setActiveTab('reports')} className={`ops-nav-btn flex-col gap-1 ${activeTab === 'reports' ? 'ops-nav-btn-active' : ''}`}><AlertTriangle className="w-4 h-4" /><span>{fr ? 'Signaler' : 'Melden'}</span></button>
-        <button onClick={() => setActiveTab('notifications')} className={`ops-nav-btn flex-col gap-1 relative ${activeTab === 'notifications' ? 'ops-nav-btn-active' : ''}`}><Bell className="w-4 h-4" /><span>{fr ? 'Messages' : 'Berichten'}</span>{notifications.some(item => !item.readAt) && <span className="absolute top-1.5 right-2 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-white" />}</button>
+        <button onClick={() => setActiveTab('reports')} className={`ops-nav-btn flex-col gap-1 ${activeTab === 'reports' ? 'ops-nav-btn-active' : ''}`}><AlertTriangle className="w-4 h-4" /><span>{t('report')}</span></button>
+        <button onClick={() => setActiveTab('notifications')} className={`ops-nav-btn flex-col gap-1 relative ${activeTab === 'notifications' ? 'ops-nav-btn-active' : ''}`}><Bell className="w-4 h-4" /><span>{t('messages')}</span>{notifications.some(item => !item.readAt) && <span className="absolute top-1.5 right-2 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-white" />}</button>
         <button
           onClick={() => setActiveTab('profile')}
           className={`ops-nav-btn flex-col gap-1 ${activeTab === 'profile' ? 'ops-nav-btn-active' : ''}`}
         >
           <UserIcon className="w-4 h-4" />
-          <span>{fr ? 'Profil' : 'Mijn Profiel'}</span>
+          <span>{t('profile')}</span>
         </button>
       </div>
 
@@ -120,6 +116,7 @@ export default function EmployeeView() {
 }
 
 function DashboardTab({ userId, shifts, breaks, assignments, plannedShifts, attachments, loading, onChanged }: { userId: string; shifts: Shift[]; breaks: ShiftBreak[]; assignments: Assignment[]; plannedShifts: PlannedShift[]; attachments: Attachment[]; loading: boolean; onChanged: () => Promise<void> }) {
+  const { t } = useLanguage();
   const [isLocating, setIsLocating] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [showLocationHelp, setShowLocationHelp] = useState(false);
@@ -376,7 +373,7 @@ function DashboardTab({ userId, shifts, breaks, assignments, plannedShifts, atta
       {/* Time Tracking Card */}
       <div className="ops-card overflow-hidden">
         <div className="p-8 text-center space-y-6">
-          <h2 className="text-xl font-bold text-zinc-800">Urenregistratie</h2>
+          <h2 className="text-xl font-bold text-zinc-800">{t('clockTitle')}</h2>
           
           {activeShift ? (
             <div className="space-y-6">
@@ -419,20 +416,20 @@ function DashboardTab({ userId, shifts, breaks, assignments, plannedShifts, atta
                 className="ops-btn-primary w-full space-x-3 py-5 text-lg"
               >
                 {isLocating ? <Loader2 className="animate-spin w-6 h-6" /> : <Square className="w-6 h-6" />}
-                <span>{isLocating ? 'Locatie zoeken...' : 'Uitklokken'}</span>
+                <span>{isLocating ? t('locating') : t('clockOut')}</span>
               </button>
             </div>
           ) : (
             <div className="space-y-6">
-              <p className="text-zinc-500 font-medium">Je bent momenteel niet ingeklokt.</p>
-              {todaysPlanned.length > 0 && <select value={selectedPlannedShiftId} onChange={e => setPlannedShiftId(e.target.value)} className="ops-input w-full p-3 font-semibold text-sm"><option value="">Algemene werkdag</option>{todaysPlanned.map(item => <option key={item.id} value={item.id}>{item.startTime} — {item.title}</option>)}</select>}
+              <p className="text-zinc-500 font-medium">{t('notClocked')}</p>
+              {todaysPlanned.length > 0 && <select value={selectedPlannedShiftId} onChange={e => setPlannedShiftId(e.target.value)} className="ops-input w-full p-3 font-semibold text-sm"><option value="">{t('generalDay')}</option>{todaysPlanned.map(item => <option key={item.id} value={item.id}>{item.startTime} — {item.title}</option>)}</select>}
               <button
                 onClick={handleClockIn}
                 disabled={isLocating}
                 className="ops-btn-primary w-full space-x-3 py-5 text-lg"
               >
                 {isLocating ? <Loader2 className="animate-spin w-6 h-6" /> : <Play className="w-6 h-6" />}
-                <span>{isLocating ? 'Locatie zoeken...' : 'Start Werkdag (Inklokken)'}</span>
+                <span>{isLocating ? t('locating') : t('startDay')}</span>
               </button>
             </div>
           )}
@@ -441,11 +438,11 @@ function DashboardTab({ userId, shifts, breaks, assignments, plannedShifts, atta
 
       {/* Assignments Card */}
       <div className="space-y-4">
-        <h2 className="text-xl font-bold text-zinc-800 px-2 pt-4">Mijn Planning Vandaag</h2>
+        <h2 className="text-xl font-bold text-zinc-800 px-2 pt-4">{t('myPlanningToday')}</h2>
         
         {myAssignments.length === 0 ? (
-          <div className="bg-zinc-100/50/50 border-2 border-dashed border-zinc-200/60 rounded-[24px] p-10 text-center text-zinc-500 font-medium">
-            Je hebt nog geen opdrachten voor vandaag.
+          <div className="ops-panel border-2 border-dashed p-10 text-center font-medium">
+            {t('noJobsToday')}
           </div>
         ) : (
           <div className="space-y-4">
@@ -460,6 +457,8 @@ function DashboardTab({ userId, shifts, breaks, assignments, plannedShifts, atta
 }
 
 function EmployeePlanningTab({ userId, shifts, attachments, onChanged }: { userId: string; shifts: PlannedShift[]; attachments: Attachment[]; onChanged: () => Promise<void> }) {
+  const { t, locale } = useLanguage();
+  const fr = locale === 'fr';
   const [busyId, setBusyId] = useState('');
   const [error, setError] = useState('');
   const [mode, setMode] = useState<'today' | 'week'>('today');
@@ -495,9 +494,9 @@ function EmployeePlanningTab({ userId, shifts, attachments, onChanged }: { userI
   };
   return <div className="space-y-4">
     <div className="px-1"><h2 className="text-2xl font-bold text-zinc-900">Mijn planning</h2><p className="text-sm text-zinc-500 mt-1">Bekijk je diensten en route voor vandaag of de week.</p></div>
-    <div className="grid grid-cols-2 gap-2 bg-white border border-zinc-200 rounded-xl p-1.5">
-      <button type="button" onClick={() => setMode('today')} className={`py-3 rounded-lg font-bold text-sm ${mode === 'today' ? 'bg-zinc-900 text-white' : 'text-zinc-600'}`}>Vandaag</button>
-      <button type="button" onClick={() => setMode('week')} className={`py-3 rounded-lg font-bold text-sm ${mode === 'week' ? 'bg-zinc-900 text-white' : 'text-zinc-600'}`}>Week</button>
+    <div className="grid grid-cols-2 gap-2 ops-panel p-1.5">
+      <button type="button" onClick={() => setMode('today')} className={`py-3 rounded-lg font-bold text-sm ${mode === 'today' ? 'ops-nav-btn-active' : ''}`}>{t('today')}</button>
+      <button type="button" onClick={() => setMode('week')} className={`py-3 rounded-lg font-bold text-sm ${mode === 'week' ? 'ops-nav-btn-active' : ''}`}>{fr ? 'Semaine' : 'Week'}</button>
     </div>
     {error && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</div>}
     {!visible.length && <div className="bg-white border border-zinc-200 rounded-2xl p-8 text-center text-zinc-500">{mode === 'today' ? 'Geen diensten gepland voor vandaag.' : 'Er staan nog geen gepubliceerde diensten klaar.'}</div>}
@@ -591,24 +590,18 @@ function ProfileTab({ user }: { user: User }) {
   const [historyShifts, setHistoryShifts] = useState<Shift[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
 
-  useEffect(() => {
-    let active = true;
-    const load = async () => {
-      try {
-        const { data } = await secureApi.snapshot();
-        if (!active) return;
-        setHistoryAssignments(data.assignments.filter(item => item.status === 'completed'));
-        setHistoryShifts(data.shifts);
-        setLoadingHistory(false);
-      } catch (error) {
-        console.error(error);
-        if (active) setLoadingHistory(false);
-      }
-    };
-    void load();
-    const timer = window.setInterval(load, 10000);
-    return () => { active = false; window.clearInterval(timer); };
-  }, [user.id]);
+  const loadHistory = React.useCallback(async () => {
+    try {
+      const { data } = await secureApi.snapshot();
+      setHistoryAssignments(data.assignments.filter(item => item.status === 'completed'));
+      setHistoryShifts(data.shifts);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoadingHistory(false);
+    }
+  }, []);
+  useLiveRefresh(loadHistory, true, 30_000);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();

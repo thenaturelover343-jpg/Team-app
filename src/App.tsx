@@ -1,27 +1,93 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import EmployeeView from './EmployeeView';
 import AdminView from './AdminView';
 import { UserCircle, Loader2, LogOut, Eye, EyeOff } from 'lucide-react';
 import { PWAInstallButton } from './components/PWAInstallButton';
 import { AppUpdateBanner } from './components/AppUpdateBanner';
 import { AuthProvider, useAuth } from './hooks/useAuth';
-import { loginWithEmail, loginWithGoogle, logout, resetPassword, mapAuthErrorToDutch } from './lib/firebase';
+import {
+  completeEmailLinkSignIn,
+  loginWithEmail,
+  loginWithGoogle,
+  logout,
+  mapAuthErrorToDutch,
+  pendingEmailLinkSignIn,
+  registerWithEmail,
+  resetPassword,
+  sendEmailSignInLink,
+} from './lib/firebase';
 import { LanguageProvider, LanguageSwitch, useLanguage } from './i18n';
+import { secureApi } from './lib/secureApi';
+import { readInviteTokenFromLocation } from './lib/inviteLink';
+
+function GoogleMark() {
+  return (
+    <svg className="w-4 h-4" viewBox="0 0 24 24" aria-hidden="true">
+      <path fill="#EA4335" d="M12 10.2v3.6h5.1c-.2 1.2-1.4 3.5-5.1 3.5-3.1 0-5.6-2.5-5.6-5.6S8.9 6.1 12 6.1c1.8 0 3 .7 3.7 1.4l2.5-2.4C16.7 3.7 14.6 2.8 12 2.8 6.9 2.8 2.8 6.9 2.8 12S6.9 21.2 12 21.2c5.3 0 8.8-3.7 8.8-8.9 0-.6-.1-1-.2-1.5H12z" />
+    </svg>
+  );
+}
 
 function AppContent() {
   const { user, loading, accessError, redirectAuthError } = useAuth();
-  const { locale } = useLanguage(); const fr = locale === 'fr';
-  
-  // Auth Form State
+  const { locale, t } = useLanguage();
+  const fr = locale === 'fr';
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [password2, setPassword2] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [authError, setAuthError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [authNotice, setAuthNotice] = useState('');
+  const [inviteToken] = useState(() => readInviteTokenFromLocation());
+  const [invite, setInvite] = useState<{ email: string; name: string } | null>(null);
+  const [inviteLoading, setInviteLoading] = useState(Boolean(inviteToken));
+  const [needsEmailForLink, setNeedsEmailForLink] = useState(false);
   const [viewAsEmployee, setViewAsEmployee] = useState(() => {
     if (typeof sessionStorage === 'undefined') return false;
     return sessionStorage.getItem('adminViewAsEmployee') === '1';
   });
+
+  useEffect(() => {
+    if (!inviteToken) return;
+    let active = true;
+    secureApi.lookupInvite(inviteToken).then(result => {
+      if (!active) return;
+      setInvite(result.data);
+      setEmail(result.data.email);
+      setInviteLoading(false);
+    }).catch(error => {
+      if (!active) return;
+      setAuthError(error instanceof Error ? error.message : t('inviteInvalid'));
+      setInviteLoading(false);
+    });
+    return () => { active = false; };
+  }, [inviteToken, t]);
+
+  useEffect(() => {
+    if (pendingEmailLinkSignIn()) {
+      try {
+        if (!window.localStorage.getItem('barliciousEmailForSignIn')) setNeedsEmailForLink(true);
+      } catch {
+        setNeedsEmailForLink(true);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!invite || !pendingEmailLinkSignIn()) return;
+    let active = true;
+    setIsSubmitting(true);
+    completeEmailLinkSignIn(invite.email).then(() => {
+      if (active) setNeedsEmailForLink(false);
+    }).catch(error => {
+      if (active) setAuthError(mapAuthErrorToDutch(error));
+    }).finally(() => {
+      if (active) setIsSubmitting(false);
+    });
+    return () => { active = false; };
+  }, [invite]);
 
   const toggleEmployeePreview = () => {
     setViewAsEmployee(prev => {
@@ -37,14 +103,33 @@ function AppContent() {
     setAuthNotice('');
     setIsSubmitting(true);
     try {
-      await loginWithEmail(email, password);
+      if (pendingEmailLinkSignIn()) {
+        await completeEmailLinkSignIn(email);
+        setNeedsEmailForLink(false);
+        return;
+      }
+      if (invite) {
+        if (password !== password2) {
+          setAuthError(t('passwordsMismatch'));
+          return;
+        }
+        try {
+          await registerWithEmail(email, password);
+        } catch (err: unknown) {
+          const code = typeof err === 'object' && err !== null && 'code' in err ? String(err.code) : '';
+          if (code === 'auth/email-already-in-use') await loginWithEmail(email, password);
+          else throw err;
+        }
+      } else {
+        await loginWithEmail(email, password);
+      }
     } catch (err: unknown) {
       console.error(err);
       const code = typeof err === 'object' && err !== null && 'code' in err ? String(err.code) : '';
       if (code === 'auth/invalid-credential' || code === 'auth/user-not-found' || code === 'auth/wrong-password') {
         setAuthError('E-mail of wachtwoord is onjuist.');
       } else {
-        setAuthError('Er is een fout opgetreden. Probeer het opnieuw.');
+        setAuthError(mapAuthErrorToDutch(err) || t('genericError'));
       }
     } finally {
       setIsSubmitting(false);
@@ -55,17 +140,32 @@ function AppContent() {
     setAuthError('');
     setAuthNotice('');
     if (!email) {
-      setAuthError('Vul eerst uw e-mailadres in.');
+      setAuthError(t('fillEmailFirst'));
       return;
     }
     try {
       await resetPassword(email);
-      setAuthNotice('Als dit account bestaat, is een herstelmail verzonden.');
-    } catch {
-      setAuthNotice('Als dit account bestaat, is een herstelmail verzonden.');
-    }
+    } catch { /* same copy either way */ }
+    setAuthNotice(t('resetSent'));
   };
 
+  const handleEmailLink = async () => {
+    setAuthError('');
+    setAuthNotice('');
+    if (!email) {
+      setAuthError(t('fillEmailFirst'));
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await sendEmailSignInLink(email);
+      setAuthNotice(t('emailLinkSent'));
+    } catch (err) {
+      setAuthError(mapAuthErrorToDutch(err));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const handleGoogleAuth = async () => {
     setAuthError('');
@@ -73,7 +173,6 @@ function AppContent() {
     setIsSubmitting(true);
     try {
       await loginWithGoogle();
-      // Redirect flow navigates away; popup resolves here.
     } catch (err: unknown) {
       console.error(err);
       setAuthError(mapAuthErrorToDutch(err));
@@ -82,11 +181,12 @@ function AppContent() {
     }
   };
 
-  if (loading) {
+  if (loading || inviteLoading) {
     return (
       <div className="app-loading min-h-screen flex flex-col items-center justify-center space-y-4">
+        <img src="/brand-logo.svg" alt="" className="w-16 h-16" />
         <Loader2 className="w-8 h-8 animate-spin text-zinc-900" />
-        <p className="text-zinc-500 font-medium tracking-wide">{fr ? 'Chargement…' : 'Bezig met laden...'}</p>
+        <p className="text-zinc-500 font-medium tracking-wide">{t('loading')}</p>
       </div>
     );
   }
@@ -99,10 +199,11 @@ function AppContent() {
         <div className="auth-card ops-card max-w-md w-full p-5 sm:p-9 space-y-6 sm:space-y-8">
           <div className="text-center space-y-3">
             <div className="brand-mark brand-mark-hero flex items-center justify-center mx-auto mb-2">
-              <img src="/brand-logo.svg" alt="Team" className="w-[88%] h-[88%] object-contain" />
+              <img src="/brand-logo.svg" alt="Barlicious Team" className="w-[88%] h-[88%] object-contain" />
             </div>
-            <div className="eyebrow">FIELD OPERATIONS</div>
-            <p className="text-zinc-500">{fr ? 'Connectez-vous avec votre compte invité' : 'Log in met uw uitgenodigde account'}</p>
+            <div className="eyebrow">{t('fieldOps')}</div>
+            <p className="text-zinc-500">{invite ? t('inviteLead') : t('loginLead')}</p>
+            {invite && <p className="text-sm font-bold">{invite.name} · {invite.email}</p>}
           </div>
 
           {(authError || accessError || redirectAuthError) && (
@@ -114,38 +215,92 @@ function AppContent() {
             <div className="p-3 bg-green-50 text-green-700 rounded-[12px] text-sm font-medium text-center border border-green-100">{authNotice}</div>
           )}
 
+          {needsEmailForLink && (
+            <p className="text-sm text-center text-zinc-500">{t('confirmEmail')}</p>
+          )}
+
           <form onSubmit={handleEmailAuth} className="space-y-4">
             <div>
-              <label className="block text-sm font-bold text-zinc-700 mb-1.5">{fr ? 'Adresse e-mail' : 'E-mailadres'}</label>
-              <input 
-                type="email" value={email} onChange={e => setEmail(e.target.value)} required
+              <label className="block text-sm font-bold text-zinc-700 mb-1.5" htmlFor="login-email">{t('email')}</label>
+              <input
+                id="login-email"
+                type="email"
+                name="email"
+                autoComplete="username email"
+                inputMode="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                required
+                readOnly={Boolean(invite)}
+                placeholder="nina.v@example.com"
                 className="ops-input p-3.5 font-medium"
               />
             </div>
+            {!needsEmailForLink && (
             <div>
-              <label className="block text-sm font-bold text-zinc-700 mb-1.5">{fr ? 'Mot de passe' : 'Wachtwoord'}</label>
-              <input 
-                type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={6}
-                className="ops-input p-3.5 font-medium"
-              />
+              <label className="block text-sm font-bold text-zinc-700 mb-1.5" htmlFor="login-password">{t('password')}</label>
+              <div className="relative">
+                <input
+                  id="login-password"
+                  type={showPassword ? 'text' : 'password'}
+                  name={invite ? 'new-password' : 'current-password'}
+                  autoComplete={invite ? 'new-password' : 'current-password'}
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  required
+                  minLength={6}
+                  className="ops-input p-3.5 font-medium pr-12"
+                />
+                <button
+                  type="button"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400"
+                  aria-label={showPassword ? t('hidePassword') : t('showPassword')}
+                  onClick={() => setShowPassword(v => !v)}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
-            
+            )}
+            {invite && !needsEmailForLink && (
+              <div>
+                <label className="block text-sm font-bold text-zinc-700 mb-1.5" htmlFor="login-password2">{t('passwordConfirm')}</label>
+                <input
+                  id="login-password2"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="new-password"
+                  value={password2}
+                  onChange={e => setPassword2(e.target.value)}
+                  required
+                  minLength={6}
+                  className="ops-input p-3.5 font-medium"
+                />
+              </div>
+            )}
+
             <button
               type="submit"
               disabled={isSubmitting}
               className="ops-btn-primary w-full py-4 disabled:opacity-50 mt-2"
             >
               {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
-              <span>{fr ? 'Se connecter' : 'Inloggen'}</span>
+              <span>{needsEmailForLink ? t('confirmEmailBtn') : invite ? t('inviteActivate') : t('signIn')}</span>
             </button>
           </form>
+          {!needsEmailForLink && (
           <button type="button" onClick={handlePasswordReset} className="w-full text-sm font-bold text-zinc-600 hover:text-zinc-900">
-            {fr ? 'Mot de passe oublié ?' : 'Wachtwoord vergeten?'}
+            {t('forgot')}
           </button>
+          )}
+          {!needsEmailForLink && (
+          <button type="button" onClick={handleEmailLink} disabled={isSubmitting} className="ops-btn-secondary w-full py-3 disabled:opacity-50">
+            {t('emailLink')}
+          </button>
+          )}
 
           <div className="flex items-center gap-3 text-zinc-400 text-sm">
             <span className="h-px flex-1 bg-zinc-200" />
-            <span>{fr ? 'ou' : 'of'}</span>
+            <span>{t('or')}</span>
             <span className="h-px flex-1 bg-zinc-200" />
           </div>
 
@@ -155,10 +310,11 @@ function AppContent() {
             disabled={isSubmitting}
             className="ops-btn-secondary w-full py-4 disabled:opacity-50"
           >
-            {fr ? 'Continuer avec Google' : 'Verder met Google'}
+            <GoogleMark />
+            <span>{t('google')}</span>
           </button>
 
-          <p className="text-center text-xs text-zinc-500">{fr ? 'Les nouveaux comptes sont créés uniquement par un administrateur.' : 'Nieuwe accounts worden uitsluitend door een beheerder aangemaakt.'}</p>
+          <p className="text-center text-xs text-zinc-500">{t('accountsAdmin')}</p>
         </div>
       </div>
     );
@@ -166,7 +322,7 @@ function AppContent() {
 
   return (
     <div className="app-shell min-h-screen font-sans selection:bg-cyan-400/30">
-      <a href="#main-content" className="skip-link">{fr ? 'Aller au contenu' : 'Ga naar inhoud'}</a>
+      <a href="#main-content" className="skip-link">{t('skip')}</a>
       <header className="topbar sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-4 md:px-8">
           <div className="min-h-[72px] py-2.5 flex flex-wrap items-center justify-between gap-2">
@@ -179,7 +335,7 @@ function AppContent() {
                 <span className="font-bold text-lg sm:hidden tracking-tight text-zinc-900">Team</span>
               </div>
             </div>
-            
+
             <div className="header-actions flex flex-wrap items-center justify-end gap-2 sm:gap-3 max-w-full">
               <LanguageSwitch />
               <PWAInstallButton />
@@ -188,8 +344,8 @@ function AppContent() {
                   type="button"
                   onClick={toggleEmployeePreview}
                   className="ops-btn-primary inline-flex items-center justify-center p-2 shrink-0"
-                  title={viewAsEmployee ? 'Terug naar beheer' : 'Bekijk als werknemer'}
-                  aria-label={viewAsEmployee ? 'Terug naar beheer' : 'Bekijk als werknemer'}
+                  title={viewAsEmployee ? t('backAdmin') : t('viewEmployee')}
+                  aria-label={viewAsEmployee ? t('backAdmin') : t('viewEmployee')}
                 >
                   {viewAsEmployee ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -201,10 +357,10 @@ function AppContent() {
                 <div className="user-pill-copy flex flex-col pr-2 sm:pr-3 border-r border-zinc-200">
                   <span className="text-sm font-bold text-zinc-900 leading-tight truncate max-w-[100px]">{user.name}</span>
                   <span className="text-xs text-zinc-400 leading-tight capitalize">
-                    {user.role === 'admin' && viewAsEmployee ? 'beheerder · preview' : user.role}
+                    {user.role === 'admin' && viewAsEmployee ? (fr ? 'admin · aperçu' : 'beheerder · preview') : user.role}
                   </span>
                 </div>
-                <button onClick={logout} aria-label={fr ? 'Se déconnecter' : 'Uitloggen'} className="text-zinc-400 hover:text-zinc-900 transition-colors" title={fr ? 'Se déconnecter' : 'Uitloggen'}>
+                <button onClick={logout} aria-label={t('logout')} className="text-zinc-400 hover:text-zinc-900 transition-colors" title={t('logout')}>
                   <LogOut className="w-4 h-4" />
                 </button>
               </div>
@@ -214,7 +370,6 @@ function AppContent() {
       </header>
 
       <AppUpdateBanner />
-
 
       <main id="main-content" tabIndex={-1} className="content-shell max-w-6xl mx-auto px-4 sm:px-6 md:px-8 py-6 md:py-8">
         {user.role === 'admin' && !viewAsEmployee ? <AdminView /> : <EmployeeView />}

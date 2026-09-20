@@ -42,3 +42,14 @@ export function validateGeofence(location: { lat: number; lng: number; accuracy:
 export function isAllowedTransition(current: unknown, next: unknown) {
   return current === 'pending' && next === 'arrived' || current === 'arrived' && next === 'completed';
 }
+
+export function mayCreateAdminSession(userCount: number, loginEmail: string, bootstrapEmail: string) {
+  if (userCount <= 0) return true;
+  return Boolean(bootstrapEmail && loginEmail === bootstrapEmail);
+}
+
+export function inviteAcceptsUnverified(emailVerified: boolean, inviteToken: string) {
+  return emailVerified || Boolean(inviteToken);
+}
+
+

@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { buildPushPayload, type PushSubscription } from "@block65/webcrypto-web-push";
-import { cleanText as clean, isAllowedTransition, normalizeEmail as email, validateGeofence, validateLocation as location } from "../../../server/policy";
+import { cleanText as clean, inviteAcceptsUnverified, isAllowedTransition, mayCreateAdminSession, normalizeEmail as email, validateGeofence, validateLocation as location } from "../../../server/policy";
 import { addWeeks, availabilityConflict, isValidDate, isValidTime, overlaps, parseAvailability, validateShiftWindow } from "../../../server/planning";
 import { attendanceEvents, csv, workedMinutes, type PlannedAttendance } from "../../../server/phase4";
 import { cutoff, normalizeRetention, safeErrorMessage, sha256, shouldRunDaily, type RetentionSettings } from "../../../server/privacy";
@@ -11,7 +11,7 @@ const FIREBASE_PROJECT_ID = "gen-lang-client-0310454092";
 const FIREBASE_ISSUER = `https://securetoken.google.com/${FIREBASE_PROJECT_ID}`;
 const FIREBASE_JWKS = "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com";
 
-type FirebaseIdentity = { uid: string; email: string; name: string };
+type FirebaseIdentity = { uid: string; email: string; name: string; emailVerified: boolean };
 type AppUser = FirebaseIdentity & { role: "admin" | "employee"; active: boolean };
 type Json = Record<string, unknown>;
 
@@ -76,11 +76,12 @@ async function verifyFirebaseToken(request: Request): Promise<FirebaseIdentity> 
     throw new Error("Uw aanmelding is verlopen. Meld opnieuw aan.");
   }
   if (typeof claims.sub !== "string" || !claims.sub || claims.sub.length > 128) throw new Error("Ongeldige aanmelding.");
-  if (claims.email_verified !== true || typeof claims.email !== "string") throw new Error("Gebruik een geverifieerd e-mailadres.");
+  if (typeof claims.email !== "string" || !claims.email) throw new Error("Gebruik een geldig e-mailadres.");
   return {
     uid: claims.sub,
     email: claims.email.toLowerCase(),
     name: typeof claims.name === "string" ? claims.name : claims.email.split("@")[0],
+    emailVerified: claims.email_verified === true,
   };
 }
 
@@ -99,31 +100,70 @@ async function audit(db: D1Database, actorId: string, action: string, targetType
     VALUES (?, ?, ?, ?, ?, ?, ?)`).bind(id(), actorId, action, targetType, targetId, JSON.stringify(details), Date.now()).run();
 }
 
-async function session(identity: FirebaseIdentity): Promise<AppUser> {
+async function ensureInviteTokenColumn(db: D1Database) {
+  try {
+    await db.prepare("SELECT token FROM invites LIMIT 1").first();
+  } catch {
+    await db.prepare("ALTER TABLE invites ADD COLUMN token text").run();
+    try { await db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_invites_token ON invites(token)").run(); } catch { /* exists */ }
+  }
+}
+
+function inviteTokenValue() {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function acceptInvite(db: D1Database, identity: FirebaseIdentity, invite: Json) {
+  const now = Date.now();
+  await db.batch([
+    db.prepare(`INSERT INTO users (id, email, name, phone, role, active, created_at) VALUES (?, ?, ?, ?, ?, 1, ?)`)
+      .bind(identity.uid, identity.email, String(invite.name), invite.phone || null, String(invite.role || "employee"), now),
+    db.prepare("UPDATE invites SET status = 'accepted', accepted_at = ? WHERE id = ?").bind(now, String(invite.id)),
+    db.prepare(`INSERT INTO audit_events (id, actor_id, action, target_type, target_id, details_json, created_at)
+      VALUES (?, ?, 'employee.invite_accepted', 'user', ?, '{}', ?)`)
+      .bind(id(), identity.uid, identity.uid, now),
+  ]);
+}
+
+async function session(identity: FirebaseIdentity, inviteToken = ""): Promise<AppUser> {
   const db = database();
+  await ensureInviteTokenColumn(db);
   let row = await db.prepare("SELECT id, email, name, role, active FROM users WHERE id = ?").bind(identity.uid).first<Json>();
   if (!row) {
+    row = await db.prepare("SELECT id, email, name, role, active FROM users WHERE email = ?").bind(identity.email).first<Json>();
+    if (row && String(row.id) !== identity.uid) {
+      throw new Error("Dit e-mailadres is al gekoppeld aan een ander toestel. Vraag de beheerder om een nieuwe uitnodiging.");
+    }
+  }
+  if (!row) {
     const total = await db.prepare("SELECT COUNT(*) AS total FROM users").first<{ total: number }>();
-    if (Number(total?.total || 0) === 0) {
-      const bootstrapEmail = email(env.BOOTSTRAP_ADMIN_EMAIL);
-      if (!bootstrapEmail || identity.email !== bootstrapEmail) throw new Error("Dit account is niet uitgenodigd.");
+    const empty = Number(total?.total || 0) === 0;
+    const bootstrapEmail = email(env.BOOTSTRAP_ADMIN_EMAIL);
+    if (mayCreateAdminSession(Number(total?.total || 0), identity.email, bootstrapEmail)) {
       const now = Date.now();
       await db.prepare(`INSERT INTO users (id, email, name, role, active, created_at) VALUES (?, ?, ?, 'admin', 1, ?)`)
         .bind(identity.uid, identity.email, identity.name, now).run();
-      await audit(db, identity.uid, "admin.bootstrapped", "user", identity.uid);
+      await audit(db, identity.uid, "admin.bootstrapped", "user", identity.uid, { firstUser: empty, bootstrap: identity.email === bootstrapEmail });
     } else {
-      const invite = await db.prepare("SELECT id, name, phone, role FROM invites WHERE email = ? AND status = 'pending'")
-        .bind(identity.email).first<Json>();
+      let invite: Json | null = null;
+      if (inviteToken) {
+        invite = await db.prepare("SELECT id, email, name, phone, role, token FROM invites WHERE token = ? AND status = 'pending'")
+          .bind(inviteToken).first<Json>();
+        if (invite && String(invite.email).toLowerCase() !== identity.email) {
+          throw new Error("Deze uitnodiging hoort bij een ander e-mailadres.");
+        }
+      }
+      if (!invite) {
+        invite = await db.prepare("SELECT id, name, phone, role FROM invites WHERE email = ? AND status = 'pending'")
+          .bind(identity.email).first<Json>();
+        if (invite && !inviteAcceptsUnverified(identity.emailVerified, inviteToken)) {
+          throw new Error("Open de uitnodigingslink of de inloglink in uw e-mail om dit account te activeren.");
+        }
+      }
       if (!invite) throw new Error("Dit account is niet uitgenodigd.");
-      const now = Date.now();
-      await db.batch([
-        db.prepare(`INSERT INTO users (id, email, name, phone, role, active, created_at) VALUES (?, ?, ?, ?, ?, 1, ?)`)
-          .bind(identity.uid, identity.email, String(invite.name), invite.phone || null, String(invite.role), now),
-        db.prepare("UPDATE invites SET status = 'accepted', accepted_at = ? WHERE id = ?").bind(now, String(invite.id)),
-        db.prepare(`INSERT INTO audit_events (id, actor_id, action, target_type, target_id, details_json, created_at)
-          VALUES (?, ?, 'employee.invite_accepted', 'user', ?, '{}', ?)`)
-          .bind(id(), identity.uid, identity.uid, now),
-      ]);
+      await acceptInvite(db, identity, invite);
     }
     row = await db.prepare("SELECT id, email, name, role, active FROM users WHERE id = ?").bind(identity.uid).first<Json>();
   }
@@ -131,6 +171,17 @@ async function session(identity: FirebaseIdentity): Promise<AppUser> {
     throw new Error("Dit account is niet actief.");
   }
   return { uid: identity.uid, email: String(row.email), name: String(row.name), role: row.role, active: true } as AppUser;
+}
+
+async function lookupInvite(input: Json) {
+  const token = clean(input.token, 160);
+  if (!token) throw new Error("Deze uitnodiging is ongeldig of al gebruikt.");
+  const db = database();
+  await ensureInviteTokenColumn(db);
+  const invite = await db.prepare("SELECT email, name, role, status FROM invites WHERE token = ?")
+    .bind(token).first<Json>();
+  if (!invite || invite.status !== "pending") throw new Error("Deze uitnodiging is ongeldig of al gebruikt.");
+  return { email: String(invite.email), name: String(invite.name), role: invite.role === "admin" ? "admin" : "employee" };
 }
 
 function requireAdmin(user: AppUser) {
@@ -421,9 +472,18 @@ async function snapshot(user: AppUser) {
   const pilotQuery = user.role === "admin"
     ? db.prepare(`SELECT pp.*, pm.user_id, u.name AS user_name FROM pilot_programs pp LEFT JOIN pilot_members pm ON pm.pilot_id=pp.id LEFT JOIN users u ON u.id=pm.user_id WHERE pp.status='active' ORDER BY pp.started_at DESC`)
     : db.prepare(`SELECT pp.*, pm.user_id, u.name AS user_name FROM pilot_programs pp JOIN pilot_members pm ON pm.pilot_id=pp.id LEFT JOIN users u ON u.id=pm.user_id WHERE pp.status='active' AND pm.user_id=?`).bind(user.uid);
+  const customersQuery = user.role === "admin"
+    ? db.prepare("SELECT * FROM customers ORDER BY name")
+    : db.prepare(`SELECT * FROM customers WHERE id IN (
+        SELECT customer_id FROM assignments WHERE user_id = ? AND customer_id IS NOT NULL
+        UNION
+        SELECT ps.customer_id FROM planned_shifts ps
+        JOIN planned_shift_members psm ON psm.shift_id = ps.id
+        WHERE psm.user_id = ? AND ps.customer_id IS NOT NULL
+      ) ORDER BY name`).bind(user.uid, user.uid);
   const [usersResult, shiftsResult, assignmentsResult, customersResult, plannedResult, breaksResult, incidentsResult, correctionsResult, attachmentsResult, notificationsResult, pushCount, auditResult, accessResult, backupResult, errorsResult, pilotResult, feedbackResult] = await Promise.all([
     usersQuery.all<Json>(), shiftsQuery.all<Json>(), assignmentsQuery.all<Json>(),
-    db.prepare("SELECT * FROM customers ORDER BY name").all<Json>(),
+    customersQuery.all<Json>(),
     plannedQuery.all<Json>(), breaksQuery.all<Json>(), incidentsQuery.all<Json>(), correctionsQuery.all<Json>(), attachmentsQuery.all<Json>(),
     notificationsQuery.all<Json>(), db.prepare("SELECT COUNT(*) AS total FROM push_subscriptions WHERE user_id=?").bind(user.uid).first<{ total: number }>(),
     auditQuery.all<Json>(), accessQuery.all<Json>(),
@@ -585,17 +645,21 @@ async function act(user: AppUser, action: string, input: Json) {
 
   if (action === "inviteEmployee") {
     requireAdmin(user);
+    await ensureInviteTokenColumn(db);
     const targetEmail = email(input.email);
     const name = clean(input.name, 160);
     if (!targetEmail || !name) throw new Error("Naam en e-mailadres zijn verplicht.");
     const inviteRole = input.role === "admin" ? "admin" : "employee";
     const inviteId = id();
-    await db.prepare(`INSERT INTO invites (id, email, name, phone, role, status, invited_by, created_at)
-      VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)
-      ON CONFLICT(email) DO UPDATE SET name = excluded.name, phone = excluded.phone, role = excluded.role, status = 'pending', invited_by = excluded.invited_by, created_at = excluded.created_at, accepted_at = NULL`)
-      .bind(inviteId, targetEmail, name, clean(input.phone, 80) || null, inviteRole, user.uid, now).run();
+    const token = inviteTokenValue();
+    const origin = clean(input.origin, 300);
+    await db.prepare(`INSERT INTO invites (id, email, name, phone, role, status, token, invited_by, created_at)
+      VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?)
+      ON CONFLICT(email) DO UPDATE SET name = excluded.name, phone = excluded.phone, role = excluded.role, status = 'pending', token = excluded.token, invited_by = excluded.invited_by, created_at = excluded.created_at, accepted_at = NULL`)
+      .bind(inviteId, targetEmail, name, clean(input.phone, 80) || null, inviteRole, token, user.uid, now).run();
     await audit(db, user.uid, "employee.invited", "invite", targetEmail, { role: inviteRole });
-    return { uid: `invite:${targetEmail}`, resetLink: "" };
+    const inviteUrl = origin && /^https?:\/\//.test(origin) ? `${origin.replace(/\/$/, "")}/?invite=${token}` : `/?invite=${token}`;
+    return { uid: `invite:${targetEmail}`, resetLink: inviteUrl, inviteUrl, token };
   }
 
   if (action === "setEmployeeAccess") {
@@ -603,7 +667,12 @@ async function act(user: AppUser, action: string, input: Json) {
     const uid = clean(input.uid, 160);
     const role = input.role === "admin" ? "admin" : "employee";
     const active = input.active === true ? 1 : 0;
-    if (!uid || uid === user.uid && (!active || role !== "admin")) throw new Error("U kunt uw eigen hoofdbeheer niet uitschakelen.");
+    if (!uid) throw new Error("Medewerker niet gevonden.");
+    if (uid === user.uid && (!active || role !== "admin")) {
+      const otherAdmin = await db.prepare("SELECT 1 FROM users WHERE role='admin' AND active=1 AND id!=?").bind(user.uid).first();
+      const pendingAdmin = await db.prepare("SELECT 1 FROM invites WHERE role='admin' AND status='pending'").first();
+      if (!otherAdmin && !pendingAdmin) throw new Error("U kunt uw eigen hoofdbeheer niet uitschakelen.");
+    }
     const result = await db.prepare("UPDATE users SET role = ?, active = ? WHERE id = ?").bind(role, active, uid).run();
     if (!result.meta.changes) throw new Error("Medewerker niet gevonden.");
     await audit(db, user.uid, "employee.access_changed", "user", uid, { role, active: Boolean(active) });
@@ -1129,17 +1198,25 @@ export async function POST(request: Request) {
   try {
     const origin = request.headers.get("Origin");
     if (!origin || origin !== new URL(request.url).origin) return json({ error: "Ongeldige aanvraag." }, 403);
-    const identity = await verifyFirebaseToken(request);
-    const user = await session(identity);
-    actorId = user.uid;
-    await recordAccess(database(), user, request);
-    if ((request.headers.get("Content-Type") || "").includes("multipart/form-data")) {
+    const contentType = request.headers.get("Content-Type") || "";
+    if (contentType.includes("multipart/form-data")) {
+      const identity = await verifyFirebaseToken(request);
+      const user = await session(identity);
+      actorId = user.uid;
+      await recordAccess(database(), user, request);
       return json({ data: await uploadAttachment(user, request) });
     }
     const payload = await request.json() as { action?: unknown; input?: unknown };
     const action = clean(payload.action, 80);
     actionName = action || "unknown";
     const input = payload.input && typeof payload.input === "object" ? payload.input as Json : {};
+    if (action === "lookupInvite") {
+      return json({ data: await lookupInvite(input) });
+    }
+    const identity = await verifyFirebaseToken(request);
+    const user = await session(identity, clean(input.inviteToken, 160));
+    actorId = user.uid;
+    await recordAccess(database(), user, request);
     if (action === "downloadAttachment") return downloadAttachment(user, clean(input.id, 160));
     return json({ data: await act(user, action, input) });
   } catch (error) {

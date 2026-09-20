@@ -2,8 +2,9 @@ import type { AccessEvent, Assignment, AssignmentTask, Attachment, AuditEvent, B
 import { auth } from './firebase';
 import { enqueueOfflineAction, flushOfflineQueue } from './offlineQueue';
 
-type InviteInput = { email: string; name: string; phone?: string; role?: 'admin' | 'employee' };
-type InviteResult = { uid: string; resetLink: string };
+type InviteInput = { email: string; name: string; phone?: string; role?: 'admin' | 'employee'; origin?: string };
+type InviteResult = { uid: string; resetLink: string; inviteUrl?: string; token?: string };
+type InvitePreview = { email: string; name: string; role: 'admin' | 'employee' };
 type AccessInput = { uid: string; role: 'admin' | 'employee'; active: boolean };
 type ClockOutInput = { location: GeoLocation; notes: string; statusTag: string };
 type AssignmentTransitionInput = { assignmentId: string; status: 'arrived' | 'completed'; location: GeoLocation; notes?: string; workNotes?: string; materials?: string; completionNotes?: string };
@@ -11,6 +12,17 @@ type CustomerInput = { id?: string; name: string; address: string; phone?: strin
 type AssignmentInput = { id?: string; userId: string; customerId: string; date: string; startTime: string; description: string; siteAddress?: string; siteLatitude?: number | ''; siteLongitude?: number | '' };
 type PlannedShiftInput = { title: string; customerId?: string; siteAddress?: string; siteLatitude?: number | ''; siteLongitude?: number | ''; date: string; startTime: string; endTime: string; breakMinutes: number; notes?: string; memberIds: string[]; repeatWeeks: number; checklist: string[] };
 export type TeamSnapshot = { user: User; users: User[]; shifts: Shift[]; assignments: Assignment[]; customers: Customer[]; plannedShifts: PlannedShift[]; breaks: ShiftBreak[]; incidents: Incident[]; correctionRequests: CorrectionRequest[]; attachments: Attachment[]; notifications: TeamNotification[]; push: PushState; privacy: PrivacySettings; auditEvents: AuditEvent[]; accessEvents: AccessEvent[]; backups: BackupRun[]; errors: ErrorEvent[]; pilot: PilotProgram | null; pilotFeedback: PilotFeedback[] };
+
+async function publicCall<T>(action: string, input: Record<string, unknown> = {}): Promise<{ data: T }> {
+  const response = await fetch('/api/team', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, input }),
+  });
+  const payload = await response.json() as { data?: T; error?: string };
+  if (!response.ok || payload.data === undefined) throw new Error(payload.error || 'De bewerking is mislukt.');
+  return { data: payload.data };
+}
 
 async function call<T>(action: string, input: Record<string, unknown> = {}): Promise<{ data: T }> {
   const current = auth.currentUser;
@@ -68,8 +80,9 @@ async function downloadAttachment(id: string) {
 }
 
 export const secureApi = {
-  snapshot: () => call<TeamSnapshot>('snapshot'),
-  inviteEmployee: (input: InviteInput) => call<InviteResult>('inviteEmployee', input),
+  snapshot: (inviteToken?: string) => call<TeamSnapshot>('snapshot', inviteToken ? { inviteToken } : {}),
+  lookupInvite: (token: string) => publicCall<InvitePreview>('lookupInvite', { token }),
+  inviteEmployee: (input: InviteInput) => call<InviteResult>('inviteEmployee', { ...input, origin: typeof window !== 'undefined' ? window.location.origin : input.origin }),
   setEmployeeAccess: (input: AccessInput) => call<{ ok: boolean }>('setEmployeeAccess', input),
   saveCustomer: (input: CustomerInput) => call<{ id: string }>('saveCustomer', input),
   savePlannedShift: (input: PlannedShiftInput) => call<{ ids: string[] }>('savePlannedShift', input),
