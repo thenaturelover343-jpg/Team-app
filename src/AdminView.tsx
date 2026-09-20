@@ -1,58 +1,47 @@
-import React, { useState } from 'react';
+import React, { useState, Suspense, lazy } from 'react';
 import { User, Assignment, Shift, Customer, CorrectionRequest, Incident, PlannedShift, PushState, TeamNotification, PrivacySettings, AuditEvent, AccessEvent, BackupRun, ErrorEvent, PilotProgram, PilotFeedback, formatDate, formatTime, localDateKey } from './types';
 import { Calendar, Clock, MapPin, Plus, User as UserIcon, ListTodo, Loader2, Users, CheckSquare, Square, Download, BarChart2, CalendarDays, AlertTriangle, ShieldCheck, Settings } from 'lucide-react';
 import { handleFirestoreError, OperationType } from './lib/firebase';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { secureApi } from './lib/secureApi';
-import WeekPlanner from './components/WeekPlanner';
-import ControlCenter from './components/ControlCenter';
-import QualityCenter from './components/QualityCenter';
 import { useLanguage } from './i18n';
 import { useLiveRefresh } from './hooks/useLiveRefresh';
-import TeamTab from './components/TeamTab';
+import { useAuth } from './hooks/useAuth';
+
+const HoursBarChart = lazy(() => import('./components/HoursBarChart'));
+const WeekPlanner = lazy(() => import('./components/WeekPlanner'));
+const ControlCenter = lazy(() => import('./components/ControlCenter'));
+const QualityCenter = lazy(() => import('./components/QualityCenter'));
+const TeamTab = lazy(() => import('./components/TeamTab'));
+
+function TabFallback() {
+  return <div className="min-h-[30vh] animate-pulse rounded-[16px] bg-white/5" />;
+}
 
 export default function AdminView() {
   const { t } = useLanguage();
+  const { snapshot, refreshUser } = useAuth();
   const [activeTab, setActiveTab] = useState<'control' | 'week' | 'planning' | 'timesheets' | 'reports' | 'customers' | 'team' | 'quality'>('control');
-  
-  const [users, setUsers] = useState<User[]>([]);
-  const [shifts, setShifts] = useState<Shift[]>([]);
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [plannedShifts, setPlannedShifts] = useState<PlannedShift[]>([]);
-  const [incidents, setIncidents] = useState<Incident[]>([]);
-  const [correctionRequests, setCorrectionRequests] = useState<CorrectionRequest[]>([]);
-  const [notifications, setNotifications] = useState<TeamNotification[]>([]);
-  const [push, setPush] = useState<PushState>({ supported: false, enabled: false, publicKey: '' });
-  const [loading, setLoading] = useState(true);
-  const [privacy, setPrivacy] = useState<PrivacySettings>({ controllerName: 'Barlicious & Koelverhuur', contactEmail: '', locationDays: 90, notificationDays: 180, auditDays: 730, errorDays: 180, backupDays: 365 });
-  const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]); const [accessEvents, setAccessEvents] = useState<AccessEvent[]>([]); const [backups, setBackups] = useState<BackupRun[]>([]); const [errors, setErrors] = useState<ErrorEvent[]>([]); const [pilot, setPilot] = useState<PilotProgram | null>(null); const [pilotFeedback, setPilotFeedback] = useState<PilotFeedback[]>([]);
 
-  const loadData = React.useCallback(async () => {
-    try {
-      const { data } = await secureApi.snapshot();
-      setUsers(data.users);
-      setShifts(data.shifts);
-      setAssignments(data.assignments);
-      setCustomers(data.customers);
-      setPlannedShifts(data.plannedShifts);
-      setIncidents(data.incidents);
-      setCorrectionRequests(data.correctionRequests);
-      setNotifications(data.notifications);
-      setPush(data.push);
-      setPrivacy(data.privacy); setAuditEvents(data.auditEvents); setAccessEvents(data.accessEvents); setBackups(data.backups); setErrors(data.errors); setPilot(data.pilot); setPilotFeedback(data.pilotFeedback);
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const users = snapshot?.users ?? [];
+  const shifts = snapshot?.shifts ?? [];
+  const assignments = snapshot?.assignments ?? [];
+  const customers = snapshot?.customers ?? [];
+  const plannedShifts = snapshot?.plannedShifts ?? [];
+  const incidents = snapshot?.incidents ?? [];
+  const correctionRequests = snapshot?.correctionRequests ?? [];
+  const notifications = snapshot?.notifications ?? [];
+  const push = snapshot?.push ?? { supported: false, enabled: false, publicKey: '' };
+  const privacy = snapshot?.privacy ?? { controllerName: 'Barlicious & Koelverhuur', contactEmail: '', locationDays: 90, notificationDays: 180, auditDays: 730, errorDays: 180, backupDays: 365 };
+  const auditEvents = snapshot?.auditEvents ?? [];
+  const accessEvents = snapshot?.accessEvents ?? [];
+  const backups = snapshot?.backups ?? [];
+  const errors = snapshot?.errors ?? [];
+  const pilot = snapshot?.pilot ?? null;
+  const pilotFeedback = snapshot?.pilotFeedback ?? [];
 
-  useLiveRefresh(loadData, true, 30_000);
+  useLiveRefresh(refreshUser, true, 30_000);
 
-  if (loading) {
-    return <div className="flex justify-center p-8"><Loader2 className="w-6 h-6 animate-spin text-zinc-900" /></div>;
-  }
+  const loadData = refreshUser;
 
   return (
     <div className="admin-shell max-w-6xl mx-auto w-full space-y-7 pb-12">
@@ -97,14 +86,14 @@ export default function AdminView() {
         </button>
       </div>
 
-      {activeTab === 'control' && <ControlCenter users={users} plannedShifts={plannedShifts} shifts={shifts} notifications={notifications} push={push} onChanged={loadData} />}
-      {activeTab === 'week' && <WeekPlanner users={users} customers={customers} shifts={plannedShifts} onChanged={loadData} />}
+      {activeTab === 'control' && <Suspense fallback={<TabFallback />}><ControlCenter users={users} plannedShifts={plannedShifts} shifts={shifts} notifications={notifications} push={push} onChanged={loadData} /></Suspense>}
+      {activeTab === 'week' && <Suspense fallback={<TabFallback />}><WeekPlanner users={users} customers={customers} shifts={plannedShifts} onChanged={loadData} /></Suspense>}
       {activeTab === 'planning' && <PlanningTab users={users} assignments={assignments} customers={customers} />}
       {activeTab === 'timesheets' && <TimesheetsTab users={users} shifts={shifts} assignments={assignments} />}
       {activeTab === 'reports' && <AdminReportsTab users={users} incidents={incidents} corrections={correctionRequests} onChanged={loadData} />}
       {activeTab === 'customers' && <CustomersTab customers={customers} />}
-      {activeTab === 'team' && <TeamTab users={users} onChanged={loadData} />}
-      {activeTab === 'quality' && <QualityCenter users={users} privacy={privacy} auditEvents={auditEvents} accessEvents={accessEvents} backups={backups} errors={errors} pilot={pilot} feedback={pilotFeedback} onChanged={loadData} />}
+      {activeTab === 'team' && <Suspense fallback={<TabFallback />}><TeamTab users={users} onChanged={loadData} /></Suspense>}
+      {activeTab === 'quality' && <Suspense fallback={<TabFallback />}><QualityCenter users={users} privacy={privacy} auditEvents={auditEvents} accessEvents={accessEvents} backups={backups} errors={errors} pilot={pilot} feedback={pilotFeedback} onChanged={loadData} /></Suspense>}
     </div>
   );
 }
@@ -819,34 +808,9 @@ function TimesheetsTab({ users, shifts, assignments = [] }: { users: User[], shi
         
         {chartData.length > 0 ? (
           <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis 
-                  dataKey="name" 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{ fontSize: 12, fill: '#64748b', fontWeight: 600 }}
-                  dy={10}
-                />
-                <YAxis 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{ fontSize: 12, fill: '#94a3b8' }}
-                />
-                <Tooltip 
-                  cursor={{ fill: '#f8fafc' }}
-                  contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                />
-                <Bar 
-                  dataKey="uren" 
-                  name="Gewerkte Uren"
-                  fill="#3b82f6" 
-                  radius={[6, 6, 0, 0]} 
-                  barSize={40}
-                />
-              </BarChart>
-            </ResponsiveContainer>
+            <Suspense fallback={<TabFallback />}>
+              <HoursBarChart data={chartData} />
+            </Suspense>
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center h-48 text-zinc-400">

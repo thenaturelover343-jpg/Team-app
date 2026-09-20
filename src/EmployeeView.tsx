@@ -14,42 +14,25 @@ import { useLiveRefresh } from './hooks/useLiveRefresh';
 const LiveLocationMap = dynamic(() => import('./components/LiveLocationMap'), { ssr: false });
 
 export default function EmployeeView() {
-  const { user } = useAuth();
+  const { user, snapshot, refreshUser } = useAuth();
   const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<'dashboard' | 'planning' | 'reports' | 'notifications' | 'profile'>('dashboard');
 
-  const [shifts, setShifts] = useState<Shift[]>([]);
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
-  const [plannedShifts, setPlannedShifts] = useState<PlannedShift[]>([]);
-  const [breaks, setBreaks] = useState<ShiftBreak[]>([]);
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [incidents, setIncidents] = useState<Incident[]>([]);
-  const [correctionRequests, setCorrectionRequests] = useState<CorrectionRequest[]>([]);
-  const [notifications, setNotifications] = useState<TeamNotification[]>([]);
-  const [push, setPush] = useState<PushState>({ supported: false, enabled: false, publicKey: '' });
+  const shifts = snapshot?.shifts ?? [];
+  const assignments = (snapshot?.assignments ?? []).filter(item => item.date === localDateKey());
+  const plannedShifts = snapshot?.plannedShifts ?? [];
+  const breaks = snapshot?.breaks ?? [];
+  const attachments = snapshot?.attachments ?? [];
+  const incidents = snapshot?.incidents ?? [];
+  const correctionRequests = snapshot?.correctionRequests ?? [];
+  const notifications = snapshot?.notifications ?? [];
+  const push = snapshot?.push ?? { supported: false, enabled: false, publicKey: '' };
+  const privacy = snapshot?.privacy ?? { controllerName: 'Barlicious & Koelverhuur', contactEmail: '', locationDays: 90, notificationDays: 180, auditDays: 730, errorDays: 180, backupDays: 365 };
+  const accessEvents = snapshot?.accessEvents ?? [];
+  const pilot = snapshot?.pilot ?? null;
+  const pilotFeedback = snapshot?.pilotFeedback ?? [];
   const [queueCount, setQueueCount] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [privacy, setPrivacy] = useState<PrivacySettings>({ controllerName: 'Barlicious & Koelverhuur', contactEmail: '', locationDays: 90, notificationDays: 180, auditDays: 730, errorDays: 180, backupDays: 365 });
-  const [accessEvents, setAccessEvents] = useState<AccessEvent[]>([]); const [pilot, setPilot] = useState<PilotProgram | null>(null); const [pilotFeedback, setPilotFeedback] = useState<PilotFeedback[]>([]);
-  const loadData = React.useCallback(async () => {
-    try {
-      const { data } = await secureApi.snapshot();
-      setShifts(data.shifts);
-      setAssignments(data.assignments.filter(item => item.date === localDateKey()));
-      setPlannedShifts(data.plannedShifts);
-      setBreaks(data.breaks);
-      setAttachments(data.attachments);
-      setIncidents(data.incidents);
-      setCorrectionRequests(data.correctionRequests);
-      setNotifications(data.notifications);
-      setPush(data.push);
-      setPrivacy(data.privacy); setAccessEvents(data.accessEvents); setPilot(data.pilot); setPilotFeedback(data.pilotFeedback);
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const loadData = refreshUser;
 
   useLiveRefresh(loadData, Boolean(user), 30_000);
 
@@ -106,7 +89,7 @@ export default function EmployeeView() {
         </button>
       </div>
 
-      {activeTab === 'dashboard' && <DashboardTab userId={user.id} shifts={shifts} breaks={breaks} assignments={assignments} plannedShifts={plannedShifts} attachments={attachments} loading={loading} onChanged={loadData} />}
+      {activeTab === 'dashboard' && <DashboardTab userId={user.id} shifts={shifts} breaks={breaks} assignments={assignments} plannedShifts={plannedShifts} attachments={attachments} loading={!snapshot} onChanged={loadData} />}
       {activeTab === 'planning' && <EmployeePlanningTab userId={user.id} shifts={plannedShifts} attachments={attachments} onChanged={loadData} />}
       {activeTab === 'reports' && <ReportsTab shifts={shifts} plannedShifts={plannedShifts} incidents={incidents} corrections={correctionRequests} onChanged={loadData} />}
       {activeTab === 'notifications' && <NotificationCenter notifications={notifications} push={push} onChanged={loadData} />}
@@ -166,10 +149,6 @@ function DashboardTab({ userId, shifts, breaks, assignments, plannedShifts, atta
       throw err;
     }
   };
-
-  if (loading) {
-    return <div className="flex justify-center p-8"><Loader2 className="w-6 h-6 animate-spin text-zinc-900" /></div>;
-  }
 
   const handleClockIn = async () => {
     setIsLocating(true);

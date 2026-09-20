@@ -162,10 +162,15 @@ function redirectSessionIncompleteError(): Error {
  */
 export async function completeGoogleRedirect(): Promise<UserCredential | null> {
   const pending = consumeGoogleRedirectPending();
+  const href = typeof window !== 'undefined' ? `${window.location.search}${window.location.hash}` : '';
+  const looksLikeRedirect = /(?:apiKey|authType|oobCode)=/.test(href);
+  if (!pending && !looksLikeRedirect) {
+    try { await auth.authStateReady(); } catch { /* ignore */ }
+    return null;
+  }
   const result = await getRedirectResult(auth);
   if (result) return result;
 
-  // Allow persistence / authStateReady to surface a session after redirect return.
   try {
     await auth.authStateReady();
   } catch {
@@ -173,7 +178,7 @@ export async function completeGoogleRedirect(): Promise<UserCredential | null> {
   }
 
   if (auth.currentUser) {
-    return null; // success via existing session
+    return null;
   }
 
   if (pending) {

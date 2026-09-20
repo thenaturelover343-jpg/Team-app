@@ -1,6 +1,4 @@
-import React, { useEffect, useState } from 'react';
-import EmployeeView from './EmployeeView';
-import AdminView from './AdminView';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { UserCircle, Loader2, LogOut, Eye, EyeOff } from 'lucide-react';
 import { PWAInstallButton } from './components/PWAInstallButton';
 import { AppUpdateBanner } from './components/AppUpdateBanner';
@@ -19,6 +17,37 @@ import {
 import { LanguageProvider, LanguageSwitch, useLanguage } from './i18n';
 import { secureApi } from './lib/secureApi';
 import { readInviteTokenFromLocation } from './lib/inviteLink';
+import { readSessionHint, type SessionHint } from './lib/sessionHint';
+
+const EmployeeView = lazy(() => import('./EmployeeView'));
+const AdminView = lazy(() => import('./AdminView'));
+
+function BootAppShell({ hint }: { hint: SessionHint }) {
+  const { t } = useLanguage();
+  return (
+    <div className="app-shell app-boot-shell min-h-screen font-sans">
+      <header className="topbar sticky top-0 z-50">
+        <div className="max-w-6xl mx-auto px-4 md:px-8">
+          <div className="min-h-[72px] py-2.5 flex items-center justify-between gap-2">
+            <div className="flex items-center space-x-3 min-w-0">
+              <div className="brand-mark flex items-center justify-center font-bold shrink-0">
+                <img src="/brand-logo.svg" alt="" className="w-full h-full object-contain rounded-[inherit]" />
+              </div>
+              <span className="font-bold text-lg tracking-tight">Team</span>
+            </div>
+            <div className="user-pill flex items-center gap-2 pl-2 pr-3 py-1.5">
+              <span className="text-sm font-bold truncate max-w-[120px]">{hint.name}</span>
+            </div>
+          </div>
+        </div>
+      </header>
+      <main className="content-shell max-w-6xl mx-auto px-4 py-8 flex min-h-[40vh] flex-col items-center justify-center space-y-4">
+        <Loader2 className="h-7 w-7 animate-spin text-zinc-400" />
+        <p className="font-medium tracking-wide text-zinc-500">{t('sessionRestore')}</p>
+      </main>
+    </div>
+  );
+}
 
 function GoogleMark() {
   return (
@@ -44,6 +73,7 @@ function AppContent() {
   const [invite, setInvite] = useState<{ email: string; name: string } | null>(null);
   const [inviteLoading, setInviteLoading] = useState(Boolean(inviteToken));
   const [creating, setCreating] = useState(false);
+  const [sessionHint] = useState(() => readSessionHint());
   const [needsEmailForLink, setNeedsEmailForLink] = useState(false);
   const [viewAsEmployee, setViewAsEmployee] = useState(() => {
     if (typeof sessionStorage === 'undefined') return false;
@@ -183,14 +213,69 @@ function AppContent() {
     }
   };
 
-  if (loading || inviteLoading) {
+  if (user) {
     return (
-      <div className="app-loading min-h-screen flex flex-col items-center justify-center space-y-4">
-        <img src="/brand-logo.svg" alt="" className="w-16 h-16" />
-        <Loader2 className="w-8 h-8 animate-spin text-zinc-900" />
-        <p className="text-zinc-500 font-medium tracking-wide">{t('loading')}</p>
-      </div>
+    <div className="app-shell min-h-screen font-sans selection:bg-cyan-400/30">
+      <a href="#main-content" className="skip-link">{t('skip')}</a>
+      <header className="topbar sticky top-0 z-50">
+        <div className="max-w-6xl mx-auto px-4 md:px-8">
+          <div className="min-h-[72px] py-2.5 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
+              <div className="brand-mark flex items-center justify-center font-bold shrink-0">
+                <img src="/brand-logo.svg" alt="Barlicious Operations" className="w-full h-full object-contain rounded-[inherit]" />
+              </div>
+              <div className="min-w-0">
+                <span className="font-bold text-xl hidden sm:block tracking-tight text-zinc-900">Barlicious <span className="brand-subtitle">Operations</span></span>
+                <span className="font-bold text-lg sm:hidden tracking-tight text-zinc-900">Team</span>
+              </div>
+            </div>
+
+            <div className="header-actions flex flex-wrap items-center justify-end gap-2 sm:gap-3 max-w-full">
+              <LanguageSwitch />
+              <PWAInstallButton />
+              {user.role === 'admin' && (
+                <button
+                  type="button"
+                  onClick={toggleEmployeePreview}
+                  className="ops-btn-primary inline-flex items-center justify-center p-2 shrink-0"
+                  title={viewAsEmployee ? t('backAdmin') : t('viewEmployee')}
+                  aria-label={viewAsEmployee ? t('backAdmin') : t('viewEmployee')}
+                >
+                  {viewAsEmployee ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              )}
+              <div className="user-pill flex items-center gap-2 sm:gap-3 pl-2 pr-2 sm:pr-3 py-1.5 shrink-0">
+                <div className="ops-panel w-8 h-8 rounded-full flex items-center justify-center">
+                  <UserCircle className="w-5 h-5 text-zinc-500" />
+                </div>
+                <div className="user-pill-copy flex flex-col pr-2 sm:pr-3 border-r border-zinc-200">
+                  <span className="text-sm font-bold text-zinc-900 leading-tight truncate max-w-[100px]">{user.name}</span>
+                  <span className="text-xs text-zinc-400 leading-tight capitalize">
+                    {user.role === 'admin' && viewAsEmployee ? (fr ? 'admin · aperçu' : 'beheerder · preview') : user.role}
+                  </span>
+                </div>
+                <button onClick={logout} aria-label={t('logout')} className="text-zinc-400 hover:text-zinc-900 transition-colors" title={t('logout')}>
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <AppUpdateBanner />
+
+      <main id="main-content" tabIndex={-1} className="content-shell max-w-6xl mx-auto px-4 sm:px-6 md:px-8 py-6 md:py-8">
+        <Suspense fallback={<div className="flex justify-center p-10"><Loader2 className="w-6 h-6 animate-spin text-zinc-400" /></div>}>
+          {user.role === 'admin' && !viewAsEmployee ? <AdminView /> : <EmployeeView />}
+        </Suspense>
+      </main>
+    </div>
     );
+  }
+
+  if (loading && sessionHint) {
+    return <BootAppShell hint={sessionHint} />;
   }
 
   if (!user) {
@@ -331,62 +416,7 @@ function AppContent() {
     );
   }
 
-  return (
-    <div className="app-shell min-h-screen font-sans selection:bg-cyan-400/30">
-      <a href="#main-content" className="skip-link">{t('skip')}</a>
-      <header className="topbar sticky top-0 z-50">
-        <div className="max-w-6xl mx-auto px-4 md:px-8">
-          <div className="min-h-[72px] py-2.5 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
-              <div className="brand-mark flex items-center justify-center font-bold shrink-0">
-                <img src="/brand-logo.svg" alt="Barlicious Operations" className="w-full h-full object-contain rounded-[inherit]" />
-              </div>
-              <div className="min-w-0">
-                <span className="font-bold text-xl hidden sm:block tracking-tight text-zinc-900">Barlicious <span className="brand-subtitle">Operations</span></span>
-                <span className="font-bold text-lg sm:hidden tracking-tight text-zinc-900">Team</span>
-              </div>
-            </div>
-
-            <div className="header-actions flex flex-wrap items-center justify-end gap-2 sm:gap-3 max-w-full">
-              <LanguageSwitch />
-              <PWAInstallButton />
-              {user.role === 'admin' && (
-                <button
-                  type="button"
-                  onClick={toggleEmployeePreview}
-                  className="ops-btn-primary inline-flex items-center justify-center p-2 shrink-0"
-                  title={viewAsEmployee ? t('backAdmin') : t('viewEmployee')}
-                  aria-label={viewAsEmployee ? t('backAdmin') : t('viewEmployee')}
-                >
-                  {viewAsEmployee ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              )}
-              <div className="user-pill flex items-center gap-2 sm:gap-3 pl-2 pr-2 sm:pr-3 py-1.5 shrink-0">
-                <div className="ops-panel w-8 h-8 rounded-full flex items-center justify-center">
-                  <UserCircle className="w-5 h-5 text-zinc-500" />
-                </div>
-                <div className="user-pill-copy flex flex-col pr-2 sm:pr-3 border-r border-zinc-200">
-                  <span className="text-sm font-bold text-zinc-900 leading-tight truncate max-w-[100px]">{user.name}</span>
-                  <span className="text-xs text-zinc-400 leading-tight capitalize">
-                    {user.role === 'admin' && viewAsEmployee ? (fr ? 'admin · aperçu' : 'beheerder · preview') : user.role}
-                  </span>
-                </div>
-                <button onClick={logout} aria-label={t('logout')} className="text-zinc-400 hover:text-zinc-900 transition-colors" title={t('logout')}>
-                  <LogOut className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <AppUpdateBanner />
-
-      <main id="main-content" tabIndex={-1} className="content-shell max-w-6xl mx-auto px-4 sm:px-6 md:px-8 py-6 md:py-8">
-        {user.role === 'admin' && !viewAsEmployee ? <AdminView /> : <EmployeeView />}
-      </main>
-    </div>
-  );
+  return null;
 }
 
 export default function App() {

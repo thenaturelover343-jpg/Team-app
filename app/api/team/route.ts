@@ -418,49 +418,52 @@ function cleanAvailability(input: unknown) {
 async function snapshot(user: AppUser) {
   const db = database();
   const settings = await privacySettings(db);
-  await runPrivacyCleanup(db, user.uid).catch(() => undefined);
+  void runPrivacyCleanup(db, user.uid).catch(() => undefined);
   if (user.role === "admin") {
-    const latest = await db.prepare("SELECT created_at FROM backup_runs WHERE status='completed' ORDER BY created_at DESC LIMIT 1").first<Json>();
-    if (shouldRunDaily(latest?.created_at, Date.now())) await createBackup(db, user.uid).catch(() => undefined);
+    void db.prepare("SELECT created_at FROM backup_runs WHERE status='completed' ORDER BY created_at DESC LIMIT 1").first<Json>()
+      .then(latest => {
+        if (shouldRunDaily(latest?.created_at, Date.now())) return createBackup(db, user.uid);
+      })
+      .catch(() => undefined);
   }
-  await runAttendanceSweep(db);
+  void runAttendanceSweep(db).catch(() => undefined);
   const usersQuery = user.role === "admin"
     ? db.prepare("SELECT * FROM users ORDER BY name")
     : db.prepare("SELECT * FROM users WHERE id = ?").bind(user.uid);
   const shiftsQuery = user.role === "admin"
     ? db.prepare(`SELECT s.*, ta.status AS approval_status, ta.reviewed_by, ta.reviewed_at, ta.admin_note
-        FROM shifts s LEFT JOIN timesheet_approvals ta ON ta.shift_id=s.id ORDER BY s.clock_in DESC LIMIT 1000`)
+        FROM shifts s LEFT JOIN timesheet_approvals ta ON ta.shift_id=s.id ORDER BY s.clock_in DESC LIMIT 400`)
     : db.prepare(`SELECT s.*, ta.status AS approval_status, ta.reviewed_by, ta.reviewed_at, ta.admin_note
-        FROM shifts s LEFT JOIN timesheet_approvals ta ON ta.shift_id=s.id WHERE s.user_id = ? ORDER BY s.clock_in DESC LIMIT 500`).bind(user.uid);
+        FROM shifts s LEFT JOIN timesheet_approvals ta ON ta.shift_id=s.id WHERE s.user_id = ? ORDER BY s.clock_in DESC LIMIT 200`).bind(user.uid);
   const assignmentsQuery = user.role === "admin"
-    ? db.prepare(`SELECT a.*, c.name AS customer_name, c.address AS customer_address FROM assignments a LEFT JOIN customers c ON c.id = a.customer_id ORDER BY a.date DESC, a.start_time DESC LIMIT 1000`)
-    : db.prepare(`SELECT a.*, c.name AS customer_name, c.address AS customer_address FROM assignments a LEFT JOIN customers c ON c.id = a.customer_id WHERE a.user_id = ? ORDER BY a.date DESC, a.start_time DESC LIMIT 500`).bind(user.uid);
+    ? db.prepare(`SELECT a.*, c.name AS customer_name, c.address AS customer_address FROM assignments a LEFT JOIN customers c ON c.id = a.customer_id ORDER BY a.date DESC, a.start_time DESC LIMIT 400`)
+    : db.prepare(`SELECT a.*, c.name AS customer_name, c.address AS customer_address FROM assignments a LEFT JOIN customers c ON c.id = a.customer_id WHERE a.user_id = ? ORDER BY a.date DESC, a.start_time DESC LIMIT 200`).bind(user.uid);
   const plannedQuery = user.role === "admin"
     ? db.prepare(`SELECT ps.*, c.name AS customer_name, c.address AS customer_address, c.latitude AS customer_latitude,
         c.longitude AS customer_longitude, psm.user_id AS member_user_id, psm.confirmation_status, psm.checklist_state_json
         FROM planned_shifts ps LEFT JOIN customers c ON c.id = ps.customer_id
-        LEFT JOIN planned_shift_members psm ON psm.shift_id = ps.id ORDER BY ps.date, ps.start_time LIMIT 3000`)
+        LEFT JOIN planned_shift_members psm ON psm.shift_id = ps.id ORDER BY ps.date, ps.start_time LIMIT 800`)
     : db.prepare(`SELECT ps.*, c.name AS customer_name, c.address AS customer_address, c.latitude AS customer_latitude,
         c.longitude AS customer_longitude, psm.user_id AS member_user_id, psm.confirmation_status, psm.checklist_state_json
         FROM planned_shifts ps LEFT JOIN customers c ON c.id = ps.customer_id
         JOIN planned_shift_members psm ON psm.shift_id = ps.id
-        WHERE psm.user_id = ? AND ps.status = 'published' ORDER BY ps.date, ps.start_time LIMIT 1000`).bind(user.uid);
+        WHERE psm.user_id = ? AND ps.status = 'published' ORDER BY ps.date, ps.start_time LIMIT 400`).bind(user.uid);
   const breaksQuery = user.role === "admin"
-    ? db.prepare("SELECT * FROM shift_breaks ORDER BY started_at DESC LIMIT 2000")
-    : db.prepare("SELECT * FROM shift_breaks WHERE user_id=? ORDER BY started_at DESC LIMIT 500").bind(user.uid);
+    ? db.prepare("SELECT * FROM shift_breaks ORDER BY started_at DESC LIMIT 400")
+    : db.prepare("SELECT * FROM shift_breaks WHERE user_id=? ORDER BY started_at DESC LIMIT 200").bind(user.uid);
   const incidentsQuery = user.role === "admin"
-    ? db.prepare("SELECT * FROM incidents ORDER BY created_at DESC LIMIT 1000")
-    : db.prepare("SELECT * FROM incidents WHERE user_id=? ORDER BY created_at DESC LIMIT 500").bind(user.uid);
+    ? db.prepare("SELECT * FROM incidents ORDER BY created_at DESC LIMIT 200")
+    : db.prepare("SELECT * FROM incidents WHERE user_id=? ORDER BY created_at DESC LIMIT 100").bind(user.uid);
   const correctionsQuery = user.role === "admin"
-    ? db.prepare("SELECT * FROM correction_requests ORDER BY created_at DESC LIMIT 1000")
-    : db.prepare("SELECT * FROM correction_requests WHERE user_id=? ORDER BY created_at DESC LIMIT 500").bind(user.uid);
+    ? db.prepare("SELECT * FROM correction_requests ORDER BY created_at DESC LIMIT 200")
+    : db.prepare("SELECT * FROM correction_requests WHERE user_id=? ORDER BY created_at DESC LIMIT 100").bind(user.uid);
   const attachmentsQuery = user.role === "admin"
-    ? db.prepare("SELECT * FROM attachments ORDER BY created_at DESC LIMIT 1000")
+    ? db.prepare("SELECT * FROM attachments ORDER BY created_at DESC LIMIT 200")
     : db.prepare(`SELECT a.* FROM attachments a WHERE a.user_id=? OR (
         a.entity_type='planned_shift' AND EXISTS (
           SELECT 1 FROM planned_shift_members psm WHERE psm.shift_id=a.entity_id AND psm.user_id=?
         )
-      ) ORDER BY a.created_at DESC LIMIT 500`).bind(user.uid, user.uid);
+      ) ORDER BY a.created_at DESC LIMIT 100`).bind(user.uid, user.uid);
   const notificationsQuery = user.role === "admin"
     ? db.prepare("SELECT * FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 500").bind(user.uid)
     : db.prepare("SELECT * FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 300").bind(user.uid);
