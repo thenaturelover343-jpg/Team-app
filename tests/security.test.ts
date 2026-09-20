@@ -78,9 +78,10 @@ test('eerste gebruiker of bootstrap-mail wordt admin, anderen niet', () => {
   assert.equal(mayCreateAdminSession(1, 'qa@outlook.com', 'thenaturelover343@gmail.com'), false);
 });
 
-test('onbevestigde mail mag alleen met uitnodigingslink', () => {
+test('onbevestigde mail mag met link of bestaande uitnodiging', () => {
   assert.equal(inviteAcceptsUnverified(true, ''), true);
   assert.equal(inviteAcceptsUnverified(false, 'token'), true);
+  assert.equal(inviteAcceptsUnverified(false, '', true), true);
   assert.equal(inviteAcceptsUnverified(false, ''), false);
 });
 

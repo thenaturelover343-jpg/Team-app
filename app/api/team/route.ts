@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { buildPushPayload, type PushSubscription } from "@block65/webcrypto-web-push";
-import { cleanText as clean, inviteAcceptsUnverified, isAllowedTransition, mayCreateAdminSession, normalizeEmail as email, validateGeofence, validateLocation as location } from "../../../server/policy";
+import { cleanText as clean, isAllowedTransition, mayCreateAdminSession, normalizeEmail as email, validateGeofence, validateLocation as location } from "../../../server/policy";
 import { addWeeks, availabilityConflict, isValidDate, isValidTime, overlaps, parseAvailability, validateShiftWindow } from "../../../server/planning";
 import { attendanceEvents, csv, workedMinutes, type PlannedAttendance } from "../../../server/phase4";
 import { cutoff, normalizeRetention, safeErrorMessage, sha256, shouldRunDaily, type RetentionSettings } from "../../../server/privacy";
@@ -158,9 +158,6 @@ async function session(identity: FirebaseIdentity, inviteToken = ""): Promise<Ap
       if (!invite) {
         invite = await db.prepare("SELECT id, name, phone, role FROM invites WHERE email = ? AND status = 'pending'")
           .bind(identity.email).first<Json>();
-        if (invite && !inviteAcceptsUnverified(identity.emailVerified, inviteToken)) {
-          throw new Error("Open de uitnodigingslink of de inloglink in uw e-mail om dit account te activeren.");
-        }
       }
       if (!invite) throw new Error("Dit account is niet uitgenodigd.");
       await acceptInvite(db, identity, invite);

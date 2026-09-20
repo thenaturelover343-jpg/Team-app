@@ -43,6 +43,7 @@ function AppContent() {
   const [inviteToken] = useState(() => readInviteTokenFromLocation());
   const [invite, setInvite] = useState<{ email: string; name: string } | null>(null);
   const [inviteLoading, setInviteLoading] = useState(Boolean(inviteToken));
+  const [creating, setCreating] = useState(false);
   const [needsEmailForLink, setNeedsEmailForLink] = useState(false);
   const [viewAsEmployee, setViewAsEmployee] = useState(() => {
     if (typeof sessionStorage === 'undefined') return false;
@@ -108,7 +109,8 @@ function AppContent() {
         setNeedsEmailForLink(false);
         return;
       }
-      if (invite) {
+      const wantsCreate = creating || Boolean(invite);
+      if (wantsCreate) {
         if (password !== password2) {
           setAuthError(t('passwordsMismatch'));
           return;
@@ -202,7 +204,7 @@ function AppContent() {
               <img src="/brand-logo.svg" alt="Barlicious Team" className="w-[88%] h-[88%] object-contain" />
             </div>
             <div className="eyebrow">{t('fieldOps')}</div>
-            <p className="text-zinc-500">{invite ? t('inviteLead') : t('loginLead')}</p>
+            <p className="text-zinc-500">{invite ? t('inviteLead') : creating ? t('createAccountLead') : t('loginLead')}</p>
             {invite && <p className="text-sm font-bold">{invite.name} · {invite.email}</p>}
           </div>
 
@@ -243,8 +245,8 @@ function AppContent() {
                 <input
                   id="login-password"
                   type={showPassword ? 'text' : 'password'}
-                  name={invite ? 'new-password' : 'current-password'}
-                  autoComplete={invite ? 'new-password' : 'current-password'}
+                  name={invite || creating ? 'new-password' : 'current-password'}
+                  autoComplete={invite || creating ? 'new-password' : 'current-password'}
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   required
@@ -262,7 +264,7 @@ function AppContent() {
               </div>
             </div>
             )}
-            {invite && !needsEmailForLink && (
+            {(invite || creating) && !needsEmailForLink && (
               <div>
                 <label className="block text-sm font-bold text-zinc-700 mb-1.5" htmlFor="login-password2">{t('passwordConfirm')}</label>
                 <input
@@ -284,9 +286,18 @@ function AppContent() {
               className="ops-btn-primary w-full py-4 disabled:opacity-50 mt-2"
             >
               {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
-              <span>{needsEmailForLink ? t('confirmEmailBtn') : invite ? t('inviteActivate') : t('signIn')}</span>
+              <span>{needsEmailForLink ? t('confirmEmailBtn') : invite || creating ? t('inviteActivate') : t('signIn')}</span>
             </button>
           </form>
+          {!needsEmailForLink && !invite && (
+            <button
+              type="button"
+              onClick={() => { setCreating(v => !v); setAuthError(''); setAuthNotice(''); }}
+              className="w-full text-sm font-bold text-zinc-600 hover:text-zinc-900"
+            >
+              {creating ? t('backToSignIn') : t('createAccount')}
+            </button>
+          )}
           {!needsEmailForLink && (
           <button type="button" onClick={handlePasswordReset} className="w-full text-sm font-bold text-zinc-600 hover:text-zinc-900">
             {t('forgot')}

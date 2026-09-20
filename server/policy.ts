@@ -48,8 +48,9 @@ export function mayCreateAdminSession(userCount: number, loginEmail: string, boo
   return Boolean(bootstrapEmail && loginEmail === bootstrapEmail);
 }
 
-export function inviteAcceptsUnverified(emailVerified: boolean, inviteToken: string) {
-  return emailVerified || Boolean(inviteToken);
+/** Invited inboxes (Outlook/Hotmail/Gmail) may activate with a password before clicking a verify-mail. */
+export function inviteAcceptsUnverified(emailVerified: boolean, inviteToken: string, hasPendingInvite = false) {
+  return emailVerified || Boolean(inviteToken) || hasPendingInvite;
 }
 
 
