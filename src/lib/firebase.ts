@@ -12,6 +12,10 @@ import {
   signInWithRedirect,
   getRedirectResult,
   sendPasswordResetEmail,
+  createUserWithEmailAndPassword,
+  sendSignInLinkToEmail,
+  isSignInWithEmailLink,
+  signInWithEmailLink,
   type UserCredential,
 } from 'firebase/auth';
 import rawFirebaseConfig from '../../firebase-applet-config.json';
@@ -212,21 +216,60 @@ export function mapAuthErrorToDutch(err: unknown): string {
     case 'auth/user-not-found':
     case 'auth/wrong-password':
       return 'E-mail of wachtwoord is onjuist.';
+    case 'auth/email-already-in-use':
+      return 'Dit e-mailadres heeft al een account. Log in of gebruik wachtwoord vergeten.';
+    case 'auth/invalid-email':
+      return 'Dit e-mailadres is ongeldig.';
+    case 'auth/weak-password':
+      return 'Kies een wachtwoord van minstens 6 tekens.';
+    case 'auth/missing-email':
+      return 'Bevestig uw e-mailadres voor de inloglink.';
     case 'auth/web-storage-unsupported':
       return 'Opslag in de browser is uitgeschakeld. Sta cookies/gegevens toe en probeer opnieuw.';
     default:
       if (message.includes('Google-login kon de sessie niet afronden')) {
         return message;
       }
-      if (code) return `Google-inloggen mislukt (${code}). Probeer opnieuw.`;
-      return 'Google-inloggen is mislukt. Probeer opnieuw.';
+      if (code) return `Aanmelden mislukt (${code}). Probeer opnieuw.`;
+      return 'Aanmelden is mislukt. Probeer opnieuw.';
   }
 }
 
 export const loginWithEmail = (email: string, pass: string) =>
   signInWithEmailAndPassword(auth, email, pass);
+export const registerWithEmail = (email: string, pass: string) =>
+  createUserWithEmailAndPassword(auth, email, pass);
 export const resetPassword = (email: string) => sendPasswordResetEmail(auth, email);
 export const logout = () => signOut(auth);
+
+const EMAIL_LINK_KEY = 'barliciousEmailForSignIn';
+
+export function emailLinkActionSettings() {
+  const url = typeof window !== 'undefined' ? window.location.origin + window.location.pathname + window.location.search : '';
+  return { url: url.split('#')[0], handleCodeInApp: true as const };
+}
+
+export async function sendEmailSignInLink(emailAddress: string, continueUrl?: string, remember = true) {
+  const url = continueUrl || emailLinkActionSettings().url;
+  await sendSignInLinkToEmail(auth, emailAddress, { url, handleCodeInApp: true });
+  if (remember) {
+    try { window.localStorage.setItem(EMAIL_LINK_KEY, emailAddress); } catch { /* private mode */ }
+  }
+}
+
+export function pendingEmailLinkSignIn(): boolean {
+  return typeof window !== 'undefined' && isSignInWithEmailLink(auth, window.location.href);
+}
+
+export async function completeEmailLinkSignIn(emailHint?: string): Promise<UserCredential | null> {
+  if (typeof window === 'undefined' || !isSignInWithEmailLink(auth, window.location.href)) return null;
+  let stored = emailHint || '';
+  try { stored = stored || window.localStorage.getItem(EMAIL_LINK_KEY) || ''; } catch { /* ignore */ }
+  if (!stored) return null;
+  const cred = await signInWithEmailLink(auth, stored, window.location.href);
+  try { window.localStorage.removeItem(EMAIL_LINK_KEY); } catch { /* ignore */ }
+  return cred;
+}
 
 export enum OperationType {
   CREATE = 'create',

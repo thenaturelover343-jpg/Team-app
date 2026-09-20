@@ -10,8 +10,9 @@ export const users = sqliteTable("users", {
 export const invites = sqliteTable("invites", {
   id: text("id").primaryKey(), email: text("email").notNull(), name: text("name").notNull(), phone: text("phone"),
   role: text("role").notNull().default("employee"), status: text("status").notNull().default("pending"),
+  token: text("token"),
   invitedBy: text("invited_by").notNull(), createdAt: integer("created_at").notNull(), acceptedAt: integer("accepted_at"),
-}, table => [uniqueIndex("idx_invites_email").on(table.email)]);
+}, table => [uniqueIndex("idx_invites_email").on(table.email), uniqueIndex("idx_invites_token").on(table.token)]);
 
 export const customers = sqliteTable("customers", {
   id: text("id").primaryKey(), name: text("name").notNull(), address: text("address").notNull(),

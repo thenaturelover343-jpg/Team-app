@@ -1,21 +1,178 @@
 'use client';
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
 export type Locale = 'nl' | 'fr';
-const LanguageContext = createContext<{ locale: Locale; setLocale: (locale: Locale) => void }>({ locale: 'nl', setLocale: () => undefined });
+
+const dict = {
+  nl: {
+    fieldOps: 'FIELD OPERATIONS',
+    loginLead: 'Log in met het e-mailadres waarop u bent uitgenodigd. Outlook, Hotmail, Gmail of Google — alles werkt.',
+    email: 'E-mailadres',
+    password: 'Wachtwoord',
+    passwordConfirm: 'Wachtwoord bevestigen',
+    createAccount: 'Account aanmaken',
+    createAccountLead: 'Eerste beheerder of uitgenodigd teamlid: kies een wachtwoord. Outlook, Hotmail, Gmail — Google is niet nodig.',
+    backToSignIn: 'Terug naar inloggen',
+    signIn: 'Inloggen',
+    forgot: 'Wachtwoord vergeten?',
+    or: 'of',
+    google: 'Verder met Google',
+    emailLink: 'Stuur inloglink (Outlook, Hotmail, …)',
+    emailLinkSent: 'Als dit adres is uitgenodigd, is een inloglink verzonden. Open de mail op dit toestel.',
+    accountsAdmin: 'Nieuwe accounts worden uitsluitend door een beheerder aangemaakt.',
+    loading: 'Bezig met laden...',
+    skip: 'Ga naar inhoud',
+    logout: 'Uitloggen',
+    viewEmployee: 'Bekijk als werknemer',
+    backAdmin: 'Terug naar beheer',
+    showPassword: 'Toon wachtwoord',
+    hidePassword: 'Verberg wachtwoord',
+    fillEmailFirst: 'Vul eerst uw e-mailadres in.',
+    resetSent: 'Als dit account bestaat, is een herstelmail verzonden.',
+    genericError: 'Er is een fout opgetreden. Probeer het opnieuw.',
+    inviteTitle: 'Account activeren',
+    inviteLead: 'Kies een wachtwoord. Daarna kunt u altijd inloggen met dit e-mailadres — Google is niet nodig.',
+    inviteActivate: 'Account activeren',
+    inviteInvalid: 'Deze uitnodiging is ongeldig of al gebruikt.',
+    passwordsMismatch: 'De wachtwoorden komen niet overeen.',
+    confirmEmail: 'Bevestig uw e-mailadres voor de inloglink',
+    confirmEmailBtn: 'Inloggen via e-mail',
+    today: 'Vandaag',
+    planning: 'Planning',
+    report: 'Melden',
+    messages: 'Berichten',
+    profile: 'Mijn Profiel',
+    clockTitle: 'Urenregistratie',
+    notClocked: 'Je bent momenteel niet ingeklokt.',
+    startDay: 'Start Werkdag (Inklokken)',
+    clockOut: 'Uitklokken',
+    locating: 'Locatie zoeken...',
+    myPlanningToday: 'Mijn Planning Vandaag',
+    noJobsToday: 'Je hebt nog geen opdrachten voor vandaag.',
+    generalDay: 'Algemene werkdag',
+    navControl: 'Controle',
+    navWeek: 'Weekplanner',
+    navQuality: 'Kwaliteit',
+    navJobs: 'Opdrachten',
+    navHours: 'Uren',
+    navCustomers: 'Klanten',
+    navReports: 'Meldingen',
+    navTeam: 'Team',
+    teamTitle: 'Team Beheer',
+    inviteBtn: 'Uitnodigen',
+    inviteOk: 'Uitnodiging klaar. Deel de link — de medewerker kiest zelf een wachtwoord (Outlook, Hotmail, Gmail of Google).',
+    copyLink: 'Kopieer link',
+    copied: 'Link gekopieerd',
+    fullName: 'Volledige naam',
+    phoneOptional: 'Telefoon (optioneel)',
+    roleEmployee: 'Medewerker',
+    roleAdmin: 'Beheerder',
+    makeEmployee: 'Maak Medewerker',
+    makeAdmin: 'Maak Beheerder',
+    activate: 'Activeren',
+    deactivate: 'Deactiveren',
+    emptyTeam: 'Nog geen teamleden. Nodig de eerste medewerker uit.',
+    emptyCustomers: 'Nog geen klanten. Voeg de eerste locatie toe.',
+    emptyShifts: 'Vandaag zijn geen diensten gepubliceerd.',
+    emptyHours: 'Alle afgesloten uren zijn behandeld.',
+    installTheme: 'Installeer Barlicious Team',
+  },
+  fr: {
+    fieldOps: 'FIELD OPERATIONS',
+    loginLead: 'Connectez-vous avec l’adresse e-mail invitée. Outlook, Hotmail, Gmail ou Google — tout fonctionne.',
+    email: 'Adresse e-mail',
+    password: 'Mot de passe',
+    passwordConfirm: 'Confirmer le mot de passe',
+    createAccount: 'Créer un compte',
+    createAccountLead: 'Premier admin ou membre invité : choisissez un mot de passe. Outlook, Hotmail, Gmail — Google n’est pas obligatoire.',
+    backToSignIn: 'Retour à la connexion',
+    signIn: 'Se connecter',
+    forgot: 'Mot de passe oublié ?',
+    or: 'ou',
+    google: 'Continuer avec Google',
+    emailLink: 'Envoyer un lien de connexion (Outlook, Hotmail, …)',
+    emailLinkSent: 'Si cette adresse est invitée, un lien a été envoyé. Ouvrez le mail sur cet appareil.',
+    accountsAdmin: 'Les nouveaux comptes sont créés uniquement par un administrateur.',
+    loading: 'Chargement…',
+    skip: 'Aller au contenu',
+    logout: 'Se déconnecter',
+    viewEmployee: 'Voir comme employé',
+    backAdmin: 'Retour à l’admin',
+    showPassword: 'Afficher le mot de passe',
+    hidePassword: 'Masquer le mot de passe',
+    fillEmailFirst: 'Saisissez d’abord votre e-mail.',
+    resetSent: 'Si ce compte existe, un e-mail de récupération a été envoyé.',
+    genericError: 'Une erreur est survenue. Réessayez.',
+    inviteTitle: 'Activer le compte',
+    inviteLead: 'Choisissez un mot de passe. Vous pourrez ensuite vous connecter avec cet e-mail — Google n’est pas obligatoire.',
+    inviteActivate: 'Activer le compte',
+    inviteInvalid: 'Cette invitation est invalide ou déjà utilisée.',
+    passwordsMismatch: 'Les mots de passe ne correspondent pas.',
+    confirmEmail: 'Confirmez votre e-mail pour le lien de connexion',
+    confirmEmailBtn: 'Connexion par e-mail',
+    today: 'Aujourd’hui',
+    planning: 'Planning',
+    report: 'Signaler',
+    messages: 'Messages',
+    profile: 'Mon profil',
+    clockTitle: 'Pointage',
+    notClocked: 'Vous n’êtes pas pointé.',
+    startDay: 'Démarrer la journée',
+    clockOut: 'Pointer la sortie',
+    locating: 'Recherche de position…',
+    myPlanningToday: 'Mon planning aujourd’hui',
+    noJobsToday: 'Pas encore de missions pour aujourd’hui.',
+    generalDay: 'Journée générale',
+    navControl: 'Contrôle',
+    navWeek: 'Semaine',
+    navQuality: 'Qualité',
+    navJobs: 'Missions',
+    navHours: 'Heures',
+    navCustomers: 'Clients',
+    navReports: 'Signalements',
+    navTeam: 'Équipe',
+    teamTitle: 'Équipe',
+    inviteBtn: 'Inviter',
+    inviteOk: 'Invitation prête. Partagez le lien — la personne choisit son mot de passe (Outlook, Hotmail, Gmail ou Google).',
+    copyLink: 'Copier le lien',
+    copied: 'Lien copié',
+    fullName: 'Nom complet',
+    phoneOptional: 'Téléphone (optionnel)',
+    roleEmployee: 'Employé',
+    roleAdmin: 'Administrateur',
+    makeEmployee: 'Rendre employé',
+    makeAdmin: 'Rendre admin',
+    activate: 'Activer',
+    deactivate: 'Désactiver',
+    emptyTeam: 'Pas encore de membres. Invitez le premier employé.',
+    emptyCustomers: 'Pas encore de clients. Ajoutez le premier lieu.',
+    emptyShifts: 'Aucune prestation publiée aujourd’hui.',
+    emptyHours: 'Toutes les heures clôturées sont traitées.',
+    installTheme: 'Installer Barlicious Team',
+  },
+} as const;
+
+export type MsgKey = keyof typeof dict.nl;
+
+const LanguageContext = createContext<{
+  locale: Locale;
+  setLocale: (locale: Locale) => void;
+  t: (key: MsgKey) => string;
+}>({ locale: 'nl', setLocale: () => undefined, t: key => dict.nl[key] });
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>(() => typeof window !== 'undefined' && window.localStorage.getItem('barlicious-locale') === 'fr' ? 'fr' : 'nl');
   const setLocale = (next: Locale) => { setLocaleState(next); window.localStorage.setItem('barlicious-locale', next); };
   useEffect(() => { document.documentElement.lang = locale === 'fr' ? 'fr-BE' : 'nl-BE'; }, [locale]);
-  return <LanguageContext.Provider value={{ locale, setLocale }}>{children}</LanguageContext.Provider>;
+  const t = useMemo(() => (key: MsgKey) => dict[locale][key] || dict.nl[key], [locale]);
+  return <LanguageContext.Provider value={{ locale, setLocale, t }}>{children}</LanguageContext.Provider>;
 }
 
 export function useLanguage() { return useContext(LanguageContext); }
 
 export function LanguageSwitch() {
   const { locale, setLocale } = useLanguage();
-  return <div className="flex rounded-xl border border-zinc-200 bg-white p-1" role="group" aria-label="Taal / Langue">
-    {(['nl', 'fr'] as const).map(item => <button key={item} type="button" onClick={() => setLocale(item)} aria-pressed={locale === item} className={`min-h-9 px-3 rounded-lg text-xs font-bold ${locale === item ? 'bg-zinc-900 text-white' : 'text-zinc-600'}`}>{item.toUpperCase()}</button>)}
+  return <div className="ops-panel flex rounded-xl p-1" role="group" aria-label="Taal / Langue">
+    {(['nl', 'fr'] as const).map(item => <button key={item} type="button" onClick={() => setLocale(item)} aria-pressed={locale === item} className={`min-h-9 px-3 rounded-lg text-xs font-bold ${locale === item ? 'ops-nav-btn-active' : ''}`}>{item.toUpperCase()}</button>)}
   </div>;
 }

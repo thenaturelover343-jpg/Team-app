@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { User, Assignment, Shift, Customer, CorrectionRequest, Incident, PlannedShift, PushState, TeamNotification, PrivacySettings, AuditEvent, AccessEvent, BackupRun, ErrorEvent, PilotProgram, PilotFeedback, formatDate, formatTime, localDateKey } from './types';
 import { Calendar, Clock, MapPin, Plus, User as UserIcon, ListTodo, Loader2, Users, CheckSquare, Square, Download, BarChart2, CalendarDays, AlertTriangle, ShieldCheck, Settings } from 'lucide-react';
 import { handleFirestoreError, OperationType } from './lib/firebase';
@@ -8,9 +8,11 @@ import WeekPlanner from './components/WeekPlanner';
 import ControlCenter from './components/ControlCenter';
 import QualityCenter from './components/QualityCenter';
 import { useLanguage } from './i18n';
+import { useLiveRefresh } from './hooks/useLiveRefresh';
+import TeamTab from './components/TeamTab';
 
 export default function AdminView() {
-  const { locale } = useLanguage(); const fr = locale === 'fr';
+  const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<'control' | 'week' | 'planning' | 'timesheets' | 'reports' | 'customers' | 'team' | 'quality'>('control');
   
   const [users, setUsers] = useState<User[]>([]);
@@ -27,35 +29,26 @@ export default function AdminView() {
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]); const [accessEvents, setAccessEvents] = useState<AccessEvent[]>([]); const [backups, setBackups] = useState<BackupRun[]>([]); const [errors, setErrors] = useState<ErrorEvent[]>([]); const [pilot, setPilot] = useState<PilotProgram | null>(null); const [pilotFeedback, setPilotFeedback] = useState<PilotFeedback[]>([]);
 
   const loadData = React.useCallback(async () => {
-    const { data } = await secureApi.snapshot();
-    setUsers(data.users);
-    setShifts(data.shifts);
-    setAssignments(data.assignments);
-    setCustomers(data.customers);
-    setPlannedShifts(data.plannedShifts);
-    setIncidents(data.incidents);
-    setCorrectionRequests(data.correctionRequests);
-    setNotifications(data.notifications);
-    setPush(data.push);
-    setPrivacy(data.privacy); setAuditEvents(data.auditEvents); setAccessEvents(data.accessEvents); setBackups(data.backups); setErrors(data.errors); setPilot(data.pilot); setPilotFeedback(data.pilotFeedback);
-    setLoading(false);
+    try {
+      const { data } = await secureApi.snapshot();
+      setUsers(data.users);
+      setShifts(data.shifts);
+      setAssignments(data.assignments);
+      setCustomers(data.customers);
+      setPlannedShifts(data.plannedShifts);
+      setIncidents(data.incidents);
+      setCorrectionRequests(data.correctionRequests);
+      setNotifications(data.notifications);
+      setPush(data.push);
+      setPrivacy(data.privacy); setAuditEvents(data.auditEvents); setAccessEvents(data.accessEvents); setBackups(data.backups); setErrors(data.errors); setPilot(data.pilot); setPilotFeedback(data.pilotFeedback);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  useEffect(() => {
-    let active = true;
-    const load = async () => {
-      try {
-        if (!active) return;
-        await loadData();
-      } catch (error) {
-        console.error(error);
-        if (active) setLoading(false);
-      }
-    };
-    void load();
-    const timer = window.setInterval(load, 5000);
-    return () => { active = false; window.clearInterval(timer); };
-  }, [loadData]);
+  useLiveRefresh(loadData, true, 30_000);
 
   if (loading) {
     return <div className="flex justify-center p-8"><Loader2 className="w-6 h-6 animate-spin text-zinc-900" /></div>;
@@ -64,43 +57,43 @@ export default function AdminView() {
   return (
     <div className="admin-shell max-w-6xl mx-auto w-full space-y-7 pb-12">
       <div className="admin-nav ops-nav p-1.5">
-        <button onClick={() => setActiveTab('control')} className={`ops-nav-btn relative ${activeTab === 'control' ? 'ops-nav-btn-active' : ''}`}><ShieldCheck className="w-4 h-4" /><span>Controle</span>{notifications.some(item => !item.readAt) && <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full" />}</button>
+        <button onClick={() => setActiveTab('control')} className={`ops-nav-btn relative ${activeTab === 'control' ? 'ops-nav-btn-active' : ''}`}><ShieldCheck className="w-4 h-4" /><span>{t('navControl')}</span>{notifications.some(item => !item.readAt) && <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full" />}</button>
         <button
           onClick={() => setActiveTab('week')}
           className={`ops-nav-btn ${activeTab === 'week' ? 'ops-nav-btn-active' : ''}`}
         >
           <CalendarDays className="w-4 h-4" />
-          <span>Weekplanner</span>
+          <span>{t('navWeek')}</span>
         </button>
-        <button onClick={() => setActiveTab('quality')} className={`ops-nav-btn ${activeTab === 'quality' ? 'ops-nav-btn-active' : ''}`}><Settings className="w-4 h-4"/><span>{fr ? 'Qualité' : 'Kwaliteit'}</span></button>
+        <button onClick={() => setActiveTab('quality')} className={`ops-nav-btn ${activeTab === 'quality' ? 'ops-nav-btn-active' : ''}`}><Settings className="w-4 h-4"/><span>{t('navQuality')}</span></button>
         <button
           onClick={() => setActiveTab('planning')}
           className={`ops-nav-btn ${activeTab === 'planning' ? 'ops-nav-btn-active' : ''}`}
         >
           <Calendar className="w-4 h-4" />
-          <span>Opdrachten</span>
+          <span>{t('navJobs')}</span>
         </button>
         <button
           onClick={() => setActiveTab('timesheets')}
           className={`ops-nav-btn ${activeTab === 'timesheets' ? 'ops-nav-btn-active' : ''}`}
         >
           <Clock className="w-4 h-4" />
-          <span>Uren</span>
+          <span>{t('navHours')}</span>
         </button>
         <button
           onClick={() => setActiveTab('customers')}
           className={`ops-nav-btn ${activeTab === 'customers' ? 'ops-nav-btn-active' : ''}`}
         >
           <Users className="w-4 h-4" />
-          <span>Klanten</span>
+          <span>{t('navCustomers')}</span>
         </button>
-        <button onClick={() => setActiveTab('reports')} className={`ops-nav-btn ${activeTab === 'reports' ? 'ops-nav-btn-active' : ''}`}><AlertTriangle className="w-4 h-4" /><span>Meldingen</span></button>
+        <button onClick={() => setActiveTab('reports')} className={`ops-nav-btn ${activeTab === 'reports' ? 'ops-nav-btn-active' : ''}`}><AlertTriangle className="w-4 h-4" /><span>{t('navReports')}</span></button>
         <button
           onClick={() => setActiveTab('team')}
           className={`ops-nav-btn ${activeTab === 'team' ? 'ops-nav-btn-active' : ''}`}
         >
           <UserIcon className="w-4 h-4" />
-          <span>Team</span>
+          <span>{t('navTeam')}</span>
         </button>
       </div>
 
@@ -110,7 +103,7 @@ export default function AdminView() {
       {activeTab === 'timesheets' && <TimesheetsTab users={users} shifts={shifts} assignments={assignments} />}
       {activeTab === 'reports' && <AdminReportsTab users={users} incidents={incidents} corrections={correctionRequests} onChanged={loadData} />}
       {activeTab === 'customers' && <CustomersTab customers={customers} />}
-      {activeTab === 'team' && <TeamTab users={users} />}
+      {activeTab === 'team' && <TeamTab users={users} onChanged={loadData} />}
       {activeTab === 'quality' && <QualityCenter users={users} privacy={privacy} auditEvents={auditEvents} accessEvents={accessEvents} backups={backups} errors={errors} pilot={pilot} feedback={pilotFeedback} onChanged={loadData} />}
     </div>
   );
@@ -933,120 +926,6 @@ function TimesheetsTab({ users, shifts, assignments = [] }: { users: User[], shi
             </tbody>
           </table>
         </div>
-      </div>
-    </div>
-  );
-}
-function TeamTab({ users }: { users: User[] }) {
-  const [errorMsg, setErrorMsg] = useState('');
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [inviteRole, setInviteRole] = useState<'admin' | 'employee'>('employee');
-  const [inviteLink, setInviteLink] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const message = (error: unknown) => error instanceof Error ? error.message : 'De bewerking is mislukt.';
-
-  const invite = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setErrorMsg('');
-    setInviteLink('');
-    setIsSubmitting(true);
-    try {
-      const result = await secureApi.inviteEmployee({ name, email, phone, role: inviteRole });
-      setInviteLink(result.data.resetLink || 'uitgenodigd');
-      setName('');
-      setEmail('');
-      setPhone('');
-      setInviteRole('employee');
-    } catch (error: unknown) {
-      setErrorMsg(message(error));
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const toggleRole = async (user: User) => {
-    try {
-      const newRole = user.role === 'admin' ? 'employee' : 'admin';
-      await secureApi.setEmployeeAccess({ uid: user.id, role: newRole, active: user.active !== false });
-    } catch (error: unknown) {
-      setErrorMsg(message(error));
-    }
-  };
-
-  const toggleActive = async (user: User) => {
-    try {
-      await secureApi.setEmployeeAccess({ uid: user.id, role: user.role, active: user.active === false });
-    } catch (error: unknown) {
-      setErrorMsg(message(error));
-    }
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-xl font-bold text-zinc-900">Team Beheer</h2>
-      </div>
-      <form onSubmit={invite} className="bg-white p-6 rounded-[24px] border border-zinc-200 grid grid-cols-1 md:grid-cols-5 gap-3">
-        <input value={name} onChange={event => setName(event.target.value)} required placeholder="Volledige naam" className="border border-zinc-200 rounded-[12px] p-3" />
-        <input value={email} onChange={event => setEmail(event.target.value)} required type="email" placeholder="E-mailadres" className="border border-zinc-200 rounded-[12px] p-3" />
-        <input value={phone} onChange={event => setPhone(event.target.value)} type="tel" placeholder="Telefoon (optioneel)" className="border border-zinc-200 rounded-[12px] p-3" />
-        <select
-          value={inviteRole}
-          onChange={event => setInviteRole(event.target.value === 'admin' ? 'admin' : 'employee')}
-          className="border border-zinc-200 rounded-[12px] p-3 bg-white font-medium"
-          aria-label="Rol"
-        >
-          <option value="employee">Medewerker</option>
-          <option value="admin">Beheerder</option>
-        </select>
-        <button disabled={isSubmitting} className="bg-zinc-900 text-white font-bold rounded-[12px] p-3 disabled:opacity-50">
-          {isSubmitting ? 'Bezig…' : 'Uitnodigen'}
-        </button>
-      </form>
-      {inviteLink && (
-        <div className="p-4 bg-green-50 text-green-800 rounded-[12px] border border-green-200 text-sm break-all">
-          De uitnodiging is verstuurd. De persoon kan nu met dit Google-e-mailadres aanmelden.
-        </div>
-      )}
-      {errorMsg && (
-        <div className="p-4 bg-red-50 text-red-700 rounded-[12px] border border-red-200 text-sm font-medium">
-          {errorMsg}
-        </div>
-      )}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {users.map(u => (
-          <div key={u.id} className={`bg-white p-5 rounded-[24px] border shadow-[0_4px_14px_0_rgb(0,0,0,0.03)] space-y-4 ${u.active === false ? 'border-red-200 opacity-70' : 'border-zinc-200'}`}>
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-zinc-100 rounded-full flex items-center justify-center text-zinc-500 font-bold">
-                {u.name.charAt(0).toUpperCase()}
-              </div>
-              <div className="flex-1 truncate">
-                <h3 className="font-bold text-zinc-900 truncate">{u.name}</h3>
-                <p className="text-sm text-zinc-500 truncate">{u.email}</p>
-              </div>
-            </div>
-            <div className="pt-4 border-t border-zinc-100 flex flex-wrap items-center justify-between gap-2">
-              <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${u.role === 'admin' ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-700'}`}>
-                {u.role === 'admin' ? 'Beheerder' : 'Medewerker'}
-              </span>
-              <button
-                onClick={() => toggleRole(u)}
-                className="text-sm text-zinc-500 hover:text-zinc-900 font-medium transition-colors"
-              >
-                {u.role === 'admin' ? 'Maak Medewerker' : 'Maak Beheerder'}
-              </button>
-              <button
-                onClick={() => toggleActive(u)}
-                className={`text-sm font-medium transition-colors ${u.active === false ? 'text-green-700' : 'text-red-600'}`}
-              >
-                {u.active === false ? 'Activeren' : 'Deactiveren'}
-              </button>
-            </div>
-          </div>
-        ))}
       </div>
     </div>
   );

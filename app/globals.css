@@ -20,38 +20,38 @@
 }
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-  --card: #ffffff;
-  --card-foreground: #171717;
-  --popover: #ffffff;
-  --popover-foreground: #171717;
-  --primary: #171717;
-  --primary-foreground: #fafafa;
-  --secondary: #f5f5f5;
-  --secondary-foreground: #171717;
-  --muted: #f5f5f5;
-  --muted-foreground: #737373;
-  --accent: #f5f5f5;
-  --accent-foreground: #171717;
-  --destructive: #e7000b;
-  --border: #e5e5e5;
-  --input: #e5e5e5;
-  --ring: #a1a1a1;
-  --chart-1: #f54900;
-  --chart-2: #009689;
-  --chart-3: #104e64;
-  --chart-4: #ffb900;
-  --chart-5: #fe9a00;
+  --background: #040a0f;
+  --foreground: #edf7f9;
+  --card: #12212c;
+  --card-foreground: #edf7f9;
+  --popover: #12212c;
+  --popover-foreground: #edf7f9;
+  --primary: #38bfd0;
+  --primary-foreground: #021014;
+  --secondary: #172933;
+  --secondary-foreground: #edf7f9;
+  --muted: #172933;
+  --muted-foreground: #9bb0ba;
+  --accent: #172933;
+  --accent-foreground: #edf7f9;
+  --destructive: #f0717e;
+  --border: rgba(151, 190, 202, 0.16);
+  --input: rgba(151, 190, 202, 0.16);
+  --ring: #5ad4df;
+  --chart-1: #38bfd0;
+  --chart-2: #49ce93;
+  --chart-3: #efb65f;
+  --chart-4: #f0717e;
+  --chart-5: #5ad4df;
   --radius: 0.625rem;
-  --sidebar: #fafafa;
-  --sidebar-foreground: #171717;
-  --sidebar-primary: #171717;
-  --sidebar-primary-foreground: #fafafa;
-  --sidebar-accent: #f5f5f5;
-  --sidebar-accent-foreground: #171717;
-  --sidebar-border: #e5e5e5;
-  --sidebar-ring: #a1a1a1;
+  --sidebar: #0d1821;
+  --sidebar-foreground: #edf7f9;
+  --sidebar-primary: #38bfd0;
+  --sidebar-primary-foreground: #021014;
+  --sidebar-accent: #172933;
+  --sidebar-accent-foreground: #edf7f9;
+  --sidebar-border: rgba(151, 190, 202, 0.16);
+  --sidebar-ring: #5ad4df;
 }
 
 @theme inline {
@@ -90,13 +90,14 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
-  --font-sans: Arial, Helvetica, sans-serif;
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Outfit", ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
     "Liberation Mono", "Courier New", monospace;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: #040a0f;
+  color: #edf7f9;
+  font-family: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
 }
