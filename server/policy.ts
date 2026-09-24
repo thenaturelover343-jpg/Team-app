@@ -32,7 +32,7 @@ export function distanceMeters(from: { lat: number; lng: number }, to: { lat: nu
 }
 
 export function validateGeofence(location: { lat: number; lng: number; accuracy: number }, target?: { lat: number; lng: number }, radius = 250) {
-  if (location.accuracy > 100) throw new Error('GPS-signaal onvoldoende nauwkeurig. Probeer buiten opnieuw.');
+  if (location.accuracy > 200) throw new Error('GPS-signaal te zwak. Ga buiten staan en probeer opnieuw.');
   if (!target) return { status: 'unverified' as const, distance: null };
   const distance = distanceMeters(location, target);
   if (distance > radius + location.accuracy) throw new Error(`U bevindt zich buiten de toegestane zone (${Math.round(distance)} meter van de locatie).`);
@@ -48,9 +48,14 @@ export function mayCreateAdminSession(userCount: number, loginEmail: string, boo
   return Boolean(bootstrapEmail && loginEmail === bootstrapEmail);
 }
 
-/** Invited inboxes (Outlook/Hotmail/Gmail) may activate with a password before clicking a verify-mail. */
+/** Activate with a verified email, or by opening the real invite link. A random token is not enough. */
 export function inviteAcceptsUnverified(emailVerified: boolean, inviteToken: string, hasPendingInvite = false) {
   return emailVerified || Boolean(inviteToken) || hasPendingInvite;
+}
+
+export function activationAllowed(emailVerified: boolean, providedToken: string, storedToken: unknown) {
+  const openedViaInviteLink = Boolean(providedToken) && providedToken === String(storedToken ?? '');
+  return inviteAcceptsUnverified(emailVerified, openedViaInviteLink ? providedToken : '');
 }
 
 

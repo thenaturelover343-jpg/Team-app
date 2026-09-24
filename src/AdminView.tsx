@@ -1,6 +1,6 @@
 import React, { useState, Suspense, lazy } from 'react';
-import { User, Assignment, Shift, Customer, CorrectionRequest, Incident, PlannedShift, PushState, TeamNotification, PrivacySettings, AuditEvent, AccessEvent, BackupRun, ErrorEvent, PilotProgram, PilotFeedback, formatDate, formatTime, localDateKey } from './types';
-import { Calendar, Clock, MapPin, Plus, User as UserIcon, ListTodo, Loader2, Users, CheckSquare, Square, Download, BarChart2, CalendarDays, AlertTriangle, ShieldCheck, Settings } from 'lucide-react';
+import { User, Assignment, Shift, Customer, CorrectionRequest, Incident, formatDate, formatTime, localDateKey } from './types';
+import { Calendar, Clock, MapPin, Plus, User as UserIcon, ListTodo, Loader2, Users, CheckSquare, Square, Download, BarChart2, CalendarDays, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { handleFirestoreError, OperationType } from './lib/firebase';
 import { secureApi } from './lib/secureApi';
 import { useLanguage } from './i18n';
@@ -10,7 +10,6 @@ import { useAuth } from './hooks/useAuth';
 const HoursBarChart = lazy(() => import('./components/HoursBarChart'));
 const WeekPlanner = lazy(() => import('./components/WeekPlanner'));
 const ControlCenter = lazy(() => import('./components/ControlCenter'));
-const QualityCenter = lazy(() => import('./components/QualityCenter'));
 const TeamTab = lazy(() => import('./components/TeamTab'));
 
 function TabFallback() {
@@ -20,7 +19,7 @@ function TabFallback() {
 export default function AdminView() {
   const { t } = useLanguage();
   const { snapshot, refreshUser } = useAuth();
-  const [activeTab, setActiveTab] = useState<'control' | 'week' | 'planning' | 'timesheets' | 'reports' | 'customers' | 'team' | 'quality'>('control');
+  const [activeTab, setActiveTab] = useState<'control' | 'week' | 'planning' | 'timesheets' | 'reports' | 'customers' | 'team'>('control');
 
   const users = snapshot?.users ?? [];
   const shifts = snapshot?.shifts ?? [];
@@ -31,17 +30,8 @@ export default function AdminView() {
   const correctionRequests = snapshot?.correctionRequests ?? [];
   const notifications = snapshot?.notifications ?? [];
   const push = snapshot?.push ?? { supported: false, enabled: false, publicKey: '' };
-  const privacy = snapshot?.privacy ?? { controllerName: 'Barlicious & Koelverhuur', contactEmail: '', locationDays: 90, notificationDays: 180, auditDays: 730, errorDays: 180, backupDays: 365 };
-  const auditEvents = snapshot?.auditEvents ?? [];
-  const accessEvents = snapshot?.accessEvents ?? [];
-  const backups = snapshot?.backups ?? [];
-  const errors = snapshot?.errors ?? [];
-  const pilot = snapshot?.pilot ?? null;
-  const pilotFeedback = snapshot?.pilotFeedback ?? [];
-
-  useLiveRefresh(refreshUser, true, 30_000);
-
   const loadData = refreshUser;
+  useLiveRefresh(loadData, true, 30_000);
 
   return (
     <div className="admin-shell max-w-6xl mx-auto w-full space-y-7 pb-12">
@@ -54,7 +44,6 @@ export default function AdminView() {
           <CalendarDays className="w-4 h-4" />
           <span>{t('navWeek')}</span>
         </button>
-        <button onClick={() => setActiveTab('quality')} className={`ops-nav-btn ${activeTab === 'quality' ? 'ops-nav-btn-active' : ''}`}><Settings className="w-4 h-4"/><span>{t('navQuality')}</span></button>
         <button
           onClick={() => setActiveTab('planning')}
           className={`ops-nav-btn ${activeTab === 'planning' ? 'ops-nav-btn-active' : ''}`}
@@ -88,12 +77,11 @@ export default function AdminView() {
 
       {activeTab === 'control' && <Suspense fallback={<TabFallback />}><ControlCenter users={users} plannedShifts={plannedShifts} shifts={shifts} notifications={notifications} push={push} onChanged={loadData} /></Suspense>}
       {activeTab === 'week' && <Suspense fallback={<TabFallback />}><WeekPlanner users={users} customers={customers} shifts={plannedShifts} onChanged={loadData} /></Suspense>}
-      {activeTab === 'planning' && <PlanningTab users={users} assignments={assignments} customers={customers} />}
+      {activeTab === 'planning' && <PlanningTab users={users} assignments={assignments} customers={customers} onChanged={loadData} />}
       {activeTab === 'timesheets' && <TimesheetsTab users={users} shifts={shifts} assignments={assignments} />}
       {activeTab === 'reports' && <AdminReportsTab users={users} incidents={incidents} corrections={correctionRequests} onChanged={loadData} />}
-      {activeTab === 'customers' && <CustomersTab customers={customers} />}
+      {activeTab === 'customers' && <CustomersTab customers={customers} onChanged={loadData} />}
       {activeTab === 'team' && <Suspense fallback={<TabFallback />}><TeamTab users={users} onChanged={loadData} /></Suspense>}
-      {activeTab === 'quality' && <Suspense fallback={<TabFallback />}><QualityCenter users={users} privacy={privacy} auditEvents={auditEvents} accessEvents={accessEvents} backups={backups} errors={errors} pilot={pilot} feedback={pilotFeedback} onChanged={loadData} /></Suspense>}
     </div>
   );
 }
@@ -112,7 +100,7 @@ function AdminReportsTab({ users, incidents, corrections, onChanged }: { users: 
   </div>;
 }
 
-function CustomersTab({ customers }: { customers: Customer[] }) {
+function CustomersTab({ customers, onChanged }: { customers: Customer[]; onChanged: () => Promise<void> }) {
   const [isAdding, setIsAdding] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -139,6 +127,7 @@ function CustomersTab({ customers }: { customers: Customer[] }) {
       setLatitude('');
       setLongitude('');
       setIsAdding(false);
+      await onChanged();
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, 'customers');
     } finally {
@@ -253,7 +242,7 @@ function CustomersTab({ customers }: { customers: Customer[] }) {
   );
 }
 
-function PlanningTab({ users, assignments, customers }: { users: User[], assignments: Assignment[], customers: Customer[] }) {
+function PlanningTab({ users, assignments, customers, onChanged }: { users: User[]; assignments: Assignment[]; customers: Customer[]; onChanged: () => Promise<void> }) {
   const [isAdding, setIsAdding] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -287,6 +276,7 @@ function PlanningTab({ users, assignments, customers }: { users: User[], assignm
       setSiteAddress('');
       setDescription('');
       setIsAdding(false);
+      await onChanged();
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, 'assignments');
     } finally {
@@ -400,7 +390,7 @@ function PlanningTab({ users, assignments, customers }: { users: User[], assignm
           </div>
         ) : (
           sortedAssignments.map(a => (
-            <AdminAssignmentCard key={a.id} assignment={a} users={users} customers={customers} />
+            <AdminAssignmentCard key={a.id} assignment={a} users={users} customers={customers} onChanged={onChanged} />
           ))
         )}
       </div>
@@ -408,7 +398,7 @@ function PlanningTab({ users, assignments, customers }: { users: User[], assignm
   );
 }
 
-function AdminAssignmentCard({ assignment, users, customers }: { assignment: Assignment, users: User[], customers: Customer[], key?: string | number }) {
+function AdminAssignmentCard({ assignment, users, customers, onChanged }: { assignment: Assignment; users: User[]; customers: Customer[]; onChanged: () => Promise<void>; key?: string | number }) {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -443,6 +433,7 @@ function AdminAssignmentCard({ assignment, users, customers }: { assignment: Ass
         siteAddress: editSiteAddress.trim() || selectedCustomer.address,
       });
       setIsEditing(false);
+      await onChanged();
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `assignments/${assignment.id}`);
     } finally {
@@ -450,11 +441,13 @@ function AdminAssignmentCard({ assignment, users, customers }: { assignment: Ass
     }
   };
 
-  const handleDelete = () => {
-    if (confirm('Zeker dat je deze opdracht wilt verwijderen?')) {
-      secureApi.deleteAssignment(assignment.id).catch(err =>
-        handleFirestoreError(err, OperationType.DELETE, `assignments/${assignment.id}`)
-      );
+  const handleDelete = async () => {
+    if (!window.confirm('Zeker dat je deze opdracht wilt verwijderen?')) return;
+    try {
+      await secureApi.deleteAssignment(assignment.id);
+      await onChanged();
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `assignments/${assignment.id}`);
     }
   };
 

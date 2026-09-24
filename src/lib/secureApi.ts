@@ -13,7 +13,7 @@ type AssignmentInput = { id?: string; userId: string; customerId: string; date: 
 type PlannedShiftInput = { title: string; customerId?: string; siteAddress?: string; siteLatitude?: number | ''; siteLongitude?: number | ''; date: string; startTime: string; endTime: string; breakMinutes: number; notes?: string; memberIds: string[]; repeatWeeks: number; checklist: string[] };
 export type TeamSnapshot = { user: User; users: User[]; shifts: Shift[]; assignments: Assignment[]; customers: Customer[]; plannedShifts: PlannedShift[]; breaks: ShiftBreak[]; incidents: Incident[]; correctionRequests: CorrectionRequest[]; attachments: Attachment[]; notifications: TeamNotification[]; push: PushState; privacy: PrivacySettings; auditEvents: AuditEvent[]; accessEvents: AccessEvent[]; backups: BackupRun[]; errors: ErrorEvent[]; pilot: PilotProgram | null; pilotFeedback: PilotFeedback[] };
 
-async function publicCall<T>(action: string, input: Record<string, unknown> = {}): Promise<{ data: T }> {
+async function publicCall<T>(action: string, input: object = {}): Promise<{ data: T }> {
   const response = await fetch('/api/team', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -24,7 +24,7 @@ async function publicCall<T>(action: string, input: Record<string, unknown> = {}
   return { data: payload.data };
 }
 
-async function call<T>(action: string, input: Record<string, unknown> = {}): Promise<{ data: T }> {
+async function call<T>(action: string, input: object = {}): Promise<{ data: T }> {
   const current = auth.currentUser;
   if (!current) throw new Error('U bent niet aangemeld.');
   const token = await current.getIdToken();
@@ -38,9 +38,10 @@ async function call<T>(action: string, input: Record<string, unknown> = {}): Pro
   return { data: payload.data };
 }
 
-async function queueable(action: string, input: Record<string, unknown>) {
+async function queueable(action: string, input: object) {
+  const payload = input as Record<string, unknown>;
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
-    enqueueOfflineAction(action, input);
+    enqueueOfflineAction(action, payload);
     return { queued: true };
   }
   try {
@@ -48,7 +49,7 @@ async function queueable(action: string, input: Record<string, unknown>) {
     return { queued: false };
   } catch (error) {
     if (error instanceof TypeError) {
-      enqueueOfflineAction(action, input);
+      enqueueOfflineAction(action, payload);
       return { queued: true };
     }
     throw error;

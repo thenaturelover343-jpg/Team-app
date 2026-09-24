@@ -25,7 +25,7 @@ export const AuthContext = createContext<AuthContextType>({
 });
 
 function isAccessDenied(message: string): boolean {
-  return /niet aangemeld|geen toegang|uitgenodigd|niet actief|niet gemachtigd|unauthorized|forbidden|invalid.?token|id.?token|ander e-mailadres/i.test(message);
+  return /niet aangemeld|geen toegang|uitgenodigd|uitnodigingslink|activeren|niet actief|niet gemachtigd|unauthorized|forbidden|invalid.?token|id.?token|ander e-mailadres/i.test(message);
 }
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
@@ -69,7 +69,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   useEffect(() => {
-    setLoading(true);
     let unsub = () => {};
     let cancelled = false;
     (async () => {

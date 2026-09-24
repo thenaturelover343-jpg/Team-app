@@ -14,7 +14,7 @@ import {
   resetPassword,
   sendEmailSignInLink,
 } from './lib/firebase';
-import { LanguageProvider, LanguageSwitch, useLanguage } from './i18n';
+import { LanguageProvider, useLanguage } from './i18n';
 import { secureApi } from './lib/secureApi';
 import { readInviteTokenFromLocation } from './lib/inviteLink';
 import { readSessionHint, type SessionHint } from './lib/sessionHint';
@@ -59,8 +59,7 @@ function GoogleMark() {
 
 function AppContent() {
   const { user, loading, accessError, redirectAuthError } = useAuth();
-  const { locale, t } = useLanguage();
-  const fr = locale === 'fr';
+  const { t } = useLanguage();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -74,7 +73,14 @@ function AppContent() {
   const [inviteLoading, setInviteLoading] = useState(Boolean(inviteToken));
   const [creating, setCreating] = useState(false);
   const [sessionHint] = useState(() => readSessionHint());
-  const [needsEmailForLink, setNeedsEmailForLink] = useState(false);
+  const [needsEmailForLink, setNeedsEmailForLink] = useState(() => {
+    if (typeof window === 'undefined' || !pendingEmailLinkSignIn()) return false;
+    try {
+      return !window.localStorage.getItem('barliciousEmailForSignIn');
+    } catch {
+      return true;
+    }
+  });
   const [viewAsEmployee, setViewAsEmployee] = useState(() => {
     if (typeof sessionStorage === 'undefined') return false;
     return sessionStorage.getItem('adminViewAsEmployee') === '1';
@@ -97,19 +103,11 @@ function AppContent() {
   }, [inviteToken, t]);
 
   useEffect(() => {
-    if (pendingEmailLinkSignIn()) {
-      try {
-        if (!window.localStorage.getItem('barliciousEmailForSignIn')) setNeedsEmailForLink(true);
-      } catch {
-        setNeedsEmailForLink(true);
-      }
-    }
-  }, []);
-
-  useEffect(() => {
     if (!invite || !pendingEmailLinkSignIn()) return;
     let active = true;
-    setIsSubmitting(true);
+    const timer = window.setTimeout(() => {
+      if (active) setIsSubmitting(true);
+    }, 0);
     completeEmailLinkSignIn(invite.email).then(() => {
       if (active) setNeedsEmailForLink(false);
     }).catch(error => {
@@ -117,7 +115,10 @@ function AppContent() {
     }).finally(() => {
       if (active) setIsSubmitting(false);
     });
-    return () => { active = false; };
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
   }, [invite]);
 
   const toggleEmployeePreview = () => {
@@ -231,7 +232,6 @@ function AppContent() {
             </div>
 
             <div className="header-actions flex flex-wrap items-center justify-end gap-2 sm:gap-3 max-w-full">
-              <LanguageSwitch />
               <PWAInstallButton />
               {user.role === 'admin' && (
                 <button
@@ -251,7 +251,7 @@ function AppContent() {
                 <div className="user-pill-copy flex flex-col pr-2 sm:pr-3 border-r border-zinc-200">
                   <span className="text-sm font-bold text-zinc-900 leading-tight truncate max-w-[100px]">{user.name}</span>
                   <span className="text-xs text-zinc-400 leading-tight capitalize">
-                    {user.role === 'admin' && viewAsEmployee ? (fr ? 'admin · aperçu' : 'beheerder · preview') : user.role}
+                    {user.role === 'admin' && viewAsEmployee ? ('beheerder · preview') : user.role}
                   </span>
                 </div>
                 <button onClick={logout} aria-label={t('logout')} className="text-zinc-400 hover:text-zinc-900 transition-colors" title={t('logout')}>
@@ -282,7 +282,6 @@ function AppContent() {
     return (
       <div className="login-shell min-h-screen flex items-center justify-center p-4 sm:p-6 relative overflow-x-hidden">
         <AppUpdateBanner />
-        <div className="login-language absolute top-4 right-4 z-10"><LanguageSwitch /></div>
         <div className="auth-card ops-card max-w-md w-full p-5 sm:p-9 space-y-6 sm:space-y-8">
           <div className="text-center space-y-3">
             <div className="brand-mark brand-mark-hero flex items-center justify-center mx-auto mb-2">

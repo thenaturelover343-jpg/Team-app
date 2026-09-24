@@ -346,3 +346,107 @@
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
+
+/* Witte legacy-kaarten op donkere Controle / Uren / Klanten / Opdrachten. */
+.employee-shell .bg-white,
+.admin-shell .bg-white,
+.employee-shell .bg-zinc-50,
+.admin-shell .bg-zinc-50,
+.employee-shell .bg-zinc-50\/60,
+.admin-shell .bg-zinc-50\/60 {
+  background-color: var(--ops-surface-raised) !important;
+  color: var(--ops-text);
+}
+.employee-shell .text-zinc-900,
+.admin-shell .text-zinc-900,
+.employee-shell .text-zinc-800,
+.admin-shell .text-zinc-800,
+.employee-shell .text-zinc-700,
+.admin-shell .text-zinc-700 {
+  color: var(--ops-text) !important;
+}
+.employee-shell .text-zinc-600,
+.admin-shell .text-zinc-600,
+.employee-shell .text-zinc-500,
+.admin-shell .text-zinc-500,
+.employee-shell .text-zinc-400,
+.admin-shell .text-zinc-400 {
+  color: var(--ops-text-muted) !important;
+}
+.employee-shell .border-zinc-200,
+.admin-shell .border-zinc-200,
+.employee-shell .border-zinc-200\/60,
+.admin-shell .border-zinc-200\/60,
+.employee-shell .border-zinc-100,
+.admin-shell .border-zinc-100,
+.employee-shell .border-zinc-300,
+.admin-shell .border-zinc-300 {
+  border-color: var(--ops-border) !important;
+}
+.employee-shell .bg-red-50,
+.admin-shell .bg-red-50,
+.employee-shell .bg-red-100,
+.admin-shell .bg-red-100 {
+  background: rgba(240, 113, 126, 0.14) !important;
+  color: #ffd5d9 !important;
+  border-color: rgba(240, 113, 126, 0.4) !important;
+}
+.employee-shell .bg-green-50,
+.admin-shell .bg-green-50,
+.employee-shell .bg-emerald-100,
+.admin-shell .bg-emerald-100,
+.employee-shell .text-emerald-700,
+.admin-shell .text-emerald-700,
+.employee-shell .text-green-700,
+.admin-shell .text-green-700 {
+  background-color: rgba(73, 206, 147, 0.14);
+  color: #c8f6df !important;
+}
+.employee-shell .bg-amber-50,
+.admin-shell .bg-amber-50,
+.employee-shell .bg-amber-100,
+.admin-shell .bg-amber-100,
+.employee-shell .bg-amber-50\/80,
+.employee-shell .text-amber-800,
+.employee-shell .text-amber-900 {
+  background-color: rgba(239, 182, 95, 0.14);
+  color: #ffe6b8 !important;
+}
+.employee-shell input,
+.employee-shell select,
+.employee-shell textarea,
+.admin-shell input,
+.admin-shell select,
+.admin-shell textarea {
+  background: #071017;
+  color: var(--ops-text);
+  border-color: var(--ops-border);
+}
+.employee-shell .bg-zinc-900,
+.admin-shell .bg-zinc-900 {
+  background: linear-gradient(180deg, #49cad8, #2aa1b1) !important;
+  color: #021014 !important;
+}
+.employee-shell .bg-\[\#FAFAFA\],
+.admin-shell .bg-\[\#FAFAFA\],
+.employee-shell .bg-\[\#FAFAFA\]\/50,
+.admin-shell .bg-\[\#FAFAFA\]\/50,
+.employee-shell .hover\:bg-\[\#FAFAFA\]\/50:hover,
+.admin-shell .hover\:bg-\[\#FAFAFA\]\/50:hover,
+.employee-shell .bg-zinc-100,
+.admin-shell .bg-zinc-100,
+.employee-shell .bg-zinc-100\/50,
+.admin-shell .bg-zinc-100\/50 {
+  background-color: var(--ops-surface) !important;
+  color: var(--ops-text);
+}
+.employee-shell .bg-green-100,
+.admin-shell .bg-green-100 {
+  background-color: rgba(73, 206, 147, 0.16) !important;
+  color: #c8f6df !important;
+}
+.employee-shell .shadow-\[0_4px_14px_0_rgb\(0\,0\,0\,0\.03\)\],
+.admin-shell .shadow-\[0_4px_14px_0_rgb\(0\,0\,0\,0\.03\)\] {
+  box-shadow: none;
+}
+

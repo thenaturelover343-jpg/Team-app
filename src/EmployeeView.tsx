@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
-import { User, Shift, ShiftBreak, Assignment, Attachment, CorrectionRequest, Incident, PlannedShift, PushState, TeamNotification, WeeklyAvailability, PrivacySettings, AccessEvent, PilotProgram, PilotFeedback, getCurrentLocation, formatTime, formatDate, AssignmentTask, localDateKey, isGeoBlockedError, openDeviceLocationSettings, detectGeoPlatform, queryLocationPermission, iosLocationStepsCopy, androidLocationStepsCopy } from './types';
+import { User, Shift, ShiftBreak, Assignment, Attachment, CorrectionRequest, Incident, PlannedShift, getCurrentLocation, formatTime, formatDate, AssignmentTask, localDateKey, isGeoBlockedError, openDeviceLocationSettings, detectGeoPlatform, queryLocationPermission, iosLocationStepsCopy, androidLocationStepsCopy } from './types';
 import { MapPin, Clock, CheckCircle, Play, Square, Navigation2, FileText, Loader2, User as UserIcon, Calendar, History, Save, Plus, Trash2, CheckSquare, CalendarDays, XCircle, AlertTriangle, ClipboardList, WifiOff, Coffee, Upload, Download, Bell, Settings } from 'lucide-react';
 import { useAuth } from './hooks/useAuth';
 import { handleFirestoreError, OperationType } from './lib/firebase';
@@ -93,7 +93,7 @@ export default function EmployeeView() {
       {activeTab === 'planning' && <EmployeePlanningTab userId={user.id} shifts={plannedShifts} attachments={attachments} onChanged={loadData} />}
       {activeTab === 'reports' && <ReportsTab shifts={shifts} plannedShifts={plannedShifts} incidents={incidents} corrections={correctionRequests} onChanged={loadData} />}
       {activeTab === 'notifications' && <NotificationCenter notifications={notifications} push={push} onChanged={loadData} />}
-      {activeTab === 'profile' && <div className="space-y-6"><ProfileTab user={user} /><PrivacyPanel privacy={privacy} accessEvents={accessEvents} pilot={pilot} feedback={pilotFeedback} onChanged={loadData} subtle /></div>}
+      {activeTab === 'profile' && <div className="space-y-6"><ProfileTab key={`${user.id}:${user.firstName || ''}:${user.lastName || ''}:${user.phone || ''}:${user.address || ''}`} user={user} /><PrivacyPanel privacy={privacy} accessEvents={accessEvents} pilot={pilot} feedback={pilotFeedback} onChanged={loadData} subtle /></div>}
     </div>
   );
 }
@@ -232,6 +232,7 @@ function DashboardTab({ userId, shifts, breaks, assignments, plannedShifts, atta
   const handleAcknowledge = async (assignmentId: string) => {
     try {
       await secureApi.acknowledgeAssignment(assignmentId);
+      await onChanged();
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `assignments/${assignmentId}`);
     }
@@ -243,6 +244,7 @@ function DashboardTab({ userId, shifts, breaks, assignments, plannedShifts, atta
         secureApi.acknowledgeAssignment(a.id)
       );
       await Promise.all(promises);
+      await onChanged();
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `assignments/batch-update`);
     }
@@ -360,7 +362,7 @@ function DashboardTab({ userId, shifts, breaks, assignments, plannedShifts, atta
                 <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse" />
                 <span>Ingeklokt sinds {formatTime(activeShift.clockIn)}</span>
               </div>
-              {activeShift.clockInLoc?.accuracy > 0 && <div className="text-xs font-semibold text-zinc-500">GPS-nauwkeurigheid: ±{Math.round(activeShift.clockInLoc.accuracy)} m{activeShift.clockInDistance !== undefined ? ` · afstand locatie: ${Math.round(activeShift.clockInDistance)} m` : ''}</div>}
+              {(activeShift.clockInLoc?.accuracy ?? 0) > 0 && <div className="text-xs font-semibold text-zinc-500">GPS-nauwkeurigheid: ±{Math.round(activeShift.clockInLoc?.accuracy ?? 0)} m{activeShift.clockInDistance !== undefined ? ` · afstand locatie: ${Math.round(activeShift.clockInDistance)} m` : ''}</div>}
               
               <div className="ops-panel text-left space-y-4 p-5">
                 <div>
@@ -436,8 +438,7 @@ function DashboardTab({ userId, shifts, breaks, assignments, plannedShifts, atta
 }
 
 function EmployeePlanningTab({ userId, shifts, attachments, onChanged }: { userId: string; shifts: PlannedShift[]; attachments: Attachment[]; onChanged: () => Promise<void> }) {
-  const { t, locale } = useLanguage();
-  const fr = locale === 'fr';
+  const { t } = useLanguage();
   const [busyId, setBusyId] = useState('');
   const [error, setError] = useState('');
   const [mode, setMode] = useState<'today' | 'week'>('today');
@@ -475,7 +476,7 @@ function EmployeePlanningTab({ userId, shifts, attachments, onChanged }: { userI
     <div className="px-1"><h2 className="text-2xl font-bold text-zinc-900">Mijn planning</h2><p className="text-sm text-zinc-500 mt-1">Bekijk je diensten en route voor vandaag of de week.</p></div>
     <div className="grid grid-cols-2 gap-2 ops-panel p-1.5">
       <button type="button" onClick={() => setMode('today')} className={`py-3 rounded-lg font-bold text-sm ${mode === 'today' ? 'ops-nav-btn-active' : ''}`}>{t('today')}</button>
-      <button type="button" onClick={() => setMode('week')} className={`py-3 rounded-lg font-bold text-sm ${mode === 'week' ? 'ops-nav-btn-active' : ''}`}>{fr ? 'Semaine' : 'Week'}</button>
+      <button type="button" onClick={() => setMode('week')} className={`py-3 rounded-lg font-bold text-sm ${mode === 'week' ? 'ops-nav-btn-active' : ''}`}>{'Week'}</button>
     </div>
     {error && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</div>}
     {!visible.length && <div className="bg-white border border-zinc-200 rounded-2xl p-8 text-center text-zinc-500">{mode === 'today' ? 'Geen diensten gepland voor vandaag.' : 'Er staan nog geen gepubliceerde diensten klaar.'}</div>}
@@ -557,13 +558,6 @@ function ProfileTab({ user }: { user: User }) {
   const [address, setAddress] = useState(user.address || '');
   const [isUpdating, setIsUpdating] = useState(false);
   const [msg, setMsg] = useState({ text: '', type: '' });
-
-  useEffect(() => {
-    setFirstName(user.firstName || '');
-    setLastName(user.lastName || '');
-    setPhone(user.phone || '');
-    setAddress(user.address || '');
-  }, [user.id, user.firstName, user.lastName, user.phone, user.address]);
 
   const [historyAssignments, setHistoryAssignments] = useState<Assignment[]>([]);
   const [historyShifts, setHistoryShifts] = useState<Shift[]>([]);

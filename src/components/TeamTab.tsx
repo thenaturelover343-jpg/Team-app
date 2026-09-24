@@ -12,6 +12,8 @@ export default function TeamTab({ users, onChanged }: { users: User[]; onChanged
   const [phone, setPhone] = useState('');
   const [inviteRole, setInviteRole] = useState<'admin' | 'employee'>('employee');
   const [inviteUrl, setInviteUrl] = useState('');
+  const [sharePhone, setSharePhone] = useState('');
+  const [mailState, setMailState] = useState<'sent' | 'failed' | ''>('');
   const [copied, setCopied] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -21,12 +23,23 @@ export default function TeamTab({ users, onChanged }: { users: User[]; onChanged
     event.preventDefault();
     setErrorMsg('');
     setInviteUrl('');
+    setSharePhone('');
+    setMailState('');
     setCopied(false);
     setIsSubmitting(true);
     try {
       const result = await secureApi.inviteEmployee({ name, email, phone, role: inviteRole });
-      setInviteUrl(result.data.inviteUrl || result.data.resetLink || '');
-      try { await sendEmailSignInLink(email, result.data.inviteUrl, false); } catch { /* link blijft kopieerbaar als mail niet vertrekt */ }
+      const link = result.data.inviteUrl || result.data.resetLink || '';
+      setInviteUrl(link);
+      setSharePhone(phone);
+      let sent = false;
+      try {
+        await sendEmailSignInLink(email, link, false);
+        sent = true;
+      } catch {
+        sent = false;
+      }
+      setMailState(sent ? 'sent' : 'failed');
       setName('');
       setEmail('');
       setPhone('');
@@ -37,6 +50,14 @@ export default function TeamTab({ users, onChanged }: { users: User[]; onChanged
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const whatsAppHref = (link: string, rawPhone: string) => {
+    const text = encodeURIComponent(`Je bent uitgenodigd voor Barlicious Team. Activeer je account via deze link:\n${link}`);
+    let digits = rawPhone.replace(/\D/g, '');
+    if (digits.startsWith('00')) digits = digits.slice(2);
+    else if (digits.startsWith('0')) digits = `32${digits.slice(1)}`;
+    return digits ? `https://wa.me/${digits}?text=${text}` : `https://wa.me/?text=${text}`;
   };
 
   const copy = async () => {
@@ -60,6 +81,8 @@ export default function TeamTab({ users, onChanged }: { users: User[]; onChanged
   };
 
   const toggleActive = async (user: User) => {
+    const turningOff = user.active !== false;
+    if (turningOff && !window.confirm(`${user.name} deactiveren? Die persoon kan dan niet meer inloggen.`)) return;
     try {
       await secureApi.setEmployeeAccess({ uid: user.id, role: user.role, active: user.active === false });
       await onChanged?.();
@@ -90,9 +113,12 @@ export default function TeamTab({ users, onChanged }: { users: User[]; onChanged
       </form>
       {inviteUrl && (
         <div className="ops-panel p-4 text-sm space-y-3">
-          <p>{t('inviteOk')}</p>
+          <p>{mailState === 'sent' ? t('inviteMailOk') : t('inviteMailFail')}</p>
           <code className="block break-all text-xs opacity-80">{inviteUrl}</code>
-          <button type="button" onClick={copy} className="ops-btn-secondary px-4">{copied ? t('copied') : t('copyLink')}</button>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={copy} className="ops-btn-secondary px-4">{copied ? t('copied') : t('copyLink')}</button>
+            <a className="ops-btn-secondary px-4 inline-flex items-center" href={whatsAppHref(inviteUrl, sharePhone)} target="_blank" rel="noreferrer">{t('whatsappShare')}</a>
+          </div>
         </div>
       )}
       {errorMsg && <div className="ops-chip-danger w-full justify-start px-4 py-3 text-sm">{errorMsg}</div>}

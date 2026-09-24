@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { cleanText, distanceMeters, inviteAcceptsUnverified, isAllowedTransition, mayCreateAdminSession, normalizeEmail, validateGeofence, validateLocation } from '../server/policy.ts';
+import { activationAllowed, cleanText, distanceMeters, inviteAcceptsUnverified, isAllowedTransition, mayCreateAdminSession, normalizeEmail, validateGeofence, validateLocation } from '../server/policy.ts';
 import { addWeeks, availabilityConflict, overlaps, validateShiftWindow } from '../server/planning.ts';
 import { attendanceEvents, csv, workedMinutes } from '../server/phase4.ts';
 
@@ -28,7 +28,8 @@ test('geofence controleert afstand en GPS-nauwkeurigheid', () => {
   assert.ok(distanceMeters(target, { lat: 50.9405, lng: 4.04 }) < 100);
   assert.equal(validateGeofence({ ...target, accuracy: 10 }, target).status, 'inside');
   assert.equal(validateGeofence({ ...target, accuracy: 10 }).status, 'unverified');
-  assert.throws(() => validateGeofence({ ...target, accuracy: 101 }, target), /onvoldoende nauwkeurig/);
+  assert.equal(validateGeofence({ ...target, accuracy: 150 }, target).status, 'inside');
+  assert.throws(() => validateGeofence({ ...target, accuracy: 201 }, target), /te zwak/);
   assert.throws(() => validateGeofence({ lat: 51, lng: 4.04, accuracy: 10 }, target), /buiten de toegestane zone/);
 });
 
@@ -83,5 +84,9 @@ test('onbevestigde mail mag met link of bestaande uitnodiging', () => {
   assert.equal(inviteAcceptsUnverified(false, 'token'), true);
   assert.equal(inviteAcceptsUnverified(false, '', true), true);
   assert.equal(inviteAcceptsUnverified(false, ''), false);
+  assert.equal(activationAllowed(false, 'tok', 'tok'), true);
+  assert.equal(activationAllowed(true, '', undefined), true);
+  assert.equal(activationAllowed(false, 'garbage', 'tok'), false);
+  assert.equal(activationAllowed(false, '', 'tok'), false);
 });
 

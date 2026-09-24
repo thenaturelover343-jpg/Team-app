@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { buildPushPayload, type PushSubscription } from "@block65/webcrypto-web-push";
-import { cleanText as clean, isAllowedTransition, mayCreateAdminSession, normalizeEmail as email, validateGeofence, validateLocation as location } from "../../../server/policy";
+import { activationAllowed, cleanText as clean, isAllowedTransition, mayCreateAdminSession, normalizeEmail as email, validateGeofence, validateLocation as location } from "../../../server/policy";
 import { addWeeks, availabilityConflict, isValidDate, isValidTime, overlaps, parseAvailability, validateShiftWindow } from "../../../server/planning";
 import { attendanceEvents, csv, workedMinutes, type PlannedAttendance } from "../../../server/phase4";
 import { cutoff, normalizeRetention, safeErrorMessage, sha256, shouldRunDaily, type RetentionSettings } from "../../../server/privacy";
@@ -160,6 +160,9 @@ async function session(identity: FirebaseIdentity, inviteToken = ""): Promise<Ap
           .bind(identity.email).first<Json>();
       }
       if (!invite) throw new Error("Dit account is niet uitgenodigd.");
+      if (!activationAllowed(identity.emailVerified, inviteToken, invite.token)) {
+        throw new Error("Open de uitnodigingslink uit de mail of WhatsApp om dit account te activeren.");
+      }
       await acceptInvite(db, identity, invite);
     }
     row = await db.prepare("SELECT id, email, name, role, active FROM users WHERE id = ?").bind(identity.uid).first<Json>();
@@ -788,7 +791,6 @@ async function act(user: AppUser, action: string, input: Json) {
     const shiftId = clean(input.id, 160);
     const row = await db.prepare("SELECT status FROM planned_shifts WHERE id=?").bind(shiftId).first<Json>();
     if (!row) throw new Error("Dienst niet gevonden.");
-    if (row.status !== "draft") throw new Error("Een gepubliceerde dienst kan niet verwijderd worden.");
     await db.batch([
       db.prepare("DELETE FROM planned_shift_members WHERE shift_id=?").bind(shiftId),
       db.prepare("DELETE FROM planned_shifts WHERE id=?").bind(shiftId),

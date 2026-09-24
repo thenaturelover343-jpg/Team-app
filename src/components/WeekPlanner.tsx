@@ -97,7 +97,7 @@ function ShiftCard({ shift, users, onChanged }: { shift: PlannedShift; users: Us
   const confirmed = shift.memberIds.filter(id => shift.confirmations[id] === 'confirmed').length;
   const declined = shift.memberIds.filter(id => shift.confirmations[id] === 'declined').length;
   const remove = async () => {
-    if (!window.confirm('Deze conceptdienst verwijderen?')) return;
+    if (!window.confirm(shift.status === 'published' ? 'Deze gepubliceerde dienst verwijderen?' : 'Deze conceptdienst verwijderen?')) return;
     setBusy(true);
     try { await secureApi.deletePlannedShift(shift.id); await onChanged(); } finally { setBusy(false); }
   };
@@ -106,6 +106,7 @@ function ShiftCard({ shift, users, onChanged }: { shift: PlannedShift; users: Us
       <div className="flex items-start justify-between gap-1">
         <div className="font-extrabold text-zinc-900 leading-tight">{shift.title}</div>
         {shift.status === 'draft' && <button disabled={busy} onClick={remove} className="text-zinc-400 hover:text-red-600" aria-label="Conceptdienst verwijderen">{busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}</button>}
+        {shift.status === 'published' && <button disabled={busy} onClick={remove} className="text-zinc-400 hover:text-red-600" aria-label="Gepubliceerde dienst verwijderen">{busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}</button>}
       </div>
       <div className="flex items-center gap-1.5 font-bold text-zinc-700"><Clock3 className="w-3.5 h-3.5" />{shift.startTime}–{shift.endTime}</div>
       {shift.breakMinutes > 0 && <div className="text-zinc-500">Pauze: {shift.breakMinutes} min.</div>}

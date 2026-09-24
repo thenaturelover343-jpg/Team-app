@@ -103,7 +103,7 @@ export function useAppUpdate() {
   useEffect(() => {
     const ac = new AbortController();
     void ensureServiceWorker();
-    void check(ac.signal);
+    const firstCheck = window.setTimeout(() => { void check(ac.signal); }, 0);
 
     const interval = window.setInterval(() => void check(), CHECK_MS);
     const onFocus = () => void check();
@@ -120,6 +120,7 @@ export function useAppUpdate() {
 
     return () => {
       ac.abort();
+      window.clearTimeout(firstCheck);
       window.clearInterval(interval);
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onVisible);
