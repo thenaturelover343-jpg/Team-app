@@ -46,9 +46,9 @@ export default function NotificationCenter({ notifications, push, onChanged }: {
 
     <section className="ops-card p-5 space-y-4">
       <div className="flex items-center gap-3"><div className={`w-10 h-10 rounded-xl flex items-center justify-center ${push.enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-100 text-zinc-500'}`}>{push.enabled ? <Bell className="w-5 h-5" /> : <BellOff className="w-5 h-5" />}</div><div><div className="font-bold">Echte pushmeldingen</div><div className="text-sm text-zinc-500">{push.enabled ? 'Actief op minstens één toestel' : 'Nog niet geactiveerd'}</div></div></div>
-      {!pushSupported() && <p className="ops-chip-warning w-full justify-start p-3 text-sm">Installeer de app op het beginscherm en open hem via dat icoon. Daarna kan je meldingen met één tik aanzetten.</p>}
-      {pushSupported() && permission === 'default' && <p className="ops-panel p-3 text-sm">Tik op Meldingen activeren. Je telefoon vraagt daarna Toestaan.</p>}
-      {pushSupported() && permission === 'denied' && <p className="ops-chip-warning w-full justify-start p-3 text-sm">Dit toestel heeft meldingen eerder geweigerd. Zet ze aan in de telefooninstellingen bij deze app, tik daarna opnieuw op de knop.</p>}
+      {!pushSupported() && <p className="ops-chip-warning w-full justify-start p-3 text-sm">Installeer de app op het beginscherm en open hem via dat icoon.</p>}
+      {pushSupported() && permission === 'default' && <p className="ops-panel p-3 text-sm">Tik op Meldingen activeren. Je telefoon toont daarna Toestaan of Weigeren.</p>}
+      {pushSupported() && permission === 'denied' && <p className="ops-chip-warning w-full justify-start p-3 text-sm">Dit toestel heeft meldingen geblokkeerd. iPhone: Instellingen → Meldingen → Team. Android: Instellingen → Apps → Team of Chrome → Meldingen.</p>}
       {message && <p className="ops-panel p-3 text-sm">{message}</p>}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <button onClick={activate} disabled={busy !== '' || !push.supported || !pushSupported()} className="ops-btn-primary gap-2">{busy === 'enable' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bell className="w-4 h-4" />}Meldingen activeren</button>
