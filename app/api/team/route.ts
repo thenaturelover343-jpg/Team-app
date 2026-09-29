@@ -4,6 +4,7 @@ import { activationAllowed, cleanText as clean, isAllowedTransition, mayCreateAd
 import { addWeeks, availabilityConflict, isValidDate, isValidTime, overlaps, parseAvailability, validateShiftWindow } from "../../../server/planning";
 import { attendanceEvents, csv, workedMinutes, type PlannedAttendance } from "../../../server/phase4";
 import { cutoff, normalizeRetention, safeErrorMessage, sha256, shouldRunDaily, type RetentionSettings } from "../../../server/privacy";
+import { evaluateClockIn, requireSnapshotAuthHeader } from "../../../server/clockInRules";
 
 export const dynamic = "force-dynamic";
 
@@ -55,11 +56,8 @@ async function getJwks() {
 }
 
 async function verifyFirebaseToken(request: Request): Promise<FirebaseIdentity> {
-  const authorization = request.headers.get("Authorization") || "";
-  if (!authorization.startsWith("Bearer ")) throw new Error("U bent niet aangemeld.");
-  const token = authorization.slice(7);
+  const token = requireSnapshotAuthHeader(request.headers.get("Authorization"));
   const parts = token.split(".");
-  if (parts.length !== 3) throw new Error("Ongeldige aanmelding.");
   const header = decodeJsonPart(parts[0]);
   const claims = decodeJsonPart(parts[1]);
   if (header.alg !== "RS256" || typeof header.kid !== "string") throw new Error("Ongeldige aanmelding.");
@@ -861,23 +859,26 @@ async function act(user: AppUser, action: string, input: Json) {
   }
 
   if (action === "clockIn") {
-    const loc = location(input.location);
     const active = await db.prepare("SELECT shift_id FROM active_shifts WHERE user_id = ?").bind(user.uid).first();
-    if (active) throw new Error("U bent al ingeklokt.");
-    const plannedShiftId = clean(input.plannedShiftId, 160) || null;
-    let target: { lat: number; lng: number } | undefined;
-    if (plannedShiftId) {
+    const requestedPlannedShiftId = clean(input.plannedShiftId, 160) || null;
+    let plannedShift: { siteLat?: number | null; siteLng?: number | null } | null = null;
+    if (requestedPlannedShiftId) {
       const planned = await db.prepare(`SELECT ps.id, ps.site_latitude, ps.site_longitude, c.latitude, c.longitude FROM planned_shifts ps
         JOIN planned_shift_members psm ON psm.shift_id=ps.id LEFT JOIN customers c ON c.id=ps.customer_id
-        WHERE ps.id=? AND psm.user_id=? AND ps.status='published'`).bind(plannedShiftId, user.uid).first<Json>();
-      if (!planned) throw new Error("Deze geplande dienst is niet beschikbaar voor uw account.");
-      const lat = planned.site_latitude ?? planned.latitude;
-      const lng = planned.site_longitude ?? planned.longitude;
-      if (lat !== null && lat !== undefined && lng !== null && lng !== undefined) {
-        target = { lat: Number(lat), lng: Number(lng) };
+        WHERE ps.id=? AND psm.user_id=? AND ps.status='published'`).bind(requestedPlannedShiftId, user.uid).first<Json>();
+      if (planned) {
+        plannedShift = {
+          siteLat: (planned.site_latitude ?? planned.latitude) as number | null | undefined,
+          siteLng: (planned.site_longitude ?? planned.longitude) as number | null | undefined,
+        };
       }
     }
-    const geofence = validateGeofence(loc, target);
+    const { loc, geofence, plannedShiftId } = evaluateClockIn({
+      location: input.location,
+      alreadyActive: Boolean(active),
+      plannedShiftId: requestedPlannedShiftId,
+      plannedShift: requestedPlannedShiftId ? plannedShift : null,
+    });
     const shiftId = id();
     await db.batch([
       db.prepare(`INSERT INTO shifts (id, user_id, planned_shift_id, clock_in, clock_in_lat, clock_in_lng, clock_in_accuracy,
