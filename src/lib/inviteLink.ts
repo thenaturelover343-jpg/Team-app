@@ -10,3 +10,7 @@ export function invitePath(token: string): string {
 export function inviteUrl(origin: string, token: string): string {
   return `${origin.replace(/\/$/, '')}${invitePath(token)}`;
 }
+
+export function installInvitePath(token: string): string {
+  return `/install?invite=${encodeURIComponent(token)}`;
+}
