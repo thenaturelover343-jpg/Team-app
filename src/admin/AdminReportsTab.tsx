@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { User, Incident, CorrectionRequest, formatDate } from '../types';
-import { handleFirestoreError, OperationType } from '../lib/firebase';
+import { User, CorrectionRequest, Incident, formatDate } from '../types';
 import { secureApi } from '../lib/secureApi';
 
 export function AdminReportsTab({ users, incidents, corrections, onChanged }: { users: User[]; incidents: Incident[]; corrections: CorrectionRequest[]; onChanged: () => Promise<void> }) {
