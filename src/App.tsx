@@ -1,6 +1,7 @@
 import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { UserCircle, Loader2, LogOut, Eye, EyeOff } from 'lucide-react';
 import { PWAInstallButton } from './components/PWAInstallButton';
+import { InstallScreen } from './components/InstallScreen';
 import { AppUpdateBanner } from './components/AppUpdateBanner';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import {
@@ -60,7 +61,6 @@ function GoogleMark() {
 function AppContent() {
   const { user, loading, accessError, redirectAuthError } = useAuth();
   const { t } = useLanguage();
-
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [password2, setPassword2] = useState('');
@@ -69,17 +69,14 @@ function AppContent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [authNotice, setAuthNotice] = useState('');
   const [inviteToken] = useState(() => readInviteTokenFromLocation());
+  const [passedInstall, setPassedInstall] = useState(false);
   const [invite, setInvite] = useState<{ email: string; name: string } | null>(null);
   const [inviteLoading, setInviteLoading] = useState(Boolean(inviteToken));
   const [creating, setCreating] = useState(false);
   const [sessionHint] = useState(() => readSessionHint());
   const [needsEmailForLink, setNeedsEmailForLink] = useState(() => {
     if (typeof window === 'undefined' || !pendingEmailLinkSignIn()) return false;
-    try {
-      return !window.localStorage.getItem('barliciousEmailForSignIn');
-    } catch {
-      return true;
-    }
+    try { return !window.localStorage.getItem('barliciousEmailForSignIn'); } catch { return true; }
   });
   const [viewAsEmployee, setViewAsEmployee] = useState(() => {
     if (typeof sessionStorage === 'undefined') return false;
@@ -105,9 +102,7 @@ function AppContent() {
   useEffect(() => {
     if (!invite || !pendingEmailLinkSignIn()) return;
     let active = true;
-    const timer = window.setTimeout(() => {
-      if (active) setIsSubmitting(true);
-    }, 0);
+    const timer = window.setTimeout(() => { if (active) setIsSubmitting(true); }, 0);
     completeEmailLinkSignIn(invite.email).then(() => {
       if (active) setNeedsEmailForLink(false);
     }).catch(error => {
@@ -115,10 +110,7 @@ function AppContent() {
     }).finally(() => {
       if (active) setIsSubmitting(false);
     });
-    return () => {
-      active = false;
-      window.clearTimeout(timer);
-    };
+    return () => { active = false; window.clearTimeout(timer); };
   }, [invite]);
 
   const toggleEmployeePreview = () => {
@@ -142,13 +134,9 @@ function AppContent() {
       }
       const wantsCreate = creating || Boolean(invite);
       if (wantsCreate) {
-        if (password !== password2) {
-          setAuthError(t('passwordsMismatch'));
-          return;
-        }
-        try {
-          await registerWithEmail(email, password);
-        } catch (err: unknown) {
+        if (password !== password2) { setAuthError(t('passwordsMismatch')); return; }
+        try { await registerWithEmail(email, password); }
+        catch (err: unknown) {
           const code = typeof err === 'object' && err !== null && 'code' in err ? String(err.code) : '';
           if (code === 'auth/email-already-in-use') await loginWithEmail(email, password);
           else throw err;
@@ -170,48 +158,26 @@ function AppContent() {
   };
 
   const handlePasswordReset = async () => {
-    setAuthError('');
-    setAuthNotice('');
-    if (!email) {
-      setAuthError(t('fillEmailFirst'));
-      return;
-    }
-    try {
-      await resetPassword(email);
-    } catch { /* same copy either way */ }
+    setAuthError(''); setAuthNotice('');
+    if (!email) { setAuthError(t('fillEmailFirst')); return; }
+    try { await resetPassword(email); } catch { /* same copy */ }
     setAuthNotice(t('resetSent'));
   };
 
   const handleEmailLink = async () => {
-    setAuthError('');
-    setAuthNotice('');
-    if (!email) {
-      setAuthError(t('fillEmailFirst'));
-      return;
-    }
+    setAuthError(''); setAuthNotice('');
+    if (!email) { setAuthError(t('fillEmailFirst')); return; }
     setIsSubmitting(true);
-    try {
-      await sendEmailSignInLink(email);
-      setAuthNotice(t('emailLinkSent'));
-    } catch (err) {
-      setAuthError(mapAuthErrorToDutch(err));
-    } finally {
-      setIsSubmitting(false);
-    }
+    try { await sendEmailSignInLink(email); setAuthNotice(t('emailLinkSent')); }
+    catch (err) { setAuthError(mapAuthErrorToDutch(err)); }
+    finally { setIsSubmitting(false); }
   };
 
   const handleGoogleAuth = async () => {
-    setAuthError('');
-    setAuthNotice('');
-    setIsSubmitting(true);
-    try {
-      await loginWithGoogle();
-    } catch (err: unknown) {
-      console.error(err);
-      setAuthError(mapAuthErrorToDutch(err));
-    } finally {
-      setIsSubmitting(false);
-    }
+    setAuthError(''); setAuthNotice(''); setIsSubmitting(true);
+    try { await loginWithGoogle(); }
+    catch (err: unknown) { setAuthError(mapAuthErrorToDutch(err)); }
+    finally { setIsSubmitting(false); }
   };
 
   if (user) {
@@ -230,41 +196,26 @@ function AppContent() {
                 <span className="font-bold text-lg sm:hidden tracking-tight text-zinc-900">Team</span>
               </div>
             </div>
-
             <div className="header-actions flex flex-wrap items-center justify-end gap-2 sm:gap-3 max-w-full">
               <PWAInstallButton />
               {user.role === 'admin' && (
-                <button
-                  type="button"
-                  onClick={toggleEmployeePreview}
-                  className="ops-btn-primary inline-flex items-center justify-center p-2 shrink-0"
-                  title={viewAsEmployee ? t('backAdmin') : t('viewEmployee')}
-                  aria-label={viewAsEmployee ? t('backAdmin') : t('viewEmployee')}
-                >
+                <button type="button" onClick={toggleEmployeePreview} className="ops-btn-primary inline-flex items-center justify-center p-2 shrink-0" title={viewAsEmployee ? t('backAdmin') : t('viewEmployee')} aria-label={viewAsEmployee ? t('backAdmin') : t('viewEmployee')}>
                   {viewAsEmployee ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               )}
               <div className="user-pill flex items-center gap-2 sm:gap-3 pl-2 pr-2 sm:pr-3 py-1.5 shrink-0">
-                <div className="ops-panel w-8 h-8 rounded-full flex items-center justify-center">
-                  <UserCircle className="w-5 h-5 text-zinc-500" />
-                </div>
+                <div className="ops-panel w-8 h-8 rounded-full flex items-center justify-center"><UserCircle className="w-5 h-5 text-zinc-500" /></div>
                 <div className="user-pill-copy flex flex-col pr-2 sm:pr-3 border-r border-zinc-200">
                   <span className="text-sm font-bold text-zinc-900 leading-tight truncate max-w-[100px]">{user.name}</span>
-                  <span className="text-xs text-zinc-400 leading-tight capitalize">
-                    {user.role === 'admin' && viewAsEmployee ? ('beheerder · preview') : user.role}
-                  </span>
+                  <span className="text-xs text-zinc-400 leading-tight capitalize">{user.role === 'admin' && viewAsEmployee ? ('beheerder · preview') : user.role}</span>
                 </div>
-                <button onClick={logout} aria-label={t('logout')} className="text-zinc-400 hover:text-zinc-900 transition-colors" title={t('logout')}>
-                  <LogOut className="w-4 h-4" />
-                </button>
+                <button onClick={logout} aria-label={t('logout')} className="text-zinc-400 hover:text-zinc-900 transition-colors" title={t('logout')}><LogOut className="w-4 h-4" /></button>
               </div>
             </div>
           </div>
         </div>
       </header>
-
       <AppUpdateBanner />
-
       <main id="main-content" tabIndex={-1} className="content-shell max-w-6xl mx-auto px-4 sm:px-6 md:px-8 py-6 md:py-8">
         <Suspense fallback={<div className="flex justify-center p-10"><Loader2 className="w-6 h-6 animate-spin text-zinc-400" /></div>}>
           {user.role === 'admin' && !viewAsEmployee ? <AdminView /> : <EmployeeView />}
@@ -274,8 +225,10 @@ function AppContent() {
     );
   }
 
-  if (loading && sessionHint) {
-    return <BootAppShell hint={sessionHint} />;
+  if (loading && sessionHint) return <BootAppShell hint={sessionHint} />;
+
+  if (!user && inviteToken && !passedInstall) {
+    return <InstallScreen inviteName={invite?.name} inviteEmail={invite?.email} onContinue={() => setPassedInstall(true)} />;
   }
 
   if (!user) {
@@ -291,124 +244,43 @@ function AppContent() {
             <p className="text-zinc-500">{invite ? t('inviteLead') : creating ? t('createAccountLead') : t('loginLead')}</p>
             {invite && <p className="text-sm font-bold">{invite.name} · {invite.email}</p>}
           </div>
-
           {(authError || accessError || redirectAuthError) && (
-            <div className="p-3 bg-red-50 text-red-700 rounded-[12px] text-sm font-medium text-center border border-red-100">
-              {authError || accessError || redirectAuthError}
-            </div>
+            <div className="p-3 bg-red-50 text-red-700 rounded-[12px] text-sm font-medium text-center border border-red-100">{authError || accessError || redirectAuthError}</div>
           )}
-          {authNotice && (
-            <div className="p-3 bg-green-50 text-green-700 rounded-[12px] text-sm font-medium text-center border border-green-100">{authNotice}</div>
-          )}
-
-          {needsEmailForLink && (
-            <p className="text-sm text-center text-zinc-500">{t('confirmEmail')}</p>
-          )}
-
+          {authNotice && <div className="p-3 bg-green-50 text-green-700 rounded-[12px] text-sm font-medium text-center border border-green-100">{authNotice}</div>}
+          {needsEmailForLink && <p className="text-sm text-center text-zinc-500">{t('confirmEmail')}</p>}
           <form onSubmit={handleEmailAuth} className="space-y-4">
             <div>
               <label className="block text-sm font-bold text-zinc-700 mb-1.5" htmlFor="login-email">{t('email')}</label>
-              <input
-                id="login-email"
-                type="email"
-                name="email"
-                autoComplete="username email"
-                inputMode="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                required
-                readOnly={Boolean(invite)}
-                placeholder="nina.v@example.com"
-                className="ops-input p-3.5 font-medium"
-              />
+              <input id="login-email" type="email" name="email" autoComplete="username email" inputMode="email" value={email} onChange={e => setEmail(e.target.value)} required readOnly={Boolean(invite)} placeholder="nina.v@example.com" className="ops-input p-3.5 font-medium" />
             </div>
             {!needsEmailForLink && (
             <div>
               <label className="block text-sm font-bold text-zinc-700 mb-1.5" htmlFor="login-password">{t('password')}</label>
               <div className="relative">
-                <input
-                  id="login-password"
-                  type={showPassword ? 'text' : 'password'}
-                  name={invite || creating ? 'new-password' : 'current-password'}
-                  autoComplete={invite || creating ? 'new-password' : 'current-password'}
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  required
-                  minLength={6}
-                  className="ops-input p-3.5 font-medium pr-12"
-                />
-                <button
-                  type="button"
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400"
-                  aria-label={showPassword ? t('hidePassword') : t('showPassword')}
-                  onClick={() => setShowPassword(v => !v)}
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
+                <input id="login-password" type={showPassword ? 'text' : 'password'} name={invite || creating ? 'new-password' : 'current-password'} autoComplete={invite || creating ? 'new-password' : 'current-password'} value={password} onChange={e => setPassword(e.target.value)} required minLength={6} className="ops-input p-3.5 font-medium pr-12" />
+                <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400" aria-label={showPassword ? t('hidePassword') : t('showPassword')} onClick={() => setShowPassword(v => !v)}>{showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}</button>
               </div>
             </div>
             )}
             {(invite || creating) && !needsEmailForLink && (
               <div>
                 <label className="block text-sm font-bold text-zinc-700 mb-1.5" htmlFor="login-password2">{t('passwordConfirm')}</label>
-                <input
-                  id="login-password2"
-                  type={showPassword ? 'text' : 'password'}
-                  autoComplete="new-password"
-                  value={password2}
-                  onChange={e => setPassword2(e.target.value)}
-                  required
-                  minLength={6}
-                  className="ops-input p-3.5 font-medium"
-                />
+                <input id="login-password2" type={showPassword ? 'text' : 'password'} autoComplete="new-password" value={password2} onChange={e => setPassword2(e.target.value)} required minLength={6} className="ops-input p-3.5 font-medium" />
               </div>
             )}
-
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="ops-btn-primary w-full py-4 disabled:opacity-50 mt-2"
-            >
+            <button type="submit" disabled={isSubmitting} className="ops-btn-primary w-full py-4 disabled:opacity-50 mt-2">
               {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
               <span>{needsEmailForLink ? t('confirmEmailBtn') : invite || creating ? t('inviteActivate') : t('signIn')}</span>
             </button>
           </form>
           {!needsEmailForLink && !invite && (
-            <button
-              type="button"
-              onClick={() => { setCreating(v => !v); setAuthError(''); setAuthNotice(''); }}
-              className="w-full text-sm font-bold text-zinc-600 hover:text-zinc-900"
-            >
-              {creating ? t('backToSignIn') : t('createAccount')}
-            </button>
+            <button type="button" onClick={() => { setCreating(v => !v); setAuthError(''); setAuthNotice(''); }} className="w-full text-sm font-bold text-zinc-600 hover:text-zinc-900">{creating ? t('backToSignIn') : t('createAccount')}</button>
           )}
-          {!needsEmailForLink && (
-          <button type="button" onClick={handlePasswordReset} className="w-full text-sm font-bold text-zinc-600 hover:text-zinc-900">
-            {t('forgot')}
-          </button>
-          )}
-          {!needsEmailForLink && (
-          <button type="button" onClick={handleEmailLink} disabled={isSubmitting} className="ops-btn-secondary w-full py-3 disabled:opacity-50">
-            {t('emailLink')}
-          </button>
-          )}
-
-          <div className="flex items-center gap-3 text-zinc-400 text-sm">
-            <span className="h-px flex-1 bg-zinc-200" />
-            <span>{t('or')}</span>
-            <span className="h-px flex-1 bg-zinc-200" />
-          </div>
-
-          <button
-            type="button"
-            onClick={handleGoogleAuth}
-            disabled={isSubmitting}
-            className="ops-btn-secondary w-full py-4 disabled:opacity-50"
-          >
-            <GoogleMark />
-            <span>{t('google')}</span>
-          </button>
-
+          {!needsEmailForLink && <button type="button" onClick={handlePasswordReset} className="w-full text-sm font-bold text-zinc-600 hover:text-zinc-900">{t('forgot')}</button>}
+          {!needsEmailForLink && <button type="button" onClick={handleEmailLink} disabled={isSubmitting} className="ops-btn-secondary w-full py-3 disabled:opacity-50">{t('emailLink')}</button>}
+          <div className="flex items-center gap-3 text-zinc-400 text-sm"><span className="h-px flex-1 bg-zinc-200" /><span>{t('or')}</span><span className="h-px flex-1 bg-zinc-200" /></div>
+          <button type="button" onClick={handleGoogleAuth} disabled={isSubmitting} className="ops-btn-secondary w-full py-4 disabled:opacity-50"><GoogleMark /><span>{t('google')}</span></button>
           <p className="text-center text-xs text-zinc-500">{t('accountsAdmin')}</p>
         </div>
       </div>
