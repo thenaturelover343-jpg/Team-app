@@ -245,7 +245,15 @@ export const loginWithEmail = (email: string, pass: string) =>
 export const registerWithEmail = (email: string, pass: string) =>
   createUserWithEmailAndPassword(auth, email, pass);
 export const resetPassword = (email: string) => sendPasswordResetEmail(auth, email);
-export const logout = () => signOut(auth);
+export const logout = async () => {
+  if (typeof window !== 'undefined') {
+    try {
+      const { disarmVisitFence } = await import('./visitFence');
+      await disarmVisitFence();
+    } catch { /* no native fence in the browser */ }
+  }
+  return signOut(auth);
+};
 
 const EMAIL_LINK_KEY = 'barliciousEmailForSignIn';
 

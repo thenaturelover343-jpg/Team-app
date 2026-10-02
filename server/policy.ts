@@ -39,6 +39,14 @@ export function validateGeofence(location: { lat: number; lng: number; accuracy:
   return { status: 'inside' as const, distance };
 }
 
+/** Day clock only records presence. It never blocks start or end of the shift. */
+export function measureGeofence(location: { lat: number; lng: number; accuracy: number }, target?: { lat: number; lng: number }, radius = 250) {
+  if (!target || location.accuracy > 200) return { status: 'unverified' as const, distance: null as number | null };
+  const distance = distanceMeters(location, target);
+  const status = distance <= radius + location.accuracy ? 'inside' as const : 'outside' as const;
+  return { status, distance };
+}
+
 export function isAllowedTransition(current: unknown, next: unknown) {
   return current === 'pending' && next === 'arrived' || current === 'arrived' && next === 'completed';
 }

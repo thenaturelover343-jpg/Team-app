@@ -61,6 +61,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setUser(null);
         setSnapshot(null);
         clearSessionHint();
+        try {
+          const { disarmVisitFence } = await import('../lib/visitFence');
+          await disarmVisitFence();
+        } catch { /* no native fence in the browser */ }
         try { await signOut(auth); } catch { /* ignore */ }
       }
     } finally {

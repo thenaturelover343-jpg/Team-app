@@ -1,0 +1,11 @@
+{
+  "name": "visit-fence",
+  "version": "1.0.0",
+  "private": true,
+  "description": "OS geofences for customer visits. Works while the app is closed.",
+  "main": "index.js",
+  "capacitor": {
+    "ios": { "src": "ios" },
+    "android": { "src": "android" }
+  }
+}

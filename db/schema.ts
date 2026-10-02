@@ -50,6 +50,8 @@ export const assignments = sqliteTable("assignments", {
   siteAddress: text("site_address"), siteLatitude: real("site_latitude"), siteLongitude: real("site_longitude"),
   status: text("status").notNull().default("pending"), arrivalTime: integer("arrival_time"), departureTime: integer("departure_time"),
   arrivalLat: real("arrival_lat"), arrivalLng: real("arrival_lng"), departureLat: real("departure_lat"), departureLng: real("departure_lng"),
+  arrivalSource: text("arrival_source"), departureSource: text("departure_source"),
+  insideSince: integer("inside_since"), outsideSince: integer("outside_since"),
   workNotes: text("work_notes"), materials: text("materials"), completionNotes: text("completion_notes"),
   tasksJson: text("tasks_json").notNull().default("[]"), acknowledged: integer("acknowledged").notNull().default(0),
   createdAt: integer("created_at").notNull(), updatedAt: integer("updated_at").notNull(),

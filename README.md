@@ -67,6 +67,26 @@ npm run verify:live-employee-ui
 
 De verify faalt als oude copy terugkomt (`Mijn Beschikbaarheid` / `Weekoverzicht` zonder `Mijn Planning Vandaag` / `Vandaag`).
 
+## Klanttijd als de app dicht is
+
+De website en het beginscherm-icoon meten alleen zolang het scherm open is. iPhone laat een website geen locatie meten op de achtergrond. Daarvoor is de geïnstalleerde app (`be.barlicious.team`) één keer nodig, met locatie op **Altijd**.
+
+Tijdens een gestarte werkdag zet die app een cirkel van 200 m rond elke opdracht met coördinaten. Twee minuten binnen = aankomst, vertrek = vertrek. Pauze en einde dag zetten het uit. Na zestien uur stopt het vanzelf. Twee klanten in dezelfde cirkel: de telefoon vraagt een keuze en gokt niet.
+
+De cirkels staan in de telefoon-app. De site in die app komt van de worker. Eerst deze branch mergen en `npm run deploy:worker`, daarna de app op de telefoon zetten. Zonder die deploy laadt de geïnstalleerde app de oude site en zet ze nog geen cirkels.
+
+`ios/` en `android/` zitten in de repo (`be.barlicious.team`). Op een Mac of pc met de SDK:
+
+```sh
+pnpm install
+npm run native:sync
+```
+
+- iPhone: CocoaPods + Xcode + Apple Developer. Daarna TestFlight of een rechtstreekse install. Locatie op **Altijd**.
+- Android: Android Studio. Locatie op “Altijd toestaan”. Play Console vraagt een verklaring voor achtergrondlocatie.
+
+`npm run native:add` is alleen nodig als de mappen `ios/` of `android/` ontbreken. De plugin zelf staat in `native/visit-fence`.
+
 ## Tests
 
 ```sh

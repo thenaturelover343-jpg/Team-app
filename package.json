@@ -15,10 +15,15 @@
     "db:generate": "drizzle-kit generate",
     "ensure:d1": "node scripts/ensure-d1-binding.mjs",
     "verify:live-employee-ui": "node scripts/verify-live-employee-ui.mjs",
+    "native:add": "cap add ios && cap add android && node scripts/configure-native.mjs",
+    "native:sync": "cap sync && node scripts/configure-native.mjs",
     "deploy:worker": "node scripts/run-framework.mjs build && node scripts/ensure-d1-binding.mjs && node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js deploy --config dist/server/wrangler.json && node scripts/verify-live-employee-ui.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
+    "@capacitor/android": "^7.4.3",
+    "@capacitor/core": "^7.4.3",
+    "@capacitor/ios": "^7.4.3",
     "@block65/webcrypto-web-push": "^2.0.0",
     "@hookform/resolvers": "^5.7.1",
     "@shadcn/react": "^0.3.0",
@@ -47,10 +52,12 @@
     "sonner": "^2.0.8",
     "tailwind-merge": "3.6.0",
     "vaul": "^1.1.2",
+    "visit-fence": "file:native/visit-fence",
     "vite-plugin-pwa": "^1.3.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@capacitor/cli": "^7.4.3",
     "@cloudflare/vite-plugin": "1.37.1",
     "@cloudflare/workers-types": "4.20260515.1",
     "@tailwindcss/postcss": "4.2.1",

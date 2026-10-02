@@ -120,6 +120,9 @@ export const secureApi = {
   downloadAttachment,
   flushOfflineQueue: () => flushOfflineQueue((action, input) => call(action, input)),
   acknowledgeAssignment: (assignmentId: string) => call<{ ok: boolean }>('acknowledgeAssignment', { assignmentId }),
+  syncVisitLocation: (location: GeoLocation, assignmentId?: string) => call<{ type: 'paused' | 'weak' | 'ambiguous' | 'tracking'; choices: { id: string; name: string }[]; changed: boolean; active: { id: string; name: string; since: number } | null }>('syncVisitLocation', { location, assignmentId }),
+  saveVisitNote: (assignmentId: string, workNotes: string) => call<{ ok: boolean }>('saveVisitNote', { assignmentId, workNotes }),
+  correctAssignmentVisit: (assignmentId: string, arrivalTime: number, departureTime: number, reason: string) => call<{ ok: boolean }>('correctAssignmentVisit', { assignmentId, arrivalTime, departureTime, reason }),
   transitionAssignment: (input: AssignmentTransitionInput) => call<{ ok: boolean }>('transitionAssignment', input),
   updateProfile: (input: { firstName: string; lastName: string; phone: string; address: string; name?: string }) => call<{ ok: boolean }>('updateProfile', input),
   updateAssignmentDetails: (assignmentId: string, tasks: AssignmentTask[], workNotes: string, materials = '', completionNotes = '') =>

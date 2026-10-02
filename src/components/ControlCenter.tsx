@@ -2,14 +2,15 @@
 
 import React, { useState } from 'react';
 import { AlertTriangle, CheckCircle, Clock3, Download, Loader2, Users } from 'lucide-react';
-import type { PlannedShift, PushState, Shift, TeamNotification, User } from '../types';
+import type { Assignment, PlannedShift, PushState, Shift, TeamNotification, User } from '../types';
 import { formatDate, formatTime, localDateKey } from '../types';
 import { secureApi } from '../lib/secureApi';
 import NotificationCenter from './NotificationCenter';
+import { VisitGaps } from '../admin/VisitGaps';
 
 function monthStart() { const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`; }
 
-export default function ControlCenter({ users, plannedShifts, shifts, notifications, push, onChanged }: { users: User[]; plannedShifts: PlannedShift[]; shifts: Shift[]; notifications: TeamNotification[]; push: PushState; onChanged: () => Promise<void> }) {
+export default function ControlCenter({ users, plannedShifts, shifts, assignments, notifications, push, onChanged }: { users: User[]; plannedShifts: PlannedShift[]; shifts: Shift[]; assignments: Assignment[]; notifications: TeamNotification[]; push: PushState; onChanged: () => Promise<void> }) {
   const [busy, setBusy] = useState('');
   const [note, setNote] = useState('');
   const [startDate, setStartDate] = useState(monthStart);
@@ -35,7 +36,7 @@ export default function ControlCenter({ users, plannedShifts, shifts, notificati
       const { data } = await secureApi.exportHours(kind, startDate, endDate);
       const url = URL.createObjectURL(new Blob([data.csv], { type: 'text/csv;charset=utf-8' }));
       const anchor = document.createElement('a'); anchor.href = url; anchor.download = data.filename; anchor.click(); URL.revokeObjectURL(url);
-      setMessage(`${data.rows} goedgekeurde tijdregistratie${data.rows === 1 ? '' : 's'} geëxporteerd.`);
+      setMessage(kind === 'invoice' ? `${data.rows} klantbezoek${data.rows === 1 ? '' : 'en'} geëxporteerd.` : `${data.rows} goedgekeurde tijdregistratie${data.rows === 1 ? '' : 's'} geëxporteerd.`);
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Export is mislukt.'); }
     finally { setBusy(''); }
   };
@@ -51,7 +52,9 @@ export default function ControlCenter({ users, plannedShifts, shifts, notificati
 
     <section className="space-y-3"><h3 className="font-bold text-lg">Openstaande urencontrole</h3>{pending.length === 0 && <div className="ops-panel p-5 text-zinc-500">Alle afgesloten uren zijn behandeld.</div>}{pending.slice(0, 50).map(item => { const minutes = item.clockOut ? Math.max(0, Math.round((item.clockOut - item.clockIn) / 60000)) : 0; return <article key={item.id} className="ops-card p-4 space-y-3"><div className="flex justify-between gap-3"><div><div className="font-bold">{name(item.userId)}</div><div className="text-sm text-zinc-500">{formatDate(item.clockIn)} · {formatTime(item.clockIn)}–{item.clockOut ? formatTime(item.clockOut) : ''}</div></div><span className="font-bold">{Math.floor(minutes / 60)}u {minutes % 60}m</span></div><input value={note} onChange={event => setNote(event.target.value)} placeholder="Opmerking bij afwijzing (optioneel)" className="ops-input w-full p-3 text-sm" /><div className="grid grid-cols-2 gap-3"><button disabled={busy !== ''} onClick={() => review(item.id, 'rejected')} className="ops-btn-danger">Afwijzen</button><button disabled={busy !== ''} onClick={() => review(item.id, 'approved')} className="ops-btn-primary">{busy === item.id && <Loader2 className="w-4 h-4 animate-spin mr-2" />}Goedkeuren</button></div></article>; })}</section>
 
-    <section className="ops-card p-5 space-y-4"><div><h3 className="font-bold text-lg">Loon- en facturatie-export</h3><p className="text-sm text-zinc-500">Alleen goedgekeurde, afgesloten tijdregistraties worden opgenomen.</p></div><div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><label className="text-sm font-bold">Van<input type="date" value={startDate} onChange={event => setStartDate(event.target.value)} className="ops-input mt-1.5 w-full p-3" /></label><label className="text-sm font-bold">Tot<input type="date" value={endDate} onChange={event => setEndDate(event.target.value)} className="ops-input mt-1.5 w-full p-3" /></label></div><div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><button onClick={() => download('payroll')} disabled={busy !== ''} className="ops-btn-primary gap-2"><Download className="w-4 h-4" />Loonexport CSV</button><button onClick={() => download('invoice')} disabled={busy !== ''} className="ops-btn-secondary gap-2"><Download className="w-4 h-4" />Facturatie CSV</button></div></section>
+    <section className="ops-card p-5 space-y-4"><div><h3 className="font-bold text-lg">Loon- en facturatie-export</h3><p className="text-sm text-zinc-500">Loon gebruikt goedgekeurde daguren. Factuur gebruikt aankomst en vertrek bij de klant.</p></div><div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><label className="text-sm font-bold">Van<input type="date" value={startDate} onChange={event => setStartDate(event.target.value)} className="ops-input mt-1.5 w-full p-3" /></label><label className="text-sm font-bold">Tot<input type="date" value={endDate} onChange={event => setEndDate(event.target.value)} className="ops-input mt-1.5 w-full p-3" /></label></div><div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><button onClick={() => download('payroll')} disabled={busy !== ''} className="ops-btn-primary gap-2"><Download className="w-4 h-4" />Loonexport CSV</button><button onClick={() => download('invoice')} disabled={busy !== ''} className="ops-btn-secondary gap-2"><Download className="w-4 h-4" />Facturatie CSV</button></div></section>
+
+    <VisitGaps users={users} assignments={assignments} onChanged={onChanged} />
 
     <NotificationCenter notifications={notifications} push={push} onChanged={onChanged} />
   </div>;

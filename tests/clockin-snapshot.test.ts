@@ -26,7 +26,7 @@ test('clock-in weigert een dienst die niet van de medewerker is', () => {
   );
 });
 
-test('clock-in slaagt binnen de geofence en faalt daarbuiten', () => {
+test('clock-in noteert de zone maar blokkeert de dagstart niet', () => {
   const loc = { lat: 50.94, lng: 4.04, accuracy: 12, capturedAt: Date.now() };
   const ok = evaluateClockIn({
     location: loc,
@@ -37,13 +37,11 @@ test('clock-in slaagt binnen de geofence en faalt daarbuiten', () => {
   assert.equal(ok.geofence.status, 'inside');
   assert.equal(ok.plannedShiftId, 'shift-1');
 
-  assert.throws(
-    () => evaluateClockIn({
-      location: loc,
-      alreadyActive: false,
-      plannedShiftId: 'shift-1',
-      plannedShift: { siteLat: 51.2, siteLng: 4.04 },
-    }),
-    /buiten de toegestane zone/,
-  );
+  const away = evaluateClockIn({
+    location: loc,
+    alreadyActive: false,
+    plannedShiftId: 'shift-1',
+    plannedShift: { siteLat: 51.2, siteLng: 4.04 },
+  });
+  assert.equal(away.geofence.status, 'outside');
 });

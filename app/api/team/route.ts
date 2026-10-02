@@ -1,10 +1,11 @@
 import { env } from "cloudflare:workers";
 import { buildPushPayload, type PushSubscription } from "@block65/webcrypto-web-push";
-import { activationAllowed, cleanText as clean, isAllowedTransition, mayCreateAdminSession, normalizeEmail as email, validateGeofence, validateLocation as location } from "../../../server/policy";
+import { activationAllowed, cleanText as clean, isAllowedTransition, mayCreateAdminSession, normalizeEmail as email, measureGeofence, validateLocation as location } from "../../../server/policy";
 import { addWeeks, availabilityConflict, isValidDate, isValidTime, overlaps, parseAvailability, validateShiftWindow } from "../../../server/planning";
-import { attendanceEvents, csv, workedMinutes, type PlannedAttendance } from "../../../server/phase4";
+import { attendanceEvents, csv, localClockParts, workedMinutes, type PlannedAttendance } from "../../../server/phase4";
 import { cutoff, normalizeRetention, safeErrorMessage, sha256, shouldRunDaily, type RetentionSettings } from "../../../server/privacy";
 import { evaluateClockIn, requireSnapshotAuthHeader } from "../../../server/clockInRules";
+import { evaluateVisitPing, visitReminderEvents } from "../../../server/visitClock";
 
 export const dynamic = "force-dynamic";
 
@@ -96,6 +97,70 @@ function bucket() {
 async function audit(db: D1Database, actorId: string, action: string, targetType: string, targetId: string, details: Json = {}) {
   await db.prepare(`INSERT INTO audit_events (id, actor_id, action, target_type, target_id, details_json, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)`).bind(id(), actorId, action, targetType, targetId, JSON.stringify(details), Date.now()).run();
+}
+
+async function ensureVisitColumns(db: D1Database) {
+  try {
+    await db.prepare("SELECT inside_since, outside_since, arrival_source, departure_source FROM assignments LIMIT 1").first();
+  } catch {
+    for (const [name, type] of [["inside_since", "integer"], ["outside_since", "integer"], ["arrival_source", "text"], ["departure_source", "text"]] as const) {
+      try { await db.prepare(`ALTER TABLE assignments ADD COLUMN ${name} ${type}`).run(); } catch { /* column already exists */ }
+    }
+  }
+}
+
+async function syncVisit(db: D1Database, user: AppUser, input: Json, now: number) {
+  const loc = location(input.location);
+  const active = await db.prepare("SELECT shift_id FROM active_shifts WHERE user_id=?").bind(user.uid).first();
+  const onBreak = Boolean(await db.prepare("SELECT break_id FROM active_breaks WHERE user_id=?").bind(user.uid).first());
+  const date = localClockParts(new Date(now)).date;
+  const rows = await db.prepare(`SELECT a.id, a.status, a.arrival_time, a.departure_time, a.inside_since, a.outside_since,
+      COALESCE(a.site_latitude, c.latitude) AS lat, COALESCE(a.site_longitude, c.longitude) AS lng, COALESCE(c.name, 'Klant') AS customer_name
+    FROM assignments a LEFT JOIN customers c ON c.id=a.customer_id
+    WHERE a.user_id=? AND a.date=? AND a.status!='completed'`).bind(user.uid, date).all<Json>();
+  const sites = (rows.results as Json[]).map(row => ({
+    id: String(row.id), name: String(row.customer_name || "Klant"),
+    lat: row.lat == null ? null : Number(row.lat), lng: row.lng == null ? null : Number(row.lng),
+    status: (row.status === "arrived" || row.status === "completed" ? row.status : "pending") as "pending" | "arrived" | "completed",
+    arrivalTime: row.arrival_time ? Number(row.arrival_time) : null,
+    departureTime: row.departure_time ? Number(row.departure_time) : null,
+    insideSince: row.inside_since ? Number(row.inside_since) : null,
+    outsideSince: row.outside_since ? Number(row.outside_since) : null,
+  }));
+  const result = evaluateVisitPing({
+    now, clockedIn: Boolean(active), onBreak, lat: loc.lat, lng: loc.lng, accuracy: loc.accuracy, sites,
+    chosenId: clean(input.assignmentId, 160) || null,
+    confirmedDwell: input.confirmedDwell === true,
+    confirmedExit: input.confirmedExit === true,
+  });
+  for (const patch of result.patches) {
+    if (patch.arriveAt) {
+      await db.prepare(`UPDATE assignments SET status='arrived', arrival_time=?, arrival_lat=?, arrival_lng=?, arrival_source='auto',
+        inside_since=NULL, outside_since=NULL, updated_at=? WHERE id=? AND user_id=? AND status='pending'`)
+        .bind(patch.arriveAt, loc.lat, loc.lng, now, patch.id, user.uid).run();
+      const arrived = result.arrived.find(item => item.id === patch.id);
+      if (arrived) {
+        const label = new Date(arrived.at).toLocaleTimeString("nl-BE", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Brussels" });
+        await notify(db, { userId: user.uid, type: "visit_started", title: "Tijd loopt", body: `Tijd loopt bij ${arrived.name} sinds ${label}.`, dedupeKey: `visit-started:${patch.id}:${arrived.at}`, entityType: "assignment", entityId: patch.id });
+      }
+    } else if (patch.departAt) {
+      await db.prepare(`UPDATE assignments SET departure_time=?, departure_lat=?, departure_lng=?, departure_source='auto', inside_since=NULL, outside_since=NULL,
+        status=CASE WHEN length(trim(coalesce(work_notes, ''))) > 0 THEN 'completed' ELSE status END, updated_at=?
+        WHERE id=? AND user_id=? AND status='arrived' AND departure_time IS NULL`)
+        .bind(patch.departAt, loc.lat, loc.lng, now, patch.id, user.uid).run();
+    } else {
+      await db.prepare("UPDATE assignments SET inside_since=?, outside_since=?, updated_at=? WHERE id=? AND user_id=? AND status!='completed'")
+        .bind(patch.insideSince, patch.outsideSince, now, patch.id, user.uid).run();
+    }
+  }
+  const started = result.arrived[0];
+  const open = sites.find(site => site.status === "arrived" && !site.departureTime && result.departed.every(item => item.id !== site.id));
+  return {
+    type: result.type,
+    choices: result.choices,
+    changed: result.arrived.length + result.departed.length > 0,
+    active: started ? { id: started.id, name: started.name, since: started.at } : open ? { id: open.id, name: open.name, since: open.arrivalTime || now } : null,
+  };
 }
 
 async function ensureInviteTokenColumn(db: D1Database) {
@@ -334,6 +399,20 @@ async function runAttendanceSweep(db: D1Database) {
   }
 }
 
+async function runVisitReminderSweep(db: D1Database) {
+  const result = await db.prepare(`SELECT a.id, a.user_id, a.date, a.start_time, a.status, a.arrival_time, COALESCE(c.name, 'Klant') AS customer_name
+    FROM assignments a LEFT JOIN customers c ON c.id=a.customer_id
+    WHERE a.status='pending' AND a.date BETWEEN date('now', '-1 day') AND date('now', '+1 day')`).all<Json>();
+  const rows = (result.results as Json[]).map(row => ({
+    assignmentId: String(row.id), userId: String(row.user_id), customerName: String(row.customer_name),
+    date: String(row.date), startTime: String(row.start_time || ""), status: String(row.status), hasArrival: Boolean(row.arrival_time),
+  }));
+  for (const event of visitReminderEvents(rows, new Date())) {
+    await notify(db, { userId: event.userId, type: event.type, title: event.title, body: event.body, dedupeKey: event.dedupeKey, entityType: "assignment", entityId: event.assignmentId });
+    if (event.admin) await notifyAdmins(db, { type: event.type, title: event.title, body: event.body, dedupeKey: `${event.dedupeKey}:admin`, entityType: "assignment", entityId: event.assignmentId });
+  }
+}
+
 function mapUser(row: Json) {
   // Prefer explicit first_name/last_name. Never invent by splitting displayName/username.
   const firstName = row.first_name != null ? String(row.first_name).trim() : "";
@@ -367,10 +446,12 @@ function mapAssignment(row: Json) {
   return {
     id: row.id, userId: row.user_id, customerId: row.customer_id, customerName: row.customer_name || "",
     customerAddress: row.customer_address || "",
-    siteAddress: row.site_address || "", siteLatitude: row.site_latitude ?? undefined, siteLongitude: row.site_longitude ?? undefined,
+    siteAddress: row.site_address || "", siteLatitude: row.site_latitude ?? row.customer_latitude ?? undefined, siteLongitude: row.site_longitude ?? row.customer_longitude ?? undefined,
     description: row.description, date: row.date, startTime: row.start_time || "", status: row.status,
     arrivalTime: row.arrival_time ? Number(row.arrival_time) : undefined,
     departureTime: row.departure_time ? Number(row.departure_time) : undefined,
+    arrivalSource: row.arrival_source || undefined,
+    departureSource: row.departure_source || undefined,
     workNotes: row.work_notes || "", materials: row.materials || "", completionNotes: row.completion_notes || "",
     tasks: JSON.parse(String(row.tasks_json || "[]")),
     acknowledged: Number(row.acknowledged) === 1, createdAt: Number(row.created_at),
@@ -437,8 +518,8 @@ async function snapshot(user: AppUser) {
     : db.prepare(`SELECT s.*, ta.status AS approval_status, ta.reviewed_by, ta.reviewed_at, ta.admin_note
         FROM shifts s LEFT JOIN timesheet_approvals ta ON ta.shift_id=s.id WHERE s.user_id = ? ORDER BY s.clock_in DESC LIMIT 200`).bind(user.uid);
   const assignmentsQuery = user.role === "admin"
-    ? db.prepare(`SELECT a.*, c.name AS customer_name, c.address AS customer_address FROM assignments a LEFT JOIN customers c ON c.id = a.customer_id ORDER BY a.date DESC, a.start_time DESC LIMIT 400`)
-    : db.prepare(`SELECT a.*, c.name AS customer_name, c.address AS customer_address FROM assignments a LEFT JOIN customers c ON c.id = a.customer_id WHERE a.user_id = ? ORDER BY a.date DESC, a.start_time DESC LIMIT 200`).bind(user.uid);
+    ? db.prepare(`SELECT a.*, c.name AS customer_name, c.address AS customer_address, c.latitude AS customer_latitude, c.longitude AS customer_longitude FROM assignments a LEFT JOIN customers c ON c.id = a.customer_id ORDER BY a.date DESC, a.start_time DESC LIMIT 400`)
+    : db.prepare(`SELECT a.*, c.name AS customer_name, c.address AS customer_address, c.latitude AS customer_latitude, c.longitude AS customer_longitude FROM assignments a LEFT JOIN customers c ON c.id = a.customer_id WHERE a.user_id = ? ORDER BY a.date DESC, a.start_time DESC LIMIT 200`).bind(user.uid);
   const plannedQuery = user.role === "admin"
     ? db.prepare(`SELECT ps.*, c.name AS customer_name, c.address AS customer_address, c.latitude AS customer_latitude,
         c.longitude AS customer_longitude, psm.user_id AS member_user_id, psm.confirmation_status, psm.checklist_state_json
@@ -527,6 +608,7 @@ async function snapshot(user: AppUser) {
 async function act(user: AppUser, action: string, input: Json) {
   const db = database();
   const now = Date.now();
+  await ensureVisitColumns(db);
   if (action === "snapshot") return snapshot(user);
 
   if (action === "updatePrivacySettings") {
@@ -641,6 +723,7 @@ async function act(user: AppUser, action: string, input: Json) {
 
   if (action === "runNotificationSweep") {
     await runAttendanceSweep(db);
+    await runVisitReminderSweep(db);
     return { ok: true };
   }
 
@@ -903,7 +986,7 @@ async function act(user: AppUser, action: string, input: Json) {
     const geoLng = active.site_longitude ?? active.longitude;
     const target = geoLat !== null && geoLat !== undefined && geoLng !== null && geoLng !== undefined
       ? { lat: Number(geoLat), lng: Number(geoLng) } : undefined;
-    const geofence = validateGeofence(loc, target);
+    const geofence = measureGeofence(loc, target);
     await db.batch([
       db.prepare(`UPDATE shifts SET clock_out=?, clock_out_lat=?, clock_out_lng=?, clock_out_accuracy=?, clock_out_distance=?,
         clock_out_client_at=?, notes=?, status_tag=? WHERE id=? AND clock_out IS NULL`)
@@ -912,6 +995,10 @@ async function act(user: AppUser, action: string, input: Json) {
       db.prepare(`INSERT INTO audit_events (id, actor_id, action, target_type, target_id, details_json, created_at) VALUES (?, ?, 'shift.clock_out', 'shift', ?, ?, ?)`)
         .bind(id(), user.uid, active.shift_id, JSON.stringify({ statusTag: clean(input.statusTag, 80) }), now),
     ]);
+    await db.prepare(`UPDATE assignments SET departure_time=?, departure_lat=?, departure_lng=?, departure_source='clock_out', inside_since=NULL, outside_since=NULL,
+      status=CASE WHEN length(trim(coalesce(work_notes, ''))) > 0 THEN 'completed' ELSE status END, updated_at=?
+      WHERE user_id=? AND status='arrived' AND departure_time IS NULL AND date=?`)
+      .bind(now, loc.lat, loc.lng, now, user.uid, localClockParts(new Date(now)).date).run();
     return { ok: true };
   }
 
@@ -1043,6 +1130,23 @@ async function act(user: AppUser, action: string, input: Json) {
     const endDate = clean(input.endDate, 10);
     const kind = input.kind === "invoice" ? "invoice" : "payroll";
     if (!isValidDate(startDate) || !isValidDate(endDate) || startDate > endDate) throw new Error("Kies een geldige exportperiode.");
+    if (kind === "invoice") {
+      const visitRows = await db.prepare(`SELECT a.date, a.arrival_time, a.departure_time, a.work_notes, u.name AS user_name, c.name AS customer_name
+        FROM assignments a JOIN users u ON u.id=a.user_id JOIN customers c ON c.id=a.customer_id
+        WHERE a.date BETWEEN ? AND ? AND a.arrival_time IS NOT NULL AND a.departure_time IS NOT NULL
+        ORDER BY a.date, a.arrival_time`).bind(startDate, endDate).all<Json>();
+      const header = ["Klant", "Datum", "Medewerker", "Aankomst", "Vertrek", "Factureerbare minuten", "Factureerbare uren", "Wat is gedaan", "Werkbon"];
+      const stamp = (value: number) => new Date(value).toLocaleTimeString("nl-BE", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Brussels" });
+      const exportRows = (visitRows.results as Json[]).map(row => {
+        const arrival = Number(row.arrival_time);
+        const departure = Number(row.departure_time);
+        const minutes = Math.max(0, Math.round((departure - arrival) / 60000));
+        const note = clean(row.work_notes, 4000);
+        return [row.customer_name, row.date, row.user_name, stamp(arrival), stamp(departure), minutes, (minutes / 60).toFixed(2), note, note ? "ingevuld" : "open"];
+      });
+      await audit(db, user.uid, "export.invoice", "export", `${startDate}:${endDate}`, { rows: exportRows.length });
+      return { filename: `facturatie-export-${startDate}-${endDate}.csv`, csv: csv([header, ...exportRows]), rows: exportRows.length };
+    }
     const rows = await db.prepare(`SELECT s.id, s.clock_in, s.clock_out, u.name AS user_name, u.email,
         ps.title, ps.date, ps.break_minutes, c.name AS customer_name,
         COALESCE((SELECT SUM(CASE WHEN sb.ended_at IS NOT NULL THEN sb.ended_at-sb.started_at ELSE 0 END) FROM shift_breaks sb WHERE sb.shift_id=s.id), 0) AS actual_break_ms
@@ -1064,6 +1168,8 @@ async function act(user: AppUser, action: string, input: Json) {
     return { filename: `${kind === "payroll" ? "loonexport" : "facturatie-export"}-${startDate}-${endDate}.csv`, csv: csv([header, ...exportRows]), rows: exportRows.length };
   }
 
+  if (action === "syncVisitLocation") return syncVisit(db, user, input, now);
+
   if (action === "acknowledgeAssignment") {
     const assignmentId = clean(input.assignmentId, 160);
     const result = await db.prepare("UPDATE assignments SET acknowledged=1, updated_at=? WHERE id=? AND user_id=? AND status='pending'")
@@ -1081,7 +1187,7 @@ async function act(user: AppUser, action: string, input: Json) {
     const allowed = isAllowedTransition(row?.status, nextStatus);
     if (!allowed) throw new Error("Deze statusovergang is niet toegestaan.");
     if (nextStatus === "arrived") {
-      await db.prepare("UPDATE assignments SET status='arrived', arrival_time=?, arrival_lat=?, arrival_lng=?, updated_at=? WHERE id=?")
+      await db.prepare("UPDATE assignments SET status='arrived', arrival_time=?, arrival_lat=?, arrival_lng=?, arrival_source='manual', inside_since=NULL, outside_since=NULL, updated_at=? WHERE id=?")
         .bind(now, loc.lat, loc.lng, now, assignmentId).run();
     } else {
       const workNotes = clean(input.workNotes ?? input.notes, 4000);
@@ -1090,6 +1196,36 @@ async function act(user: AppUser, action: string, input: Json) {
         .bind(now, loc.lat, loc.lng, workNotes, clean(input.materials, 4000) || null, clean(input.completionNotes, 4000) || null, now, assignmentId).run();
     }
     await audit(db, user.uid, `assignment.${nextStatus}`, "assignment", assignmentId);
+    return { ok: true };
+  }
+
+  if (action === "saveVisitNote") {
+    const assignmentId = clean(input.assignmentId, 160);
+    const workNotes = clean(input.workNotes, 4000);
+    if (!workNotes) throw new Error("Vul in wat is gedaan.");
+    const row = await db.prepare("SELECT status, departure_time FROM assignments WHERE id=? AND user_id=?").bind(assignmentId, user.uid).first<Json>();
+    if (!row || row.status === "completed") throw new Error("Opdracht niet gevonden of al afgerond.");
+    const done = Boolean(row.departure_time);
+    await db.prepare("UPDATE assignments SET work_notes=?, status=?, updated_at=? WHERE id=? AND user_id=?")
+      .bind(workNotes, done ? "completed" : String(row.status), now, assignmentId, user.uid).run();
+    await audit(db, user.uid, "assignment.work_note", "assignment", assignmentId, { completed: done });
+    return { ok: true };
+  }
+
+  if (action === "correctAssignmentVisit") {
+    requireAdmin(user);
+    const assignmentId = clean(input.assignmentId, 160);
+    const reason = clean(input.reason, 1000);
+    if (!reason) throw new Error("Geef een reden voor de correctie.");
+    const arrival = Number(input.arrivalTime);
+    const departure = Number(input.departureTime);
+    if (!Number.isFinite(arrival) || !Number.isFinite(departure) || departure <= arrival) throw new Error("Vertrek moet na aankomst liggen.");
+    const row = await db.prepare("SELECT id, work_notes FROM assignments WHERE id=?").bind(assignmentId).first<Json>();
+    if (!row) throw new Error("Opdracht niet gevonden.");
+    const nextStatus = clean(row.work_notes, 4000) ? "completed" : "arrived";
+    await db.prepare(`UPDATE assignments SET status=?, arrival_time=?, departure_time=?, arrival_source='manual', departure_source='manual', updated_at=? WHERE id=?`)
+      .bind(nextStatus, arrival, departure, now, assignmentId).run();
+    await audit(db, user.uid, "assignment.times_corrected", "assignment", assignmentId, { reason, arrival, departure });
     return { ok: true };
   }
 
@@ -1200,7 +1336,8 @@ export async function POST(request: Request) {
   let actionName = "request";
   try {
     const origin = request.headers.get("Origin");
-    if (!origin || origin !== new URL(request.url).origin) return json({ error: "Ongeldige aanvraag." }, 403);
+    const nativeFence = request.headers.get("X-Team-Client") === "visit-fence";
+    if (!nativeFence && (!origin || origin !== new URL(request.url).origin)) return json({ error: "Ongeldige aanvraag." }, 403);
     const contentType = request.headers.get("Content-Type") || "";
     if (contentType.includes("multipart/form-data")) {
       const identity = await verifyFirebaseToken(request);

@@ -72,7 +72,7 @@ export default function AdminView() {
         </button>
       </div>
 
-      {activeTab === 'control' && <Suspense fallback={<TabFallback />}><ControlCenter users={users} plannedShifts={plannedShifts} shifts={shifts} notifications={notifications} push={push} onChanged={loadData} /></Suspense>}
+      {activeTab === 'control' && <Suspense fallback={<TabFallback />}><ControlCenter users={users} plannedShifts={plannedShifts} shifts={shifts} assignments={assignments} notifications={notifications} push={push} onChanged={loadData} /></Suspense>}
       {activeTab === 'week' && <Suspense fallback={<TabFallback />}><WeekPlanner users={users} customers={customers} shifts={plannedShifts} onChanged={loadData} /></Suspense>}
       {activeTab === 'planning' && <PlanningTab users={users} assignments={assignments} customers={customers} onChanged={loadData} />}
       {activeTab === 'timesheets' && <TimesheetsTab users={users} shifts={shifts} assignments={assignments} />}
