@@ -1,4 +1,4 @@
-import { validateGeofence, validateLocation } from './policy.ts';
+import { measureGeofence, validateLocation } from './policy.ts';
 
 export function requireSnapshotAuthHeader(authorization: string | null | undefined) {
   const header = authorization || '';
@@ -27,6 +27,6 @@ export function evaluateClockIn(input: {
       target = { lat: Number(lat), lng: Number(lng) };
     }
   }
-  const geofence = validateGeofence(loc, target);
+  const geofence = measureGeofence(loc, target);
   return { loc, geofence, plannedShiftId: plannedShiftId || null };
 }

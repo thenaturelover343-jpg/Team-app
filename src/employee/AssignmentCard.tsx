@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { Assignment, Attachment, AssignmentTask, getCurrentLocation, formatTime } from '../types';
-import { MapPin, Clock, CheckCircle, Square, Navigation2, FileText, Loader2, Plus, Trash2, CheckSquare, Upload, Download } from 'lucide-react';
+import { MapPin, Clock, CheckCircle, Square, FileText, Loader2, Plus, Trash2, CheckSquare, Upload, Download } from 'lucide-react';
 import { secureApi } from '../lib/secureApi';
 
 const LiveLocationMap = dynamic(() => import('../components/LiveLocationMap'), { ssr: false });
@@ -104,10 +104,10 @@ export function AssignmentCard({ assignment, attachments, onChanged }: { assignm
           </div>
           {assignment.status === 'completed' && (<span className="bg-green-100 text-green-700 p-2 rounded-full shrink-0"><CheckCircle className="w-6 h-6" /></span>)}
         </div>
-        {assignment.status === 'pending' && (<div className="space-y-4"><div><span className="text-xs font-bold text-zinc-400 block mb-2 uppercase tracking-wider">Locatie Verificatie</span><LiveLocationMap /></div><button onClick={handleArrive} disabled={isUpdating} className="ops-btn-secondary w-full space-x-2 py-4">{isUpdating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Navigation2 className="w-5 h-5" />}<span>Markeer als aangekomen</span></button></div>)}
+        {assignment.status === 'pending' && (<div className="space-y-3"><p className="text-sm text-zinc-600">Aankomst start vanzelf als de dag loopt en dit scherm open blijft. Lukt de gps niet, leg de aankomst dan zelf vast.</p><button onClick={handleArrive} disabled={isUpdating} className="text-sm font-bold text-zinc-700 underline">{isUpdating ? 'Bezig…' : 'Zelf aankomst vastleggen'}</button></div>)}
         {assignment.status === 'arrived' && (
           <div className="space-y-5 pt-4 border-t border-zinc-200">
-            <div className="ops-panel flex items-center space-x-2 text-sm font-medium p-3.5"><Clock className="w-4 h-4 text-zinc-900" /><span>Aangekomen om {formatTime(assignment.arrivalTime!)}</span></div>
+            <div className="ops-panel flex items-center space-x-2 text-sm font-medium p-3.5"><Clock className="w-4 h-4 text-zinc-900" /><span>Aangekomen om {formatTime(assignment.arrivalTime!)}{assignment.departureTime ? ` · vertrokken om ${formatTime(assignment.departureTime)}` : ''}</span></div>
             <div className="space-y-3">
               <label className="text-sm font-bold text-zinc-800 flex items-center space-x-2"><CheckSquare className="w-4 h-4 text-zinc-400" /><span>Checklist / Uitgevoerde taken</span></label>
               {tasks.length > 0 && (<div className="space-y-2 mb-3">{tasks.map(task => (<div key={task.id} className="ops-panel flex items-center justify-between gap-2 p-3"><label className="flex items-center space-x-3 cursor-pointer flex-1 min-w-0"><input type="checkbox" checked={task.completed} onChange={() => handleToggleTask(task.id)} className="w-5 h-5 text-zinc-900 rounded border-zinc-200 focus:ring-zinc-900/10 cursor-pointer shrink-0" /><span className={`text-sm font-medium break-words ${task.completed ? 'text-zinc-400 line-through' : 'text-zinc-700'}`}>{task.text}</span></label><button onClick={() => handleDeleteTask(task.id)} className="text-zinc-400 hover:text-red-500 transition-colors p-1 shrink-0" title="Taak verwijderen"><Trash2 className="w-4 h-4" /></button></div>))}</div>)}

@@ -203,6 +203,8 @@ export interface Assignment {
   status: 'pending' | 'arrived' | 'completed';
   arrivalTime?: number;
   departureTime?: number;
+  arrivalSource?: string;
+  departureSource?: string;
   workNotes?: string;
   materials?: string;
   completionNotes?: string;

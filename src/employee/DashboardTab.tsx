@@ -5,6 +5,7 @@ import { handleFirestoreError, OperationType } from '../lib/firebase';
 import { secureApi } from '../lib/secureApi';
 import { useLanguage } from '../i18n';
 import { AssignmentCard } from './AssignmentCard';
+import { VisitPanel } from './VisitPanel';
 
 export function DashboardTab({ userId, shifts, breaks, assignments, plannedShifts, attachments, loading, onChanged }: { userId: string; shifts: Shift[]; breaks: ShiftBreak[]; assignments: Assignment[]; plannedShifts: PlannedShift[]; attachments: Attachment[]; loading: boolean; onChanged: () => Promise<void> }) {
   const { t } = useLanguage();
@@ -132,6 +133,7 @@ export function DashboardTab({ userId, shifts, breaks, assignments, plannedShift
         </div>
       )}
       {todaysPlanned.length > 0 && <div className="ops-card p-5 space-y-3"><h2 className="font-bold text-zinc-900">Vandaag gepland</h2>{todaysPlanned.map(item => <div key={item.id} className="ops-panel p-3 flex justify-between gap-3"><div><div className="font-bold">{item.title}</div><div className="text-sm text-zinc-500">{item.startTime}–{item.endTime}{item.customerName ? ` · ${item.customerName}` : ''}</div></div>{item.customerLatitude !== undefined && item.customerLongitude !== undefined && <a target="_blank" rel="noreferrer" href={`https://www.google.com/maps/dir/?api=1&destination=${item.customerLatitude},${item.customerLongitude}`} className="ops-btn-primary shrink-0 px-3 text-xs gap-1"><Navigation2 className="w-3.5 h-3.5" />Route</a>}</div>)}</div>}
+      <VisitPanel clockedIn={Boolean(activeShift)} onBreak={Boolean(activeBreak)} assignments={assignments.filter(item => item.date === localDateKey())} onChanged={onChanged} />
       <div className="ops-card overflow-hidden">
         <div className="p-8 text-center space-y-6">
           <h2 className="text-xl font-bold text-zinc-800">{t('clockTitle')}</h2>
