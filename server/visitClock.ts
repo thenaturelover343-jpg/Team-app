@@ -62,11 +62,18 @@ export function evaluateVisitPing(input: {
   accuracy: number;
   sites: VisitSite[];
   chosenId?: string | null;
+  confirmedDwell?: boolean;
+  confirmedExit?: boolean;
 }): VisitPingResult {
   if (!input.clockedIn || input.onBreak) return { ...empty(), type: 'paused' };
-  if (!Number.isFinite(input.accuracy) || input.accuracy <= 0 || input.accuracy > VISIT_MAX_ACCURACY_M) return { ...empty(), type: 'weak' };
+  const confirmed = input.confirmedDwell === true || input.confirmedExit === true;
+  let accuracy = input.accuracy;
+  if (!Number.isFinite(accuracy) || accuracy <= 0 || accuracy > VISIT_MAX_ACCURACY_M) {
+    if (!confirmed) return { ...empty(), type: 'weak' };
+    accuracy = VISIT_MAX_ACCURACY_M;
+  }
 
-  const point = { lat: input.lat, lng: input.lng, accuracy: input.accuracy };
+  const point = { lat: input.lat, lng: input.lng, accuracy };
   const sites = input.sites.filter(site => site.status !== 'completed' && site.lat != null && site.lng != null);
   const isIn = (site: VisitSite) => visitInside(site, point);
   const open = sites.find(site => site.status === 'arrived' && !site.departureTime);
@@ -76,8 +83,11 @@ export function evaluateVisitPing(input: {
   const remember = (site: VisitSite, insideSince: number | null, outsideSince: number | null, extra?: Pick<VisitPatch, 'arriveAt' | 'departAt'>) => {
     result.patches.push({ id: site.id, insideSince, outsideSince, ...extra });
   };
+  const dwellStart = (site: VisitSite) => input.confirmedDwell
+    ? Math.min(site.insideSince || input.now, input.now - VISIT_DWELL_MS)
+    : (site.insideSince || input.now);
 
-  if (open && isIn(open)) {
+  if (open && isIn(open) && !input.confirmedExit) {
     remember(open, null, null);
     for (const site of sites) {
       if (site.id !== open.id && site.status === 'pending' && site.insideSince) remember(site, null, site.outsideSince ?? null);
@@ -86,7 +96,7 @@ export function evaluateVisitPing(input: {
   }
 
   let candidate: VisitSite | undefined;
-  if (!open || !isIn(open)) {
+  if (!open || !isIn(open) || input.confirmedExit) {
     if (pendingInside.length >= 2 && !input.chosenId) {
       result.type = 'ambiguous';
       result.choices = pendingInside.map(site => ({ id: site.id, name: site.name }));
@@ -98,26 +108,27 @@ export function evaluateVisitPing(input: {
     }
   }
 
-  if (open && !isIn(open)) {
+  if (open && (!isIn(open) || input.confirmedExit)) {
     const outsideSince = open.outsideSince || input.now;
-    const leftLongEnough = input.now - outsideSince >= VISIT_DWELL_MS;
-    const candidateSince = candidate ? (candidate.insideSince || input.now) : null;
+    const leftLongEnough = Boolean(input.confirmedExit) || input.now - outsideSince >= VISIT_DWELL_MS;
+    const candidateSince = candidate ? dwellStart(candidate) : null;
     const candidateReady = Boolean(candidate && candidateSince != null && input.now - candidateSince >= VISIT_DWELL_MS);
     if (candidateReady && candidate && candidateSince != null) {
-      remember(open, null, null, { departAt: candidateSince });
-      result.departed.push({ id: open.id, name: open.name, at: candidateSince });
+      remember(open, null, null, { departAt: input.confirmedExit ? input.now : candidateSince });
+      result.departed.push({ id: open.id, name: open.name, at: input.confirmedExit ? input.now : candidateSince });
       remember(candidate, null, null, { arriveAt: candidateSince });
       result.arrived.push({ id: candidate.id, name: candidate.name, at: candidateSince });
     } else if (leftLongEnough) {
-      remember(open, null, null, { departAt: outsideSince });
-      result.departed.push({ id: open.id, name: open.name, at: outsideSince });
+      const departAt = input.confirmedExit ? input.now : outsideSince;
+      remember(open, null, null, { departAt });
+      result.departed.push({ id: open.id, name: open.name, at: departAt });
       if (candidate && candidateSince != null) remember(candidate, candidateSince, null);
     } else {
       remember(open, null, outsideSince);
       if (candidate && candidateSince != null) remember(candidate, candidateSince, null);
     }
   } else if (candidate) {
-    const insideSince = candidate.insideSince || input.now;
+    const insideSince = dwellStart(candidate);
     if (input.now - insideSince >= VISIT_DWELL_MS) {
       remember(candidate, null, null, { arriveAt: insideSince });
       result.arrived.push({ id: candidate.id, name: candidate.name, at: insideSince });
@@ -152,7 +163,7 @@ export function visitReminderEvents(rows: {
     if (delta <= 0 && delta > -20) {
       events.push({
         type: 'visit_reminder', userId: row.userId, assignmentId: row.assignmentId, admin: false,
-        title: 'Klantbezoek', body: `Open de app bij ${row.customerName}. De tijd op de werf start vanzelf.`,
+        title: 'Klantbezoek', body: `Bij ${row.customerName}. De klanttijd loopt vanzelf, ook als de app dicht is.`,
         dedupeKey: `visit-reminder:${row.assignmentId}:${row.date}`,
       });
     }

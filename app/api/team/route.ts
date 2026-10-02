@@ -130,6 +130,8 @@ async function syncVisit(db: D1Database, user: AppUser, input: Json, now: number
   const result = evaluateVisitPing({
     now, clockedIn: Boolean(active), onBreak, lat: loc.lat, lng: loc.lng, accuracy: loc.accuracy, sites,
     chosenId: clean(input.assignmentId, 160) || null,
+    confirmedDwell: input.confirmedDwell === true,
+    confirmedExit: input.confirmedExit === true,
   });
   for (const patch of result.patches) {
     if (patch.arriveAt) {
@@ -444,7 +446,7 @@ function mapAssignment(row: Json) {
   return {
     id: row.id, userId: row.user_id, customerId: row.customer_id, customerName: row.customer_name || "",
     customerAddress: row.customer_address || "",
-    siteAddress: row.site_address || "", siteLatitude: row.site_latitude ?? undefined, siteLongitude: row.site_longitude ?? undefined,
+    siteAddress: row.site_address || "", siteLatitude: row.site_latitude ?? row.customer_latitude ?? undefined, siteLongitude: row.site_longitude ?? row.customer_longitude ?? undefined,
     description: row.description, date: row.date, startTime: row.start_time || "", status: row.status,
     arrivalTime: row.arrival_time ? Number(row.arrival_time) : undefined,
     departureTime: row.departure_time ? Number(row.departure_time) : undefined,
@@ -516,8 +518,8 @@ async function snapshot(user: AppUser) {
     : db.prepare(`SELECT s.*, ta.status AS approval_status, ta.reviewed_by, ta.reviewed_at, ta.admin_note
         FROM shifts s LEFT JOIN timesheet_approvals ta ON ta.shift_id=s.id WHERE s.user_id = ? ORDER BY s.clock_in DESC LIMIT 200`).bind(user.uid);
   const assignmentsQuery = user.role === "admin"
-    ? db.prepare(`SELECT a.*, c.name AS customer_name, c.address AS customer_address FROM assignments a LEFT JOIN customers c ON c.id = a.customer_id ORDER BY a.date DESC, a.start_time DESC LIMIT 400`)
-    : db.prepare(`SELECT a.*, c.name AS customer_name, c.address AS customer_address FROM assignments a LEFT JOIN customers c ON c.id = a.customer_id WHERE a.user_id = ? ORDER BY a.date DESC, a.start_time DESC LIMIT 200`).bind(user.uid);
+    ? db.prepare(`SELECT a.*, c.name AS customer_name, c.address AS customer_address, c.latitude AS customer_latitude, c.longitude AS customer_longitude FROM assignments a LEFT JOIN customers c ON c.id = a.customer_id ORDER BY a.date DESC, a.start_time DESC LIMIT 400`)
+    : db.prepare(`SELECT a.*, c.name AS customer_name, c.address AS customer_address, c.latitude AS customer_latitude, c.longitude AS customer_longitude FROM assignments a LEFT JOIN customers c ON c.id = a.customer_id WHERE a.user_id = ? ORDER BY a.date DESC, a.start_time DESC LIMIT 200`).bind(user.uid);
   const plannedQuery = user.role === "admin"
     ? db.prepare(`SELECT ps.*, c.name AS customer_name, c.address AS customer_address, c.latitude AS customer_latitude,
         c.longitude AS customer_longitude, psm.user_id AS member_user_id, psm.confirmation_status, psm.checklist_state_json
@@ -1334,7 +1336,8 @@ export async function POST(request: Request) {
   let actionName = "request";
   try {
     const origin = request.headers.get("Origin");
-    if (!origin || origin !== new URL(request.url).origin) return json({ error: "Ongeldige aanvraag." }, 403);
+    const nativeFence = request.headers.get("X-Team-Client") === "visit-fence";
+    if (!nativeFence && (!origin || origin !== new URL(request.url).origin)) return json({ error: "Ongeldige aanvraag." }, 403);
     const contentType = request.headers.get("Content-Type") || "";
     if (contentType.includes("multipart/form-data")) {
       const identity = await verifyFirebaseToken(request);

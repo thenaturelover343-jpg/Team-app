@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import type { Assignment, GeoLocation } from '../types';
 import { formatTime, getCurrentLocation } from '../types';
 import { secureApi } from '../lib/secureApi';
+import { armVisitFence, disarmVisitFence, isNativeApp, pauseVisitFence, resumeVisitFence } from '../lib/visitFence';
 
 export function VisitPanel({ clockedIn, onBreak, assignments, onChanged }: { clockedIn: boolean; onBreak: boolean; assignments: Assignment[]; onChanged: () => Promise<void> }) {
   const [banner, setBanner] = useState('');
@@ -10,6 +11,8 @@ export function VisitPanel({ clockedIn, onBreak, assignments, onChanged }: { clo
   const [busy, setBusy] = useState('');
   const onChangedRef = useRef(onChanged);
   onChangedRef.current = onChanged;
+
+  const siteKey = assignments.map(item => `${item.id}:${item.status}:${item.siteLatitude ?? ''}:${item.siteLongitude ?? ''}`).join('|');
 
   useEffect(() => {
     if (!clockedIn || onBreak || typeof navigator === 'undefined' || !navigator.geolocation) return;
@@ -38,6 +41,35 @@ export function VisitPanel({ clockedIn, onBreak, assignments, onChanged }: { clo
     return () => { stopped = true; navigator.geolocation.clearWatch(watch); };
   }, [clockedIn, onBreak]);
 
+  useEffect(() => {
+    let stopped = false;
+    const syncNative = async () => {
+      if (!isNativeApp()) return;
+      try {
+        if (!clockedIn) {
+          await disarmVisitFence();
+          return;
+        }
+        if (onBreak) {
+          await pauseVisitFence();
+          if (!stopped) setBanner('Pauze: de klanttijd staat stil.');
+          return;
+        }
+        await resumeVisitFence();
+        const armed = await armVisitFence(assignments);
+        if (!stopped) {
+          setBanner(armed
+            ? 'Klanttijd loopt ook als de app dicht is. Alleen tijdens deze dienst, locatie op Altijd.'
+            : 'Geen opdracht met coördinaten. Zonder adres start de klanttijd niet vanzelf.');
+        }
+      } catch (error) {
+        if (!stopped) setBanner(error instanceof Error ? error.message : 'Achtergrondlocatie lukt niet.');
+      }
+    };
+    void syncNative();
+    return () => { stopped = true; };
+  }, [clockedIn, onBreak, siteKey]);
+
   const pick = async (assignmentId: string) => {
     setBusy(assignmentId);
     try {
@@ -65,7 +97,7 @@ export function VisitPanel({ clockedIn, onBreak, assignments, onChanged }: { clo
     <div className="space-y-3">
       {clockedIn && <div className="ops-card p-5 space-y-3">
         <h2 className="font-bold text-zinc-900">Bij de klant</h2>
-        <p className="text-sm text-zinc-600">{onBreak ? 'Pauze: de klanttijd staat stil.' : banner || 'De app zet aankomst en vertrek zelf, zolang dit scherm open blijft. Twee minuten op het adres telt, voorbijrijden niet.'}</p>
+        <p className="text-sm text-zinc-600">{onBreak ? 'Pauze: de klanttijd staat stil.' : banner || (isNativeApp() ? 'Klanttijd loopt ook als de app dicht is. Twee minuten op het adres telt.' : 'In de browser en via het beginscherm-icoon telt dit alleen zolang dit scherm open blijft. De geïnstalleerde Team-app meet ook met het scherm uit.')}</p>
         {choices.length > 0 && <div className="space-y-2">{choices.map(choice => <button key={choice.id} type="button" disabled={busy !== ''} onClick={() => pick(choice.id)} className="ops-btn-primary w-full py-3">{busy === choice.id ? 'Bezig…' : choice.name}</button>)}</div>}
         {missing.length > 0 && <p className="text-sm text-zinc-500">Nog geen aankomst: {missing.map(item => item.customerName || 'Klant').join(', ')}.</p>}
       </div>}

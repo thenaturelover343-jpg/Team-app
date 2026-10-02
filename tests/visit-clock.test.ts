@@ -68,6 +68,47 @@ test('vertrek na twee minuten buiten, en de volgende klant sluit de vorige', () 
   assert.equal(transfer.arrived[0]?.id, 'b');
 });
 
+test('een bevestigde cirkel telt meteen, een bevestigd vertrek ook', () => {
+  const pending = site({ id: 'a', name: 'Jansen', status: 'pending' });
+  const arrived = evaluateVisitPing({
+    now, clockedIn: true, onBreak: false, lat: here.lat, lng: here.lng, accuracy: 20,
+    sites: [pending], confirmedDwell: true,
+  });
+  assert.equal(arrived.arrived[0]?.at, now - VISIT_DWELL_MS);
+
+  const open = site({ id: 'a', name: 'Jansen', status: 'arrived', lat: away.lat, lng: away.lng, arrivalTime: now });
+  const left = evaluateVisitPing({
+    now: now + 10_000, clockedIn: true, onBreak: false, lat: here.lat, lng: here.lng, accuracy: 20,
+    sites: [open], confirmedExit: true,
+  });
+  assert.equal(left.departed[0]?.at, now + 10_000);
+
+  const stillThere = site({ id: 'a', name: 'Jansen', status: 'arrived', arrivalTime: now });
+  const forced = evaluateVisitPing({
+    now: now + 5_000, clockedIn: true, onBreak: false, lat: here.lat, lng: here.lng, accuracy: 20,
+    sites: [stillThere], confirmedExit: true,
+  });
+  assert.equal(forced.departed[0]?.id, 'a');
+
+  const coarse = evaluateVisitPing({
+    now, clockedIn: true, onBreak: false, lat: here.lat, lng: here.lng, accuracy: 800,
+    sites: [site({ id: 'b', name: 'Pieters', status: 'pending' })], confirmedDwell: true,
+  });
+  assert.equal(coarse.arrived[0]?.name, 'Pieters');
+  assert.equal(evaluateVisitPing({
+    now, clockedIn: true, onBreak: false, lat: here.lat, lng: here.lng, accuracy: 800,
+    sites: [site({ id: 'b', status: 'pending' })],
+  }).type, 'weak');
+
+  const both = evaluateVisitPing({
+    now, clockedIn: true, onBreak: false, lat: here.lat, lng: here.lng, accuracy: 20,
+    sites: [site({ id: 'a', name: 'Jansen', status: 'pending' }), site({ id: 'b', name: 'Pieters', status: 'pending' })],
+    confirmedDwell: true,
+  });
+  assert.equal(both.type, 'ambiguous');
+  assert.equal(both.arrived.length, 0);
+});
+
 test('herinnering op het geplande uur en geen aankomst na dertig minuten', () => {
   const row = { assignmentId: 'job-1', userId: 'user-1', customerName: 'Jansen', date: '2026-09-17', startTime: '10:00', status: 'pending', hasArrival: false };
   assert.equal(visitReminderEvents([row], new Date('2026-09-17T08:05:00Z'))[0]?.type, 'visit_reminder');
