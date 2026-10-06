@@ -787,6 +787,19 @@ async function act(user: AppUser, action: string, input: Json) {
     return { ok: true };
   }
 
+  if (action === "logClientError") {
+    requireAdmin(user);
+    const context = clean(input.context, 40);
+    if (!["invite_mail", "login_link"].includes(context)) throw new Error("Onbekende foutcontext.");
+    const code = clean(input.code, 80) || "onbekend";
+    const target = clean(input.email, 200);
+    const detail = clean(input.message, 300);
+    const message = `${code}${target ? ` · ${target}` : ""}${detail ? ` · ${detail}` : ""}`.slice(0, 500);
+    await db.prepare("INSERT INTO error_events (id, actor_id, action, message, severity, created_at) VALUES (?, ?, ?, ?, 'error', ?)")
+      .bind(id(), user.uid, `client.${context}`, message, now).run();
+    return { ok: true };
+  }
+
   if (action === "inviteEmployee") {
     requireAdmin(user);
     await ensureInviteTokenColumn(db);
