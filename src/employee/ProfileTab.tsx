@@ -17,11 +17,11 @@ export function ProfileTab({ user }: { user: User }) {
   const loadHistory = React.useCallback(async () => {
     try {
       const { data } = await secureApi.snapshot();
-      setHistoryAssignments(data.assignments.filter(item => item.status === 'completed'));
-      setHistoryShifts(data.shifts);
+      setHistoryAssignments(data.assignments.filter(item => item.status === 'completed' && item.userId === user.id));
+      setHistoryShifts(data.shifts.filter(item => item.userId === user.id));
     } catch (error) { console.error(error); }
     finally { setLoadingHistory(false); }
-  }, []);
+  }, [user.id]);
   useLiveRefresh(loadHistory, true, 30_000);
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault(); setIsUpdating(true); setMsg({ text: '', type: '' });
