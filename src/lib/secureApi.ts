@@ -84,6 +84,7 @@ export const secureApi = {
   snapshot: (inviteToken?: string) => call<TeamSnapshot>('snapshot', inviteToken ? { inviteToken } : {}),
   lookupInvite: (token: string) => publicCall<InvitePreview>('lookupInvite', { token }),
   inviteEmployee: (input: InviteInput) => call<InviteResult>('inviteEmployee', { ...input, origin: typeof window !== 'undefined' ? window.location.origin : input.origin }),
+  logClientError: (input: { context: 'invite_mail' | 'login_link'; code: string; message?: string; email?: string }) => call<{ ok: boolean }>('logClientError', input),
   setEmployeeAccess: (input: AccessInput) => call<{ ok: boolean }>('setEmployeeAccess', input),
   saveCustomer: (input: CustomerInput) => call<{ id: string }>('saveCustomer', input),
   savePlannedShift: (input: PlannedShiftInput) => call<{ ids: string[] }>('savePlannedShift', input),
