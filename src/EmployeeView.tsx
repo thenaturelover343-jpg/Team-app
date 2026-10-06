@@ -18,9 +18,10 @@ export default function EmployeeView() {
   const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<'dashboard' | 'planning' | 'reports' | 'notifications' | 'profile'>('dashboard');
 
-  const shifts = snapshot?.shifts ?? [];
   const weekStart = weekStartKey();
-  // Dual-role admins receive all assignments in snapshot — always scope to self + upcoming week.
+  // Dual-role admins receive everyone's rows in snapshot — always scope employee UI to self.
+  const shifts = (snapshot?.shifts ?? []).filter(item => Boolean(user?.id) && item.userId === user!.id);
+  const breaks = (snapshot?.breaks ?? []).filter(item => Boolean(user?.id) && item.userId === user!.id);
   const assignments = (snapshot?.assignments ?? []).filter(item =>
     Boolean(user?.id) && item.userId === user!.id && item.date >= weekStart
   );
@@ -31,10 +32,9 @@ export default function EmployeeView() {
     // Fallback if memberIds omitted but confirmations keyed by uid
     return Boolean(shift.confirmations && user.id in shift.confirmations);
   });
-  const breaks = snapshot?.breaks ?? [];
   const attachments = snapshot?.attachments ?? [];
-  const incidents = snapshot?.incidents ?? [];
-  const correctionRequests = snapshot?.correctionRequests ?? [];
+  const incidents = (snapshot?.incidents ?? []).filter(item => Boolean(user?.id) && item.userId === user!.id);
+  const correctionRequests = (snapshot?.correctionRequests ?? []).filter(item => Boolean(user?.id) && item.userId === user!.id);
   const notifications = snapshot?.notifications ?? [];
   const push = snapshot?.push ?? { supported: false, enabled: false, publicKey: '' };
   const privacy = snapshot?.privacy ?? { controllerName: 'Barlicious & Koelverhuur', contactEmail: '', locationDays: 90, notificationDays: 180, auditDays: 730, errorDays: 180, backupDays: 365 };
