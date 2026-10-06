@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { localDateKey } from './types';
+import { localDateKey, weekStartKey } from './types';
 import { User as UserIcon, Calendar, CalendarDays, WifiOff, Bell, AlertTriangle } from 'lucide-react';
 import { useAuth } from './hooks/useAuth';
 import { secureApi } from './lib/secureApi';
@@ -19,7 +19,11 @@ export default function EmployeeView() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'planning' | 'reports' | 'notifications' | 'profile'>('dashboard');
 
   const shifts = snapshot?.shifts ?? [];
-  const assignments = (snapshot?.assignments ?? []).filter(item => item.date === localDateKey());
+  const weekStart = weekStartKey();
+  // Dual-role admins receive all assignments in snapshot — always scope to self + upcoming week.
+  const assignments = (snapshot?.assignments ?? []).filter(item =>
+    Boolean(user?.id) && item.userId === user!.id && item.date >= weekStart
+  );
   // Employee side: only published shifts assigned to this person (also when a dual-role admin previews medewerker).
   const plannedShifts = (snapshot?.plannedShifts ?? []).filter(shift => {
     if (shift.status !== 'published' || !user?.id) return false;
@@ -96,7 +100,7 @@ export default function EmployeeView() {
       </div>
 
       {activeTab === 'dashboard' && <DashboardTab userId={user.id} shifts={shifts} breaks={breaks} assignments={assignments} plannedShifts={plannedShifts} attachments={attachments} loading={!snapshot} onChanged={loadData} />}
-      {activeTab === 'planning' && <EmployeePlanningTab userId={user.id} shifts={plannedShifts} attachments={attachments} onChanged={loadData} />}
+      {activeTab === 'planning' && <EmployeePlanningTab userId={user.id} shifts={plannedShifts} assignments={assignments} attachments={attachments} onChanged={loadData} />}
       {activeTab === 'reports' && <ReportsTab shifts={shifts} plannedShifts={plannedShifts} incidents={incidents} corrections={correctionRequests} onChanged={loadData} />}
       {activeTab === 'notifications' && <NotificationCenter notifications={notifications} push={push} onChanged={loadData} />}
       {activeTab === 'profile' && <div className="space-y-6"><ProfileTab key={`${user.id}:${user.firstName || ''}:${user.lastName || ''}:${user.phone || ''}:${user.address || ''}`} user={user} /><PrivacyPanel privacy={privacy} accessEvents={accessEvents} pilot={pilot} feedback={pilotFeedback} onChanged={loadData} subtle /></div>}

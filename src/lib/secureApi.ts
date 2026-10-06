@@ -9,7 +9,7 @@ type AccessInput = { uid: string; role?: 'admin' | 'employee' | 'both'; isAdmin?
 type ClockOutInput = { location: GeoLocation; notes: string; statusTag: string };
 type AssignmentTransitionInput = { assignmentId: string; status: 'arrived' | 'completed'; location: GeoLocation; notes?: string; workNotes?: string; materials?: string; completionNotes?: string };
 type CustomerInput = { id?: string; name: string; address: string; phone?: string; email?: string; btwNumber?: string; latitude?: number | ''; longitude?: number | '' };
-type AssignmentInput = { id?: string; userId: string; customerId: string; date: string; startTime: string; description: string; siteAddress?: string; siteLatitude?: number | ''; siteLongitude?: number | '' };
+type AssignmentInput = { id?: string; userId?: string; memberIds?: string[]; customerId: string; date: string; startTime: string; description: string; siteAddress?: string; siteLatitude?: number | ''; siteLongitude?: number | '' };
 type PlannedShiftInput = { title: string; customerId?: string; siteAddress?: string; siteLatitude?: number | ''; siteLongitude?: number | ''; date: string; startTime: string; endTime: string; breakMinutes: number; notes?: string; memberIds: string[]; repeatWeeks: number; checklist: string[]; publish?: boolean };
 export type TeamSnapshot = { user: User; users: User[]; shifts: Shift[]; assignments: Assignment[]; customers: Customer[]; plannedShifts: PlannedShift[]; breaks: ShiftBreak[]; incidents: Incident[]; correctionRequests: CorrectionRequest[]; attachments: Attachment[]; notifications: TeamNotification[]; push: PushState; privacy: PrivacySettings; auditEvents: AuditEvent[]; accessEvents: AccessEvent[]; backups: BackupRun[]; errors: ErrorEvent[]; pilot: PilotProgram | null; pilotFeedback: PilotFeedback[] };
 
@@ -90,7 +90,7 @@ export const secureApi = {
   publishPlannedShifts: (shiftIds: string[]) => call<{ count: number }>('publishPlannedShifts', { shiftIds }),
   deletePlannedShift: (id: string) => call<{ ok: boolean }>('deletePlannedShift', { id }),
   confirmPlannedShift: (shiftId: string, status: 'confirmed' | 'declined') => call<{ ok: boolean }>('confirmPlannedShift', { shiftId, status }),
-  saveAssignment: (input: AssignmentInput) => call<{ id: string }>('saveAssignment', input),
+  saveAssignment: (input: AssignmentInput) => call<{ id: string; ids: string[] }>('saveAssignment', input),
   deleteAssignment: (id: string) => call<{ ok: boolean }>('deleteAssignment', { id }),
   clockIn: (location: GeoLocation, plannedShiftId?: string) => queueable('clockIn', { location, plannedShiftId }),
   clockOut: (input: ClockOutInput) => call<{ ok: boolean }>('clockOut', input),

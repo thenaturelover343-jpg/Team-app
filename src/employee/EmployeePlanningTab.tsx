@@ -1,10 +1,16 @@
 import React, { useState } from 'react';
-import { Attachment, PlannedShift, formatDate, localDateKey, weekStartKey } from '../types';
-import { MapPin, CheckCircle, Loader2, XCircle, ClipboardList, Upload, Download } from 'lucide-react';
+import { Assignment, Attachment, PlannedShift, formatDate, localDateKey, weekStartKey } from '../types';
+import { MapPin, CheckCircle, Loader2, XCircle, ClipboardList, Upload, Download, ListTodo } from 'lucide-react';
 import { secureApi } from '../lib/secureApi';
 import { useLanguage } from '../i18n';
 
-export function EmployeePlanningTab({ userId, shifts, attachments, onChanged }: { userId: string; shifts: PlannedShift[]; attachments: Attachment[]; onChanged: () => Promise<void> }) {
+export function EmployeePlanningTab({ userId, shifts, assignments = [], attachments, onChanged }: {
+  userId: string;
+  shifts: PlannedShift[];
+  assignments?: Assignment[];
+  attachments: Attachment[];
+  onChanged: () => Promise<void>;
+}) {
   const { t } = useLanguage();
   const [busyId, setBusyId] = useState('');
   const [error, setError] = useState('');
@@ -14,9 +20,14 @@ export function EmployeePlanningTab({ userId, shifts, attachments, onChanged }: 
     .filter(shift => shift.date >= weekStart)
     .sort((a, b) => `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`));
   const todayShifts = weekShifts.filter(shift => shift.date === today);
+  const weekAssignments = [...assignments]
+    .filter(item => item.date >= weekStart && item.userId === userId)
+    .sort((a, b) => `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`));
+  const todayAssignments = weekAssignments.filter(item => item.date === today);
   // Default to week: a dienst on Monday must still show on Tuesday without hunting tabs.
-  const [mode, setMode] = useState<'today' | 'week'>(() => (todayShifts.length ? 'today' : 'week'));
+  const [mode, setMode] = useState<'today' | 'week'>(() => (todayShifts.length || todayAssignments.length ? 'today' : 'week'));
   const visible = mode === 'today' ? todayShifts : weekShifts;
+  const visibleAssignments = mode === 'today' ? todayAssignments : weekAssignments;
   const respond = async (shiftId: string, status: 'confirmed' | 'declined') => {
     setBusyId(shiftId); setError('');
     try { await secureApi.confirmPlannedShift(shiftId, status); await onChanged(); }
@@ -45,24 +56,47 @@ export function EmployeePlanningTab({ userId, shifts, attachments, onChanged }: 
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
   return <div className="space-y-4">
-    <div className="px-1"><h2 className="text-2xl font-bold text-zinc-900">Mijn planning</h2><p className="text-sm text-zinc-500 mt-1">Bekijk je diensten en route voor vandaag of de week.</p></div>
+    <div className="px-1"><h2 className="text-2xl font-bold text-zinc-900">Mijn planning</h2><p className="text-sm text-zinc-500 mt-1">Bekijk je diensten en klantopdrachten voor vandaag of de week.</p></div>
     <div className="grid grid-cols-2 gap-2 ops-panel p-1.5">
       <button type="button" onClick={() => setMode('today')} className={`py-3 rounded-lg font-bold text-sm ${mode === 'today' ? 'ops-nav-btn-active' : ''}`}>{t('today')}</button>
       <button type="button" onClick={() => setMode('week')} className={`py-3 rounded-lg font-bold text-sm ${mode === 'week' ? 'ops-nav-btn-active' : ''}`}>{'Week'}</button>
     </div>
     {error && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</div>}
-    {!visible.length && (
+    {!visible.length && !visibleAssignments.length && (
       <div className="bg-white border border-zinc-200 rounded-2xl p-8 text-center text-zinc-500 space-y-3">
         <p>{mode === 'today'
-          ? (weekShifts.length
-            ? `Geen diensten vandaag. Wel ${weekShifts.length} deze week — open Week.`
-            : 'Geen diensten gepland voor vandaag.')
-          : 'Er staan deze week nog geen gepubliceerde diensten klaar.'}</p>
-        {mode === 'today' && weekShifts.length > 0 && (
+          ? ((weekShifts.length + weekAssignments.length)
+            ? `Niets vandaag. Wel ${weekShifts.length + weekAssignments.length} deze week — open Week.`
+            : 'Geen diensten of opdrachten voor vandaag.')
+          : 'Er staan deze week nog geen gepubliceerde diensten of opdrachten klaar.'}</p>
+        {mode === 'today' && (weekShifts.length + weekAssignments.length) > 0 && (
           <button type="button" onClick={() => setMode('week')} className="ops-btn-primary px-5 text-sm">Bekijk weekplanning</button>
         )}
       </div>
     )}
+    {visibleAssignments.length > 0 && (
+      <div className="space-y-3">
+        <div className="px-1 text-xs font-bold uppercase tracking-wide text-zinc-400 flex items-center gap-2"><ListTodo className="w-4 h-4" />Klantopdrachten</div>
+        {visibleAssignments.map(item => (
+          <article key={item.id} className="bg-white border border-zinc-200 rounded-[24px] p-5 shadow-sm space-y-2">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-xs uppercase tracking-wide font-bold text-zinc-400">{formatDate(item.date)}{item.startTime ? ` · ${item.startTime}` : ''}</div>
+                <h3 className="text-lg font-extrabold text-zinc-900 mt-1">{item.customerName || 'Klantopdracht'}</h3>
+              </div>
+              <span className={`text-xs font-bold px-3 py-1.5 rounded-full ${item.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : item.status === 'arrived' ? 'bg-cyan-100 text-cyan-700' : 'bg-amber-100 text-amber-800'}`}>
+                {item.status === 'completed' ? 'Afgerond' : item.status === 'arrived' ? 'Ter plaatse' : 'Gepland'}
+              </span>
+            </div>
+            {(item.siteAddress || item.customerAddress) && (
+              <div className="flex items-start gap-2 text-sm text-zinc-600"><MapPin className="w-4 h-4 mt-0.5 shrink-0" /><span>{item.siteAddress || item.customerAddress}</span></div>
+            )}
+            {item.description && <p className="text-sm text-zinc-600 bg-zinc-50 rounded-xl p-3">{item.description}</p>}
+          </article>
+        ))}
+      </div>
+    )}
+    {visible.length > 0 && <div className="px-1 text-xs font-bold uppercase tracking-wide text-zinc-400">Weekdiensten</div>}
     {visible.map(shift => {
       const confirmation = shift.confirmations[userId] || 'pending';
       return <article key={shift.id} className="bg-white border border-zinc-200 rounded-[24px] p-5 shadow-sm space-y-4">

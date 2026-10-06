@@ -927,7 +927,7 @@ async function act(user: AppUser, action: string, input: Json) {
       }
     }
     await db.batch(statements);
-    const shouldPublish = input.publish === true || input.publish === 1 || input.publish === "1";
+    const shouldPublish = !(input.publish === false || input.publish === 0 || input.publish === "0" || input.publish === "false");
     if (shouldPublish && createdIds.length) {
       const pubPlaceholders = createdIds.map(() => "?").join(",");
       await db.prepare(`UPDATE planned_shifts SET status='published', published_at=?, updated_at=? WHERE id IN (${pubPlaceholders}) AND status='draft'`)
@@ -995,12 +995,23 @@ async function act(user: AppUser, action: string, input: Json) {
 
   if (action === "saveAssignment") {
     requireAdmin(user);
-    const assignmentId = clean(input.id, 160) || id();
-    const userId = clean(input.userId, 160);
+    await ensureIsEmployeeColumn(db);
     const customerId = clean(input.customerId, 160);
     const date = clean(input.date, 10);
-    if (!userId || !customerId || !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Medewerker, klant en datum zijn verplicht.");
-    const customer = await db.prepare("SELECT address, latitude, longitude FROM customers WHERE id=?").bind(customerId).first<Json>();
+    if (!customerId || !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Klant en datum zijn verplicht.");
+    const memberIds = [...new Set((
+      Array.isArray(input.memberIds) ? input.memberIds :
+      Array.isArray(input.userIds) ? input.userIds :
+      input.userId ? [input.userId] : []
+    ).map(value => clean(value, 160)).filter(Boolean))];
+    if (!memberIds.length) throw new Error("Selecteer minstens één medewerker.");
+    const placeholders = memberIds.map(() => "?").join(",");
+    const membersResult = await db.prepare(`SELECT id, name, active, is_employee FROM users WHERE id IN (${placeholders}) AND active=1 AND is_employee=1`)
+      .bind(...memberIds).all<Json>();
+    if ((membersResult.results as Json[]).length !== memberIds.length) {
+      throw new Error("Een geselecteerde medewerker is niet actief of niet als medewerker ingesteld.");
+    }
+    const customer = await db.prepare("SELECT name, address, latitude, longitude FROM customers WHERE id=?").bind(customerId).first<Json>();
     if (!customer) throw new Error("Klant niet gevonden.");
     let siteAddress = clean(input.siteAddress, 500);
     if (!siteAddress) siteAddress = clean(customer.address, 500);
@@ -1016,16 +1027,43 @@ async function act(user: AppUser, action: string, input: Json) {
     if (siteLatitude !== null && (!Number.isFinite(siteLatitude) || siteLatitude < -90 || siteLatitude > 90 || !Number.isFinite(siteLongitude!) || siteLongitude! < -180 || siteLongitude! > 180)) {
       throw new Error("De coördinaten van het opdrachtadres zijn ongeldig.");
     }
-    const existing = await db.prepare("SELECT status, created_at FROM assignments WHERE id = ?").bind(assignmentId).first<Json>();
-    if (existing && existing.status !== "pending") throw new Error("Een gestarte opdracht kan niet opnieuw ingepland worden.");
-    await db.prepare(`INSERT INTO assignments (id, user_id, customer_id, description, date, start_time, site_address, site_latitude, site_longitude, status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
-      ON CONFLICT(id) DO UPDATE SET user_id=excluded.user_id, customer_id=excluded.customer_id, description=excluded.description,
-        date=excluded.date, start_time=excluded.start_time, site_address=excluded.site_address, site_latitude=excluded.site_latitude,
-        site_longitude=excluded.site_longitude, updated_at=excluded.updated_at`)
-      .bind(assignmentId, userId, customerId, clean(input.description), date, clean(input.startTime, 5) || null, siteAddress || null, siteLatitude, siteLongitude, Number(existing?.created_at || now), now).run();
-    await audit(db, user.uid, "assignment.saved", "assignment", assignmentId, { userId, customerId, siteAddress });
-    return { id: assignmentId };
+    const description = clean(input.description);
+    const startTime = clean(input.startTime, 5) || null;
+    const updateId = clean(input.id, 160);
+    if (updateId) {
+      // Single-row edit keeps one assignee (backward compatible).
+      const userId = memberIds[0];
+      const existing = await db.prepare("SELECT status, created_at FROM assignments WHERE id = ?").bind(updateId).first<Json>();
+      if (existing && existing.status !== "pending") throw new Error("Een gestarte opdracht kan niet opnieuw ingepland worden.");
+      await db.prepare(`INSERT INTO assignments (id, user_id, customer_id, description, date, start_time, site_address, site_latitude, site_longitude, status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+        ON CONFLICT(id) DO UPDATE SET user_id=excluded.user_id, customer_id=excluded.customer_id, description=excluded.description,
+          date=excluded.date, start_time=excluded.start_time, site_address=excluded.site_address, site_latitude=excluded.site_latitude,
+          site_longitude=excluded.site_longitude, updated_at=excluded.updated_at`)
+        .bind(updateId, userId, customerId, description, date, startTime, siteAddress || null, siteLatitude, siteLongitude, Number(existing?.created_at || now), now).run();
+      await audit(db, user.uid, "assignment.saved", "assignment", updateId, { userId, customerId, siteAddress });
+      await notify(db, {
+        userId, type: "assignment_assigned", title: "Nieuwe klantopdracht",
+        body: `${String(customer.name || "Klant")} op ${date}${startTime ? ` om ${startTime}` : ""}.`,
+        dedupeKey: `assignment:${updateId}:${userId}:${now}`, entityType: "assignment", entityId: updateId,
+      });
+      return { id: updateId, ids: [updateId] };
+    }
+    const createdIds: string[] = [];
+    for (const userId of memberIds) {
+      const assignmentId = id();
+      createdIds.push(assignmentId);
+      await db.prepare(`INSERT INTO assignments (id, user_id, customer_id, description, date, start_time, site_address, site_latitude, site_longitude, status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`)
+        .bind(assignmentId, userId, customerId, description, date, startTime, siteAddress || null, siteLatitude, siteLongitude, now, now).run();
+      await notify(db, {
+        userId, type: "assignment_assigned", title: "Nieuwe klantopdracht",
+        body: `${String(customer.name || "Klant")} op ${date}${startTime ? ` om ${startTime}` : ""}.`,
+        dedupeKey: `assignment:${assignmentId}:${userId}:${now}`, entityType: "assignment", entityId: assignmentId,
+      });
+    }
+    await audit(db, user.uid, "assignment.saved", "assignment", createdIds[0], { memberIds, customerId, siteAddress, count: createdIds.length });
+    return { id: createdIds[0], ids: createdIds };
   }
 
   if (action === "deleteAssignment") {
