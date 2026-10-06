@@ -15,7 +15,7 @@ export function AdminAssignmentCard({ assignment, users, customers, onChanged }:
   const [editDescription, setEditDescription] = useState(assignment.description);
   const emp = users.find(u => u.id === assignment.userId);
   const customer = customers.find(c => c.id === assignment.customerId);
-  const employees = users.filter(u => u.role === 'employee');
+  const employees = users.filter(u => u.active !== false && u.isEmployee !== false);
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editUserId || !editCustomerId || !editDate) return;

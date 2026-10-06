@@ -2,6 +2,7 @@ import { LocationAccessError } from './lib/geolocation';
 export { LocationAccessError, isGeoBlockedError, openDeviceLocationSettings, detectGeoPlatform, queryLocationPermission, iosLocationStepsCopy, androidLocationStepsCopy } from './lib/geolocation';
 
 export type Role = 'admin' | 'employee';
+export type InviteRole = 'admin' | 'employee' | 'both';
 
 export interface User {
   id: string; // Document ID is uid
@@ -10,6 +11,8 @@ export interface User {
   lastName?: string;
   email: string;
   role: Role;
+  /** True when this person also works as medewerker (planning, clock-in). Admins may be dual. */
+  isEmployee?: boolean;
   active?: boolean;
   createdAt: number;
   phone?: string;

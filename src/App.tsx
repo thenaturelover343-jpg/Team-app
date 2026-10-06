@@ -70,7 +70,7 @@ function AppContent() {
   const [authNotice, setAuthNotice] = useState('');
   const [inviteToken] = useState(() => readInviteTokenFromLocation());
   const [passedInstall, setPassedInstall] = useState(false);
-  const [invite, setInvite] = useState<{ email: string; name: string } | null>(null);
+  const [invite, setInvite] = useState<{ email: string; name: string; role?: string; existingUser?: boolean } | null>(null);
   const [inviteLoading, setInviteLoading] = useState(Boolean(inviteToken));
   const [creating, setCreating] = useState(false);
   const [sessionHint] = useState(() => readSessionHint());
@@ -132,14 +132,26 @@ function AppContent() {
         setNeedsEmailForLink(false);
         return;
       }
-      const wantsCreate = creating || Boolean(invite);
+      const existingInviteAccount = Boolean(invite?.existingUser);
+      const wantsCreate = (creating || Boolean(invite)) && !existingInviteAccount;
       if (wantsCreate) {
         if (password !== password2) { setAuthError(t('passwordsMismatch')); return; }
         try { await registerWithEmail(email, password); }
         catch (err: unknown) {
           const code = typeof err === 'object' && err !== null && 'code' in err ? String(err.code) : '';
-          if (code === 'auth/email-already-in-use') await loginWithEmail(email, password);
-          else throw err;
+          if (code === 'auth/email-already-in-use') {
+            // Account already exists (e.g. invited again with another role) — use existing password.
+            try {
+              await loginWithEmail(email, password);
+            } catch (loginErr: unknown) {
+              const loginCode = typeof loginErr === 'object' && loginErr !== null && 'code' in loginErr ? String(loginErr.code) : '';
+              if (loginCode === 'auth/invalid-credential' || loginCode === 'auth/wrong-password' || loginCode === 'auth/user-not-found') {
+                setAuthError(t('existingAccountLead'));
+                return;
+              }
+              throw loginErr;
+            }
+          } else throw err;
         }
       } else {
         await loginWithEmail(email, password);
@@ -207,7 +219,7 @@ function AppContent() {
                 <div className="ops-panel w-8 h-8 rounded-full flex items-center justify-center"><UserCircle className="w-5 h-5 text-zinc-500" /></div>
                 <div className="user-pill-copy flex flex-col pr-2 sm:pr-3 border-r border-zinc-200">
                   <span className="text-sm font-bold text-zinc-900 leading-tight truncate max-w-[100px]">{user.name}</span>
-                  <span className="text-xs text-zinc-400 leading-tight capitalize">{user.role === 'admin' && viewAsEmployee ? ('beheerder · preview') : user.role}</span>
+                  <span className="text-xs text-zinc-400 leading-tight">{user.role === 'admin' ? (viewAsEmployee ? 'beheerder · medewerker' : (user.isEmployee !== false ? 'beheerder + medewerker' : 'beheerder')) : 'medewerker'}</span>
                 </div>
                 <button onClick={logout} aria-label={t('logout')} className="text-zinc-400 hover:text-zinc-900 transition-colors" title={t('logout')}><LogOut className="w-4 h-4" /></button>
               </div>
@@ -241,7 +253,7 @@ function AppContent() {
               <img src="/brand-logo.svg" alt="Barlicious Team" className="w-[88%] h-[88%] object-contain" />
             </div>
             <div className="eyebrow">{t('fieldOps')}</div>
-            <p className="text-zinc-500">{invite ? t('inviteLead') : creating ? t('createAccountLead') : t('loginLead')}</p>
+            <p className="text-zinc-500">{invite?.existingUser ? t('existingAccountLead') : invite ? t('inviteLead') : creating ? t('createAccountLead') : t('loginLead')}</p>
             {invite && <p className="text-sm font-bold">{invite.name} · {invite.email}</p>}
           </div>
           {(authError || accessError || redirectAuthError) && (
@@ -263,7 +275,7 @@ function AppContent() {
               </div>
             </div>
             )}
-            {(invite || creating) && !needsEmailForLink && (
+            {(invite || creating) && !invite?.existingUser && !needsEmailForLink && (
               <div>
                 <label className="block text-sm font-bold text-zinc-700 mb-1.5" htmlFor="login-password2">{t('passwordConfirm')}</label>
                 <input id="login-password2" type={showPassword ? 'text' : 'password'} autoComplete="new-password" value={password2} onChange={e => setPassword2(e.target.value)} required minLength={6} className="ops-input p-3.5 font-medium" />
@@ -271,7 +283,7 @@ function AppContent() {
             )}
             <button type="submit" disabled={isSubmitting} className="ops-btn-primary w-full py-4 disabled:opacity-50 mt-2">
               {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
-              <span>{needsEmailForLink ? t('confirmEmailBtn') : invite || creating ? t('inviteActivate') : t('signIn')}</span>
+              <span>{needsEmailForLink ? t('confirmEmailBtn') : (invite && !invite.existingUser) || creating ? t('inviteActivate') : t('signIn')}</span>
             </button>
           </form>
           {!needsEmailForLink && !invite && (

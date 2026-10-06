@@ -31,7 +31,7 @@ export default function WeekPlanner({ users, customers, shifts, onChanged }: Pro
   const [showForm, setShowForm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const employees = users.filter(user => user.active && (user.role === 'employee' || user.role === 'admin'));
+  const employees = users.filter(user => user.active !== false && user.isEmployee !== false);
   const days = useMemo(() => Array.from({ length: 7 }, (_, index) => addDays(weekStart, index)), [weekStart]);
   const weekKeys = days.map(dateKey);
   const weekShifts = shifts.filter(shift => weekKeys.includes(shift.date));

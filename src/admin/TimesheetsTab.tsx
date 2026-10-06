@@ -14,7 +14,7 @@ export function TimesheetsTab({ users, shifts, assignments = [] }: { users: User
   const chartDataMap = new Map<string, { name: string, uren: number }>();
   
   users.forEach(u => {
-    if (u.role === 'employee') {
+    if (u.isEmployee !== false && (u.role === 'employee' || u.role === 'admin')) {
       chartDataMap.set(u.id, { name: u.name, uren: 0 });
     }
   });

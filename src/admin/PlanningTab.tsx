@@ -17,7 +17,7 @@ export function PlanningTab({ users, assignments, customers, onChanged }: { user
   const [siteAddress, setSiteAddress] = useState('');
   const [description, setDescription] = useState('');
 
-  const employees = users.filter(u => u.role === 'employee');
+  const employees = users.filter(u => u.active !== false && u.isEmployee !== false);
 
   const selectCustomer = (id: string) => {
     setCustomerId(id);

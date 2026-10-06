@@ -2,10 +2,10 @@ import type { AccessEvent, Assignment, AssignmentTask, Attachment, AuditEvent, B
 import { auth } from './firebase';
 import { enqueueOfflineAction, flushOfflineQueue } from './offlineQueue';
 
-type InviteInput = { email: string; name: string; phone?: string; role?: 'admin' | 'employee'; origin?: string };
-type InviteResult = { uid: string; resetLink: string; inviteUrl?: string; token?: string };
-type InvitePreview = { email: string; name: string; role: 'admin' | 'employee' };
-type AccessInput = { uid: string; role: 'admin' | 'employee'; active: boolean };
+type InviteInput = { email: string; name: string; phone?: string; role?: 'admin' | 'employee' | 'both'; origin?: string };
+type InviteResult = { uid: string; resetLink: string; inviteUrl?: string; token?: string; existingUser?: boolean; role?: string; isEmployee?: boolean };
+type InvitePreview = { email: string; name: string; role: 'admin' | 'employee' | 'both'; existingUser?: boolean };
+type AccessInput = { uid: string; role?: 'admin' | 'employee' | 'both'; isAdmin?: boolean; isEmployee?: boolean; active: boolean };
 type ClockOutInput = { location: GeoLocation; notes: string; statusTag: string };
 type AssignmentTransitionInput = { assignmentId: string; status: 'arrived' | 'completed'; location: GeoLocation; notes?: string; workNotes?: string; materials?: string; completionNotes?: string };
 type CustomerInput = { id?: string; name: string; address: string; phone?: string; email?: string; btwNumber?: string; latitude?: number | ''; longitude?: number | '' };
