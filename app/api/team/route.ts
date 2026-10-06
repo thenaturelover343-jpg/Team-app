@@ -412,6 +412,15 @@ async function pushToUser(db: D1Database, userId: string, message: { title: stri
   return delivered > 0 ? "sent" : subscriptions.results.length ? "failed" : "no_subscription";
 }
 
+async function flushPendingPushes(db: D1Database, userId: string) {
+  const pending = await db.prepare(`SELECT id, title, body FROM notifications
+    WHERE user_id=? AND push_status='pending' ORDER BY created_at DESC LIMIT 20`).bind(userId).all<Json>();
+  for (const row of pending.results as Json[]) {
+    const pushStatus = await pushToUser(db, userId, { title: String(row.title), body: String(row.body), url: "/" });
+    await db.prepare("UPDATE notifications SET push_status=? WHERE id=?").bind(pushStatus, String(row.id)).run();
+  }
+}
+
 async function notify(db: D1Database, input: { userId: string; type: string; title: string; body: string; dedupeKey: string; entityType?: string; entityId?: string }) {
   const notificationId = id();
   const result = await db.prepare(`INSERT OR IGNORE INTO notifications
@@ -549,6 +558,7 @@ async function snapshot(user: AppUser) {
   const db = database();
   const settings = await privacySettings(db);
   void runPrivacyCleanup(db, user.uid).catch(() => undefined);
+  void flushPendingPushes(db, user.uid).catch(() => undefined);
   // Employee-only sessions never receive admin collections below.
   if (user.role === "admin") {
     void db.prepare("SELECT created_at FROM backup_runs WHERE status='completed' ORDER BY created_at DESC LIMIT 1").first<Json>()
@@ -878,10 +888,11 @@ async function act(user: AppUser, action: string, input: Json) {
     }
     if (!title || !isValidDate(date) || memberIds.length === 0) throw new Error("Titel, datum en minstens één medewerker zijn verplicht.");
     const placeholders = memberIds.map(() => "?").join(",");
-    const membersResult = await db.prepare(`SELECT id, name, active, availability_json FROM users WHERE id IN (${placeholders}) AND role IN ('employee','admin')`)
+    await ensureIsEmployeeColumn(db);
+    const membersResult = await db.prepare(`SELECT id, name, active, is_employee, availability_json FROM users WHERE id IN (${placeholders}) AND active=1 AND is_employee=1`)
       .bind(...memberIds).all<Json>();
     const members = membersResult.results as Json[];
-    if (members.length !== memberIds.length || members.some(member => Number(member.active) !== 1)) throw new Error("Een geselecteerde medewerker is niet actief.");
+    if (members.length !== memberIds.length) throw new Error("Een geselecteerde medewerker is niet actief of niet als medewerker ingesteld.");
     const conflicts: string[] = [];
     for (let week = 0; week < repeatWeeks; week += 1) {
       const occurrenceDate = addWeeks(date, week);
@@ -916,8 +927,23 @@ async function act(user: AppUser, action: string, input: Json) {
       }
     }
     await db.batch(statements);
-    await audit(db, user.uid, "planning.shift_created", "planned_shift", createdIds[0], { createdIds, repeatWeeks, memberIds });
-    return { ids: createdIds };
+    const shouldPublish = input.publish === true || input.publish === 1 || input.publish === "1";
+    if (shouldPublish && createdIds.length) {
+      const pubPlaceholders = createdIds.map(() => "?").join(",");
+      await db.prepare(`UPDATE planned_shifts SET status='published', published_at=?, updated_at=? WHERE id IN (${pubPlaceholders}) AND status='draft'`)
+        .bind(now, now, ...createdIds).run();
+      await audit(db, user.uid, "planning.published", "planned_shift", createdIds[0], { shiftIds: createdIds, count: createdIds.length, via: "save_and_publish" });
+      const membersNotify = await db.prepare(`SELECT ps.id, ps.title, ps.date, ps.start_time, psm.user_id FROM planned_shifts ps
+        JOIN planned_shift_members psm ON psm.shift_id=ps.id WHERE ps.id IN (${pubPlaceholders})`).bind(...createdIds).all<Json>();
+      await Promise.all((membersNotify.results as Json[]).map(row => notify(db, {
+        userId: String(row.user_id), type: "planning_published", title: "Nieuwe planning gepubliceerd",
+        body: `${String(row.title)} op ${String(row.date)} om ${String(row.start_time)}.`,
+        dedupeKey: `published:${String(row.id)}:${String(row.user_id)}:${now}`, entityType: "planned_shift", entityId: String(row.id),
+      })));
+    } else {
+      await audit(db, user.uid, "planning.shift_created", "planned_shift", createdIds[0], { createdIds, repeatWeeks, memberIds, draft: true });
+    }
+    return { ids: createdIds, published: Boolean(shouldPublish) };
   }
 
   if (action === "publishPlannedShifts") {

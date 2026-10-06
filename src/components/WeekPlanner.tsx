@@ -50,7 +50,7 @@ export default function WeekPlanner({ users, customers, shifts, onChanged }: Pro
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-zinc-900">Weekplanner</h2>
-          <p className="text-sm text-zinc-500 mt-1">Plan diensten los van opdrachten en publiceer ze wanneer de week klaarstaat.</p>
+          <p className="text-sm text-zinc-500 mt-1">Nieuwe diensten publiceer je meteen naar medewerkers (melding). Concept bewaren kan nog steeds.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button onClick={() => setWeekStart(mondayOf(new Date()))} className="ops-btn-secondary px-4 text-sm">Deze week</button>
@@ -101,12 +101,18 @@ function ShiftCard({ shift, users, onChanged }: { shift: PlannedShift; users: Us
     setBusy(true);
     try { await secureApi.deletePlannedShift(shift.id); await onChanged(); } finally { setBusy(false); }
   };
+  const publishOne = async () => {
+    setBusy(true);
+    try { await secureApi.publishPlannedShifts([shift.id]); await onChanged(); } finally { setBusy(false); }
+  };
   return (
     <article className={`ops-panel p-3 text-xs space-y-2 ${shift.status === 'published' ? 'border-emerald-400/50 bg-emerald-400/10' : 'border-amber-400/50 bg-amber-400/10'}`}>
       <div className="flex items-start justify-between gap-1">
         <div className="font-extrabold text-zinc-900 leading-tight">{shift.title}</div>
-        {shift.status === 'draft' && <button disabled={busy} onClick={remove} className="text-zinc-400 hover:text-red-600" aria-label="Conceptdienst verwijderen">{busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}</button>}
-        {shift.status === 'published' && <button disabled={busy} onClick={remove} className="text-zinc-400 hover:text-red-600" aria-label="Gepubliceerde dienst verwijderen">{busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}</button>}
+        <div className="flex items-center gap-1 shrink-0">
+          {shift.status === 'draft' && <button disabled={busy} onClick={publishOne} className="text-emerald-700 hover:text-emerald-900 font-bold" aria-label="Dienst publiceren" title="Publiceren">{busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}</button>}
+          <button disabled={busy} onClick={remove} className="text-zinc-400 hover:text-red-600" aria-label={shift.status === 'published' ? 'Gepubliceerde dienst verwijderen' : 'Conceptdienst verwijderen'}>{busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}</button>
+        </div>
       </div>
       <div className="flex items-center gap-1.5 font-bold text-zinc-700"><Clock3 className="w-3.5 h-3.5" />{shift.startTime}–{shift.endTime}</div>
       {shift.breakMinutes > 0 && <div className="text-zinc-500">Pauze: {shift.breakMinutes} min.</div>}
@@ -134,15 +140,22 @@ function ShiftForm({ employees, customers, initialDate, onCancel, onSaved }: { e
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const toggle = (id: string) => setMemberIds(current => current.includes(id) ? current.filter(value => value !== id) : [...current, id]);
-  const submit = async (event: React.FormEvent) => {
-    event.preventDefault(); setBusy(true); setError('');
-    try { await secureApi.savePlannedShift({ title, customerId, siteAddress: siteAddress.trim() || undefined, date, startTime, endTime, breakMinutes, memberIds, repeatWeeks, notes, checklist: checklistText.split('\n').map(item => item.trim()).filter(Boolean) }); await onSaved(); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : 'De dienst kon niet worden opgeslagen.'); }
+  const save = async (publish: boolean) => {
+    setBusy(true); setError('');
+    try {
+      const payload = { title, customerId, siteAddress: siteAddress.trim() || undefined, date, startTime, endTime, breakMinutes, memberIds, repeatWeeks, notes, checklist: checklistText.split('\n').map(item => item.trim()).filter(Boolean), publish };
+      await secureApi.savePlannedShift(payload);
+      await onSaved();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'De dienst kon niet worden opgeslagen.'); }
     finally { setBusy(false); }
+  };
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    await save(true);
   };
   return (
     <form onSubmit={submit} className="ops-card p-5 md:p-6 space-y-5">
-      <div className="flex items-center justify-between"><h3 className="font-extrabold text-lg">Nieuwe dienst</h3><span className="ops-chip-warning">Wordt als concept opgeslagen</span></div>
+      <div className="flex items-center justify-between gap-3 flex-wrap"><h3 className="font-extrabold text-lg">Nieuwe dienst</h3><span className="ops-chip-success">Standaard: direct publiceren + melding</span></div>
       {error && <div className="ops-chip-danger w-full justify-start p-3 text-sm">{error}</div>}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <label className="md:col-span-2 text-sm font-bold text-zinc-700">Titel<input value={title} onChange={event => setTitle(event.target.value)} required className="ops-input mt-1.5 w-full p-3 font-medium" /></label>
@@ -157,7 +170,11 @@ function ShiftForm({ employees, customers, initialDate, onCancel, onSaved }: { e
         <label className="md:col-span-4 text-sm font-bold text-zinc-700">Checklist — één taak per regel<textarea value={checklistText} onChange={event => setChecklistText(event.target.value)} placeholder={'Materiaal controleren\nLocatie netjes achterlaten'} className="ops-input mt-1.5 w-full p-3 font-medium h-24 resize-none" /></label>
       </div>
       <fieldset><legend className="text-sm font-bold text-zinc-700 mb-2">Medewerkers</legend><div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">{employees.map(employee => <label key={employee.id} className={`ops-panel flex items-center gap-3 p-3 cursor-pointer ${memberIds.includes(employee.id) ? 'border-cyan-400/60 bg-cyan-400/10' : ''}`}><input type="checkbox" checked={memberIds.includes(employee.id)} onChange={() => toggle(employee.id)} className="w-4 h-4 accent-cyan-500" /><span className="font-semibold text-sm">{employee.name}</span></label>)}</div></fieldset>
-      <div className="flex justify-end gap-3"><button type="button" onClick={onCancel} className="ops-btn-secondary px-5">Annuleren</button><button type="submit" disabled={busy || !memberIds.length} className="ops-btn-primary px-6 gap-2">{busy && <Loader2 className="w-4 h-4 animate-spin" />}Concept opslaan</button></div>
+      <div className="flex flex-wrap justify-end gap-3">
+        <button type="button" onClick={onCancel} className="ops-btn-secondary px-5">Annuleren</button>
+        <button type="button" disabled={busy || !memberIds.length} onClick={() => void save(false)} className="ops-btn-secondary px-5 gap-2">{busy && <Loader2 className="w-4 h-4 animate-spin" />}Alleen concept</button>
+        <button type="submit" disabled={busy || !memberIds.length} className="ops-btn-primary px-6 gap-2">{busy && <Loader2 className="w-4 h-4 animate-spin" /><Send className="w-4 h-4" />}Opslaan en publiceren</button>
+      </div>
     </form>
   );
 }

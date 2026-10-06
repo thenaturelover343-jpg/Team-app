@@ -10,7 +10,16 @@ export function EmployeePlanningTab({ userId, shifts, attachments, onChanged }: 
   const [error, setError] = useState('');
   const [mode, setMode] = useState<'today' | 'week'>('today');
   const today = localDateKey();
-  const upcoming = [...shifts].filter(shift => shift.date >= today).sort((a, b) => `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`));
+  // Week view includes earlier days in the current week so a Monday plan still shows on Tuesday.
+  const weekStart = (() => {
+    const d = new Date(`${today}T12:00:00`);
+    const day = d.getDay() || 7;
+    d.setDate(d.getDate() - day + 1);
+    return localDateKey(d);
+  })();
+  const upcoming = [...shifts]
+    .filter(shift => shift.date >= weekStart)
+    .sort((a, b) => `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`));
   const visible = mode === 'today' ? upcoming.filter(shift => shift.date === today) : upcoming;
   const respond = async (shiftId: string, status: 'confirmed' | 'declined') => {
     setBusyId(shiftId); setError('');
