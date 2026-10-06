@@ -15,7 +15,8 @@ export function DashboardTab({ userId, shifts, breaks, assignments, plannedShift
   const [geoPlatform] = useState(() => detectGeoPlatform());
   const [shiftNotes, setShiftNotes] = useState('');
   const [shiftStatus, setShiftStatus] = useState<'Normaal' | 'Vertraagd' | 'Gedeeltelijk afgerond' | 'Probleem gemeld'>('Normaal');
-  const activeShift = shifts.find(s => !s.clockOut);
+  const myShifts = shifts.filter(s => s.userId === userId);
+  const activeShift = myShifts.find(s => !s.clockOut);
   const activeBreak = activeShift ? breaks.find(item => item.shiftId === activeShift.id && !item.endedAt) : undefined;
   const todaysPlanned = plannedShifts.filter(item => item.date === localDateKey() && item.confirmations[userId] !== 'declined');
   const [plannedShiftId, setPlannedShiftId] = useState('');

@@ -2,15 +2,15 @@ import type { AccessEvent, Assignment, AssignmentTask, Attachment, AuditEvent, B
 import { auth } from './firebase';
 import { enqueueOfflineAction, flushOfflineQueue } from './offlineQueue';
 
-type InviteInput = { email: string; name: string; phone?: string; role?: 'admin' | 'employee'; origin?: string };
-type InviteResult = { uid: string; resetLink: string; inviteUrl?: string; token?: string };
-type InvitePreview = { email: string; name: string; role: 'admin' | 'employee' };
-type AccessInput = { uid: string; role: 'admin' | 'employee'; active: boolean };
+type InviteInput = { email: string; name: string; phone?: string; role?: 'admin' | 'employee' | 'both'; origin?: string };
+type InviteResult = { uid: string; resetLink: string; inviteUrl?: string; token?: string; existingUser?: boolean; role?: string; isEmployee?: boolean };
+type InvitePreview = { email: string; name: string; role: 'admin' | 'employee' | 'both'; existingUser?: boolean };
+type AccessInput = { uid: string; role?: 'admin' | 'employee' | 'both'; isAdmin?: boolean; isEmployee?: boolean; active: boolean };
 type ClockOutInput = { location: GeoLocation; notes: string; statusTag: string };
 type AssignmentTransitionInput = { assignmentId: string; status: 'arrived' | 'completed'; location: GeoLocation; notes?: string; workNotes?: string; materials?: string; completionNotes?: string };
 type CustomerInput = { id?: string; name: string; address: string; phone?: string; email?: string; btwNumber?: string; latitude?: number | ''; longitude?: number | '' };
-type AssignmentInput = { id?: string; userId: string; customerId: string; date: string; startTime: string; description: string; siteAddress?: string; siteLatitude?: number | ''; siteLongitude?: number | '' };
-type PlannedShiftInput = { title: string; customerId?: string; siteAddress?: string; siteLatitude?: number | ''; siteLongitude?: number | ''; date: string; startTime: string; endTime: string; breakMinutes: number; notes?: string; memberIds: string[]; repeatWeeks: number; checklist: string[] };
+type AssignmentInput = { id?: string; userId?: string; memberIds?: string[]; customerId: string; date: string; startTime: string; description: string; siteAddress?: string; siteLatitude?: number | ''; siteLongitude?: number | '' };
+type PlannedShiftInput = { title: string; customerId?: string; siteAddress?: string; siteLatitude?: number | ''; siteLongitude?: number | ''; date: string; startTime: string; endTime: string; breakMinutes: number; notes?: string; memberIds: string[]; repeatWeeks: number; checklist: string[]; publish?: boolean };
 export type TeamSnapshot = { user: User; users: User[]; shifts: Shift[]; assignments: Assignment[]; customers: Customer[]; plannedShifts: PlannedShift[]; breaks: ShiftBreak[]; incidents: Incident[]; correctionRequests: CorrectionRequest[]; attachments: Attachment[]; notifications: TeamNotification[]; push: PushState; privacy: PrivacySettings; auditEvents: AuditEvent[]; accessEvents: AccessEvent[]; backups: BackupRun[]; errors: ErrorEvent[]; pilot: PilotProgram | null; pilotFeedback: PilotFeedback[] };
 
 async function publicCall<T>(action: string, input: object = {}): Promise<{ data: T }> {
@@ -84,13 +84,14 @@ export const secureApi = {
   snapshot: (inviteToken?: string) => call<TeamSnapshot>('snapshot', inviteToken ? { inviteToken } : {}),
   lookupInvite: (token: string) => publicCall<InvitePreview>('lookupInvite', { token }),
   inviteEmployee: (input: InviteInput) => call<InviteResult>('inviteEmployee', { ...input, origin: typeof window !== 'undefined' ? window.location.origin : input.origin }),
+  logClientError: (input: { context: 'invite_mail' | 'login_link'; code: string; message?: string; email?: string }) => call<{ ok: boolean }>('logClientError', input),
   setEmployeeAccess: (input: AccessInput) => call<{ ok: boolean }>('setEmployeeAccess', input),
   saveCustomer: (input: CustomerInput) => call<{ id: string }>('saveCustomer', input),
   savePlannedShift: (input: PlannedShiftInput) => call<{ ids: string[] }>('savePlannedShift', input),
   publishPlannedShifts: (shiftIds: string[]) => call<{ count: number }>('publishPlannedShifts', { shiftIds }),
   deletePlannedShift: (id: string) => call<{ ok: boolean }>('deletePlannedShift', { id }),
   confirmPlannedShift: (shiftId: string, status: 'confirmed' | 'declined') => call<{ ok: boolean }>('confirmPlannedShift', { shiftId, status }),
-  saveAssignment: (input: AssignmentInput) => call<{ id: string }>('saveAssignment', input),
+  saveAssignment: (input: AssignmentInput) => call<{ id: string; ids: string[] }>('saveAssignment', input),
   deleteAssignment: (id: string) => call<{ ok: boolean }>('deleteAssignment', { id }),
   clockIn: (location: GeoLocation, plannedShiftId?: string) => queueable('clockIn', { location, plannedShiftId }),
   clockOut: (input: ClockOutInput) => call<{ ok: boolean }>('clockOut', input),

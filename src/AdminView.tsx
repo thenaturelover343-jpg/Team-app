@@ -74,7 +74,7 @@ export default function AdminView() {
 
       {activeTab === 'control' && <Suspense fallback={<TabFallback />}><ControlCenter users={users} plannedShifts={plannedShifts} shifts={shifts} assignments={assignments} notifications={notifications} push={push} onChanged={loadData} /></Suspense>}
       {activeTab === 'week' && <Suspense fallback={<TabFallback />}><WeekPlanner users={users} customers={customers} shifts={plannedShifts} onChanged={loadData} /></Suspense>}
-      {activeTab === 'planning' && <PlanningTab users={users} assignments={assignments} customers={customers} onChanged={loadData} />}
+      {activeTab === 'planning' && <PlanningTab users={users} assignments={assignments} customers={customers} plannedShifts={plannedShifts} onChanged={loadData} />}
       {activeTab === 'timesheets' && <TimesheetsTab users={users} shifts={shifts} assignments={assignments} />}
       {activeTab === 'reports' && <AdminReportsTab users={users} incidents={incidents} corrections={correctionRequests} onChanged={loadData} />}
       {activeTab === 'customers' && <CustomersTab customers={customers} onChanged={loadData} />}

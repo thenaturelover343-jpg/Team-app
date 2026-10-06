@@ -6,6 +6,7 @@ import { attendanceEvents, csv, localClockParts, workedMinutes, type PlannedAtte
 import { cutoff, normalizeRetention, safeErrorMessage, sha256, shouldRunDaily, type RetentionSettings } from "../../../server/privacy";
 import { evaluateClockIn, requireSnapshotAuthHeader } from "../../../server/clockInRules";
 import { evaluateVisitPing, visitReminderEvents } from "../../../server/visitClock";
+import { accessFromToggles, flagsFromInviteRole, flagsFromStored, mergeAccess, parseInviteRole } from "../../../server/roles";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,7 @@ const FIREBASE_ISSUER = `https://securetoken.google.com/${FIREBASE_PROJECT_ID}`;
 const FIREBASE_JWKS = "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com";
 
 type FirebaseIdentity = { uid: string; email: string; name: string; emailVerified: boolean };
-type AppUser = FirebaseIdentity & { role: "admin" | "employee"; active: boolean };
+type AppUser = FirebaseIdentity & { role: "admin" | "employee"; isEmployee: boolean; active: boolean };
 type Json = Record<string, unknown>;
 
 let jwksCache: { expiresAt: number; keys: Json[] } | null = null;
@@ -172,6 +173,15 @@ async function ensureInviteTokenColumn(db: D1Database) {
   }
 }
 
+
+async function ensureIsEmployeeColumn(db: D1Database) {
+  try {
+    await db.prepare("SELECT is_employee FROM users LIMIT 1").first();
+  } catch {
+    await db.prepare("ALTER TABLE users ADD COLUMN is_employee integer NOT NULL DEFAULT 1").run();
+  }
+}
+
 function inviteTokenValue() {
   const bytes = new Uint8Array(24);
   crypto.getRandomValues(bytes);
@@ -180,22 +190,25 @@ function inviteTokenValue() {
 
 async function acceptInvite(db: D1Database, identity: FirebaseIdentity, invite: Json) {
   const now = Date.now();
+  const flags = flagsFromInviteRole(parseInviteRole(invite.role));
+  await ensureIsEmployeeColumn(db);
   await db.batch([
-    db.prepare(`INSERT INTO users (id, email, name, phone, role, active, created_at) VALUES (?, ?, ?, ?, ?, 1, ?)`)
-      .bind(identity.uid, identity.email, String(invite.name), invite.phone || null, String(invite.role || "employee"), now),
+    db.prepare(`INSERT INTO users (id, email, name, phone, role, is_employee, active, created_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?)`)
+      .bind(identity.uid, identity.email, String(invite.name), invite.phone || null, flags.role, flags.isEmployee ? 1 : 0, now),
     db.prepare("UPDATE invites SET status = 'accepted', accepted_at = ? WHERE id = ?").bind(now, String(invite.id)),
     db.prepare(`INSERT INTO audit_events (id, actor_id, action, target_type, target_id, details_json, created_at)
-      VALUES (?, ?, 'employee.invite_accepted', 'user', ?, '{}', ?)`)
-      .bind(id(), identity.uid, identity.uid, now),
+      VALUES (?, ?, 'employee.invite_accepted', 'user', ?, ?, ?)`)
+      .bind(id(), identity.uid, identity.uid, JSON.stringify({ role: flags.role, isEmployee: flags.isEmployee }), now),
   ]);
 }
 
 async function session(identity: FirebaseIdentity, inviteToken = ""): Promise<AppUser> {
   const db = database();
   await ensureInviteTokenColumn(db);
-  let row = await db.prepare("SELECT id, email, name, role, active FROM users WHERE id = ?").bind(identity.uid).first<Json>();
+  await ensureIsEmployeeColumn(db);
+  let row = await db.prepare("SELECT id, email, name, role, is_employee, active FROM users WHERE id = ?").bind(identity.uid).first<Json>();
   if (!row) {
-    row = await db.prepare("SELECT id, email, name, role, active FROM users WHERE email = ?").bind(identity.email).first<Json>();
+    row = await db.prepare("SELECT id, email, name, role, is_employee, active FROM users WHERE email = ?").bind(identity.email).first<Json>();
     if (row && String(row.id) !== identity.uid) {
       throw new Error("Dit e-mailadres is al gekoppeld aan een ander toestel. Vraag de beheerder om een nieuwe uitnodiging.");
     }
@@ -206,9 +219,9 @@ async function session(identity: FirebaseIdentity, inviteToken = ""): Promise<Ap
     const bootstrapEmail = email(env.BOOTSTRAP_ADMIN_EMAIL);
     if (mayCreateAdminSession(Number(total?.total || 0), identity.email, bootstrapEmail)) {
       const now = Date.now();
-      await db.prepare(`INSERT INTO users (id, email, name, role, active, created_at) VALUES (?, ?, ?, 'admin', 1, ?)`)
+      await db.prepare(`INSERT INTO users (id, email, name, role, is_employee, active, created_at) VALUES (?, ?, ?, 'admin', 1, 1, ?)`)
         .bind(identity.uid, identity.email, identity.name, now).run();
-      await audit(db, identity.uid, "admin.bootstrapped", "user", identity.uid, { firstUser: empty, bootstrap: identity.email === bootstrapEmail });
+      await audit(db, identity.uid, "admin.bootstrapped", "user", identity.uid, { firstUser: empty, bootstrap: identity.email === bootstrapEmail, isEmployee: true });
     } else {
       let invite: Json | null = null;
       if (inviteToken) {
@@ -228,12 +241,38 @@ async function session(identity: FirebaseIdentity, inviteToken = ""): Promise<Ap
       }
       await acceptInvite(db, identity, invite);
     }
-    row = await db.prepare("SELECT id, email, name, role, active FROM users WHERE id = ?").bind(identity.uid).first<Json>();
+    row = await db.prepare("SELECT id, email, name, role, is_employee, active FROM users WHERE id = ?").bind(identity.uid).first<Json>();
+  } else {
+    // Existing account: apply pending invite as a role merge (never a second account).
+    let invite: Json | null = null;
+    if (inviteToken) {
+      invite = await db.prepare("SELECT id, email, name, phone, role, token FROM invites WHERE token = ? AND status = 'pending'")
+        .bind(inviteToken).first<Json>();
+      if (invite && String(invite.email).toLowerCase() !== identity.email) invite = null;
+    }
+    if (!invite) {
+      invite = await db.prepare("SELECT id, name, phone, role, token FROM invites WHERE email = ? AND status = 'pending'")
+        .bind(identity.email).first<Json>();
+    }
+    if (invite) {
+      const merged = mergeAccess(flagsFromStored(row.role, row.is_employee), parseInviteRole(invite.role));
+      const now = Date.now();
+      await db.batch([
+        db.prepare("UPDATE users SET role = ?, is_employee = ? WHERE id = ?")
+          .bind(merged.role, merged.isEmployee ? 1 : 0, String(row.id)),
+        db.prepare("UPDATE invites SET status = 'accepted', accepted_at = ? WHERE id = ?").bind(now, String(invite.id)),
+        db.prepare(`INSERT INTO audit_events (id, actor_id, action, target_type, target_id, details_json, created_at)
+          VALUES (?, ?, 'employee.roles_merged', 'user', ?, ?, ?)`)
+          .bind(id(), identity.uid, String(row.id), JSON.stringify({ role: merged.role, isEmployee: merged.isEmployee, fromInvite: invite.role }), now),
+      ]);
+      row = { ...row, role: merged.role, is_employee: merged.isEmployee ? 1 : 0 };
+    }
   }
   if (!row || Number(row.active) !== 1 || (row.role !== "admin" && row.role !== "employee")) {
     throw new Error("Dit account is niet actief.");
   }
-  return { uid: identity.uid, email: String(row.email), name: String(row.name), role: row.role, active: true } as AppUser;
+  const flags = flagsFromStored(row.role, row.is_employee);
+  return { uid: identity.uid, email: String(row.email), name: String(row.name), role: flags.role, isEmployee: flags.isEmployee, active: true } as AppUser;
 }
 
 async function lookupInvite(input: Json) {
@@ -241,13 +280,21 @@ async function lookupInvite(input: Json) {
   if (!token) throw new Error("Deze uitnodiging is ongeldig of al gebruikt.");
   const db = database();
   await ensureInviteTokenColumn(db);
+  await ensureIsEmployeeColumn(db);
   const invite = await db.prepare("SELECT email, name, role, status FROM invites WHERE token = ?")
     .bind(token).first<Json>();
   if (!invite || invite.status !== "pending") throw new Error("Deze uitnodiging is ongeldig of al gebruikt.");
-  return { email: String(invite.email), name: String(invite.name), role: invite.role === "admin" ? "admin" : "employee" };
+  const existingRow = await db.prepare("SELECT id FROM users WHERE email = ?").bind(email(invite.email)).first<Json>();
+  return {
+    email: String(invite.email),
+    name: String(invite.name),
+    role: parseInviteRole(invite.role),
+    existingUser: Boolean(existingRow),
+  };
 }
 
 function requireAdmin(user: AppUser) {
+  // Privilege is role === "admin" only. isEmployee does not grant admin APIs.
   if (user.role !== "admin") throw new Error("Alleen een beheerder mag dit uitvoeren.");
 }
 
@@ -365,6 +412,15 @@ async function pushToUser(db: D1Database, userId: string, message: { title: stri
   return delivered > 0 ? "sent" : subscriptions.results.length ? "failed" : "no_subscription";
 }
 
+async function flushPendingPushes(db: D1Database, userId: string) {
+  const pending = await db.prepare(`SELECT id, title, body FROM notifications
+    WHERE user_id=? AND push_status='pending' ORDER BY created_at DESC LIMIT 20`).bind(userId).all<Json>();
+  for (const row of pending.results as Json[]) {
+    const pushStatus = await pushToUser(db, userId, { title: String(row.title), body: String(row.body), url: "/" });
+    await db.prepare("UPDATE notifications SET push_status=? WHERE id=?").bind(pushStatus, String(row.id)).run();
+  }
+}
+
 async function notify(db: D1Database, input: { userId: string; type: string; title: string; body: string; dedupeKey: string; entityType?: string; entityId?: string }) {
   const notificationId = id();
   const result = await db.prepare(`INSERT OR IGNORE INTO notifications
@@ -423,7 +479,8 @@ function mapUser(row: Json) {
   const displayName = composed || stored || emailLocal;
   return {
     id: row.id, email: row.email, name: displayName, firstName, lastName,
-    phone: row.phone || "", address: row.address || "", role: row.role,
+    phone: row.phone || "", address: row.address || "", role: flagsFromStored(row.role, row.is_employee).role,
+    isEmployee: flagsFromStored(row.role, row.is_employee).isEmployee,
     active: Number(row.active) === 1, availability: row.availability || "",
     availabilitySchedule: parseAvailability(row.availability_json), createdAt: Number(row.created_at),
   };
@@ -501,6 +558,8 @@ async function snapshot(user: AppUser) {
   const db = database();
   const settings = await privacySettings(db);
   void runPrivacyCleanup(db, user.uid).catch(() => undefined);
+  void flushPendingPushes(db, user.uid).catch(() => undefined);
+  // Employee-only sessions never receive admin collections below.
   if (user.role === "admin") {
     void db.prepare("SELECT created_at FROM backup_runs WHERE status='completed' ORDER BY created_at DESC LIMIT 1").first<Json>()
       .then(latest => {
@@ -609,6 +668,7 @@ async function act(user: AppUser, action: string, input: Json) {
   const db = database();
   const now = Date.now();
   await ensureVisitColumns(db);
+  await ensureIsEmployeeColumn(db);
   if (action === "snapshot") return snapshot(user);
 
   if (action === "updatePrivacySettings") {
@@ -727,39 +787,74 @@ async function act(user: AppUser, action: string, input: Json) {
     return { ok: true };
   }
 
+  if (action === "logClientError") {
+    requireAdmin(user);
+    const context = clean(input.context, 40);
+    if (!["invite_mail", "login_link"].includes(context)) throw new Error("Onbekende foutcontext.");
+    const code = clean(input.code, 80) || "onbekend";
+    const target = clean(input.email, 200);
+    const detail = clean(input.message, 300);
+    const message = `${code}${target ? ` · ${target}` : ""}${detail ? ` · ${detail}` : ""}`.slice(0, 500);
+    await db.prepare("INSERT INTO error_events (id, actor_id, action, message, severity, created_at) VALUES (?, ?, ?, ?, 'error', ?)")
+      .bind(id(), user.uid, `client.${context}`, message, now).run();
+    return { ok: true };
+  }
+
   if (action === "inviteEmployee") {
     requireAdmin(user);
     await ensureInviteTokenColumn(db);
+    await ensureIsEmployeeColumn(db);
     const targetEmail = email(input.email);
     const name = clean(input.name, 160);
     if (!targetEmail || !name) throw new Error("Naam en e-mailadres zijn verplicht.");
-    const inviteRole = input.role === "admin" ? "admin" : "employee";
+    const inviteRole = parseInviteRole(input.role);
+    const flags = flagsFromInviteRole(inviteRole);
+    const origin = clean(input.origin, 300);
+    const existing = await db.prepare("SELECT id, role, is_employee, active FROM users WHERE email = ?").bind(targetEmail).first<Json>();
+    if (existing) {
+      const merged = mergeAccess(flagsFromStored(existing.role, existing.is_employee), inviteRole);
+      await db.prepare("UPDATE users SET role = ?, is_employee = ?, name = COALESCE(NULLIF(?, ''), name) WHERE id = ?")
+        .bind(merged.role, merged.isEmployee ? 1 : 0, name, String(existing.id)).run();
+      await db.prepare("UPDATE invites SET status = 'accepted', accepted_at = ? WHERE email = ? AND status = 'pending'")
+        .bind(now, targetEmail).run();
+      await audit(db, user.uid, "employee.roles_merged", "user", String(existing.id), { role: merged.role, isEmployee: merged.isEmployee, inviteRole });
+      const loginUrl = origin && /^https?:\/\//.test(origin) ? `${origin.replace(/\/$/, "")}/` : "/";
+      return { uid: String(existing.id), resetLink: loginUrl, inviteUrl: loginUrl, token: "", existingUser: true, role: merged.role, isEmployee: merged.isEmployee };
+    }
     const inviteId = id();
     const token = inviteTokenValue();
-    const origin = clean(input.origin, 300);
     await db.prepare(`INSERT INTO invites (id, email, name, phone, role, status, token, invited_by, created_at)
       VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?)
       ON CONFLICT(email) DO UPDATE SET name = excluded.name, phone = excluded.phone, role = excluded.role, status = 'pending', token = excluded.token, invited_by = excluded.invited_by, created_at = excluded.created_at, accepted_at = NULL`)
       .bind(inviteId, targetEmail, name, clean(input.phone, 80) || null, inviteRole, token, user.uid, now).run();
-    await audit(db, user.uid, "employee.invited", "invite", targetEmail, { role: inviteRole });
+    await audit(db, user.uid, "employee.invited", "invite", targetEmail, { role: inviteRole, isEmployee: flags.isEmployee });
     const inviteUrl = origin && /^https?:\/\//.test(origin) ? `${origin.replace(/\/$/, "")}/?invite=${token}` : `/?invite=${token}`;
-    return { uid: `invite:${targetEmail}`, resetLink: inviteUrl, inviteUrl, token };
+    return { uid: `invite:${targetEmail}`, resetLink: inviteUrl, inviteUrl, token, existingUser: false };
   }
 
   if (action === "setEmployeeAccess") {
     requireAdmin(user);
+    await ensureIsEmployeeColumn(db);
     const uid = clean(input.uid, 160);
-    const role = input.role === "admin" ? "admin" : "employee";
-    const active = input.active === true ? 1 : 0;
     if (!uid) throw new Error("Medewerker niet gevonden.");
-    if (uid === user.uid && (!active || role !== "admin")) {
+    let flags;
+    if (typeof input.isAdmin === "boolean" && typeof input.isEmployee === "boolean") {
+      flags = accessFromToggles(input.isAdmin, input.isEmployee);
+    } else if (typeof input.isAdmin === "boolean") {
+      flags = accessFromToggles(input.isAdmin, input.isEmployee !== false);
+    } else {
+      flags = flagsFromInviteRole(parseInviteRole(input.role));
+    }
+    const active = input.active === true ? 1 : 0;
+    if (uid === user.uid && (!active || flags.role !== "admin")) {
       const otherAdmin = await db.prepare("SELECT 1 FROM users WHERE role='admin' AND active=1 AND id!=?").bind(user.uid).first();
-      const pendingAdmin = await db.prepare("SELECT 1 FROM invites WHERE role='admin' AND status='pending'").first();
+      const pendingAdmin = await db.prepare("SELECT 1 FROM invites WHERE role IN ('admin','both') AND status='pending'").first();
       if (!otherAdmin && !pendingAdmin) throw new Error("U kunt uw eigen hoofdbeheer niet uitschakelen.");
     }
-    const result = await db.prepare("UPDATE users SET role = ?, active = ? WHERE id = ?").bind(role, active, uid).run();
+    const result = await db.prepare("UPDATE users SET role = ?, is_employee = ?, active = ? WHERE id = ?")
+      .bind(flags.role, flags.isEmployee ? 1 : 0, active, uid).run();
     if (!result.meta.changes) throw new Error("Medewerker niet gevonden.");
-    await audit(db, user.uid, "employee.access_changed", "user", uid, { role, active: Boolean(active) });
+    await audit(db, user.uid, "employee.access_changed", "user", uid, { role: flags.role, isEmployee: flags.isEmployee, active: Boolean(active) });
     return { ok: true };
   }
 
@@ -806,10 +901,11 @@ async function act(user: AppUser, action: string, input: Json) {
     }
     if (!title || !isValidDate(date) || memberIds.length === 0) throw new Error("Titel, datum en minstens één medewerker zijn verplicht.");
     const placeholders = memberIds.map(() => "?").join(",");
-    const membersResult = await db.prepare(`SELECT id, name, active, availability_json FROM users WHERE id IN (${placeholders}) AND role IN ('employee','admin')`)
+    await ensureIsEmployeeColumn(db);
+    const membersResult = await db.prepare(`SELECT id, name, active, is_employee, availability_json FROM users WHERE id IN (${placeholders}) AND active=1 AND is_employee=1`)
       .bind(...memberIds).all<Json>();
     const members = membersResult.results as Json[];
-    if (members.length !== memberIds.length || members.some(member => Number(member.active) !== 1)) throw new Error("Een geselecteerde medewerker is niet actief.");
+    if (members.length !== memberIds.length) throw new Error("Een geselecteerde medewerker is niet actief of niet als medewerker ingesteld.");
     const conflicts: string[] = [];
     for (let week = 0; week < repeatWeeks; week += 1) {
       const occurrenceDate = addWeeks(date, week);
@@ -844,8 +940,23 @@ async function act(user: AppUser, action: string, input: Json) {
       }
     }
     await db.batch(statements);
-    await audit(db, user.uid, "planning.shift_created", "planned_shift", createdIds[0], { createdIds, repeatWeeks, memberIds });
-    return { ids: createdIds };
+    const shouldPublish = !(input.publish === false || input.publish === 0 || input.publish === "0" || input.publish === "false");
+    if (shouldPublish && createdIds.length) {
+      const pubPlaceholders = createdIds.map(() => "?").join(",");
+      await db.prepare(`UPDATE planned_shifts SET status='published', published_at=?, updated_at=? WHERE id IN (${pubPlaceholders}) AND status='draft'`)
+        .bind(now, now, ...createdIds).run();
+      await audit(db, user.uid, "planning.published", "planned_shift", createdIds[0], { shiftIds: createdIds, count: createdIds.length, via: "save_and_publish" });
+      const membersNotify = await db.prepare(`SELECT ps.id, ps.title, ps.date, ps.start_time, psm.user_id FROM planned_shifts ps
+        JOIN planned_shift_members psm ON psm.shift_id=ps.id WHERE ps.id IN (${pubPlaceholders})`).bind(...createdIds).all<Json>();
+      await Promise.all((membersNotify.results as Json[]).map(row => notify(db, {
+        userId: String(row.user_id), type: "planning_published", title: "Nieuwe planning gepubliceerd",
+        body: `${String(row.title)} op ${String(row.date)} om ${String(row.start_time)}.`,
+        dedupeKey: `published:${String(row.id)}:${String(row.user_id)}:${now}`, entityType: "planned_shift", entityId: String(row.id),
+      })));
+    } else {
+      await audit(db, user.uid, "planning.shift_created", "planned_shift", createdIds[0], { createdIds, repeatWeeks, memberIds, draft: true });
+    }
+    return { ids: createdIds, published: Boolean(shouldPublish) };
   }
 
   if (action === "publishPlannedShifts") {
@@ -897,12 +1008,23 @@ async function act(user: AppUser, action: string, input: Json) {
 
   if (action === "saveAssignment") {
     requireAdmin(user);
-    const assignmentId = clean(input.id, 160) || id();
-    const userId = clean(input.userId, 160);
+    await ensureIsEmployeeColumn(db);
     const customerId = clean(input.customerId, 160);
     const date = clean(input.date, 10);
-    if (!userId || !customerId || !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Medewerker, klant en datum zijn verplicht.");
-    const customer = await db.prepare("SELECT address, latitude, longitude FROM customers WHERE id=?").bind(customerId).first<Json>();
+    if (!customerId || !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Klant en datum zijn verplicht.");
+    const memberIds = [...new Set((
+      Array.isArray(input.memberIds) ? input.memberIds :
+      Array.isArray(input.userIds) ? input.userIds :
+      input.userId ? [input.userId] : []
+    ).map(value => clean(value, 160)).filter(Boolean))];
+    if (!memberIds.length) throw new Error("Selecteer minstens één medewerker.");
+    const placeholders = memberIds.map(() => "?").join(",");
+    const membersResult = await db.prepare(`SELECT id, name, active, is_employee FROM users WHERE id IN (${placeholders}) AND active=1 AND is_employee=1`)
+      .bind(...memberIds).all<Json>();
+    if ((membersResult.results as Json[]).length !== memberIds.length) {
+      throw new Error("Een geselecteerde medewerker is niet actief of niet als medewerker ingesteld.");
+    }
+    const customer = await db.prepare("SELECT name, address, latitude, longitude FROM customers WHERE id=?").bind(customerId).first<Json>();
     if (!customer) throw new Error("Klant niet gevonden.");
     let siteAddress = clean(input.siteAddress, 500);
     if (!siteAddress) siteAddress = clean(customer.address, 500);
@@ -918,16 +1040,43 @@ async function act(user: AppUser, action: string, input: Json) {
     if (siteLatitude !== null && (!Number.isFinite(siteLatitude) || siteLatitude < -90 || siteLatitude > 90 || !Number.isFinite(siteLongitude!) || siteLongitude! < -180 || siteLongitude! > 180)) {
       throw new Error("De coördinaten van het opdrachtadres zijn ongeldig.");
     }
-    const existing = await db.prepare("SELECT status, created_at FROM assignments WHERE id = ?").bind(assignmentId).first<Json>();
-    if (existing && existing.status !== "pending") throw new Error("Een gestarte opdracht kan niet opnieuw ingepland worden.");
-    await db.prepare(`INSERT INTO assignments (id, user_id, customer_id, description, date, start_time, site_address, site_latitude, site_longitude, status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
-      ON CONFLICT(id) DO UPDATE SET user_id=excluded.user_id, customer_id=excluded.customer_id, description=excluded.description,
-        date=excluded.date, start_time=excluded.start_time, site_address=excluded.site_address, site_latitude=excluded.site_latitude,
-        site_longitude=excluded.site_longitude, updated_at=excluded.updated_at`)
-      .bind(assignmentId, userId, customerId, clean(input.description), date, clean(input.startTime, 5) || null, siteAddress || null, siteLatitude, siteLongitude, Number(existing?.created_at || now), now).run();
-    await audit(db, user.uid, "assignment.saved", "assignment", assignmentId, { userId, customerId, siteAddress });
-    return { id: assignmentId };
+    const description = clean(input.description);
+    const startTime = clean(input.startTime, 5) || null;
+    const updateId = clean(input.id, 160);
+    if (updateId) {
+      // Single-row edit keeps one assignee (backward compatible).
+      const userId = memberIds[0];
+      const existing = await db.prepare("SELECT status, created_at FROM assignments WHERE id = ?").bind(updateId).first<Json>();
+      if (existing && existing.status !== "pending") throw new Error("Een gestarte opdracht kan niet opnieuw ingepland worden.");
+      await db.prepare(`INSERT INTO assignments (id, user_id, customer_id, description, date, start_time, site_address, site_latitude, site_longitude, status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+        ON CONFLICT(id) DO UPDATE SET user_id=excluded.user_id, customer_id=excluded.customer_id, description=excluded.description,
+          date=excluded.date, start_time=excluded.start_time, site_address=excluded.site_address, site_latitude=excluded.site_latitude,
+          site_longitude=excluded.site_longitude, updated_at=excluded.updated_at`)
+        .bind(updateId, userId, customerId, description, date, startTime, siteAddress || null, siteLatitude, siteLongitude, Number(existing?.created_at || now), now).run();
+      await audit(db, user.uid, "assignment.saved", "assignment", updateId, { userId, customerId, siteAddress });
+      await notify(db, {
+        userId, type: "assignment_assigned", title: "Nieuwe klantopdracht",
+        body: `${String(customer.name || "Klant")} op ${date}${startTime ? ` om ${startTime}` : ""}.`,
+        dedupeKey: `assignment:${updateId}:${userId}:${now}`, entityType: "assignment", entityId: updateId,
+      });
+      return { id: updateId, ids: [updateId] };
+    }
+    const createdIds: string[] = [];
+    for (const userId of memberIds) {
+      const assignmentId = id();
+      createdIds.push(assignmentId);
+      await db.prepare(`INSERT INTO assignments (id, user_id, customer_id, description, date, start_time, site_address, site_latitude, site_longitude, status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`)
+        .bind(assignmentId, userId, customerId, description, date, startTime, siteAddress || null, siteLatitude, siteLongitude, now, now).run();
+      await notify(db, {
+        userId, type: "assignment_assigned", title: "Nieuwe klantopdracht",
+        body: `${String(customer.name || "Klant")} op ${date}${startTime ? ` om ${startTime}` : ""}.`,
+        dedupeKey: `assignment:${assignmentId}:${userId}:${now}`, entityType: "assignment", entityId: assignmentId,
+      });
+    }
+    await audit(db, user.uid, "assignment.saved", "assignment", createdIds[0], { memberIds, customerId, siteAddress, count: createdIds.length });
+    return { id: createdIds[0], ids: createdIds };
   }
 
   if (action === "deleteAssignment") {

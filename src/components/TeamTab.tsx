@@ -1,19 +1,24 @@
 import React, { useState } from 'react';
-import type { User } from '../types';
+import type { InviteRole, User } from '../types';
+import { isAdminUser, isEmployeeUser, roleLabelNl } from '../lib/roles';
 import { secureApi } from '../lib/secureApi';
 import { sendEmailSignInLink } from '../lib/firebase';
+import { mailErrorInfo, mailErrorText } from '../lib/inviteMailError';
 import { useLanguage } from '../i18n';
 
 export default function TeamTab({ users, onChanged }: { users: User[]; onChanged?: () => Promise<void> }) {
   const { t } = useLanguage();
   const [errorMsg, setErrorMsg] = useState('');
+  const [notice, setNotice] = useState('');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [inviteRole, setInviteRole] = useState<'admin' | 'employee'>('employee');
+  const [inviteRole, setInviteRole] = useState<InviteRole>('employee');
   const [inviteUrl, setInviteUrl] = useState('');
   const [sharePhone, setSharePhone] = useState('');
   const [mailState, setMailState] = useState<'sent' | 'failed' | ''>('');
+  const [mailError, setMailError] = useState('');
+  const [linkState, setLinkState] = useState<Record<string, { status: 'sending' | 'sent' | 'failed'; text: string }>>({});
   const [copied, setCopied] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -22,13 +27,24 @@ export default function TeamTab({ users, onChanged }: { users: User[]; onChanged
   const invite = async (event: React.FormEvent) => {
     event.preventDefault();
     setErrorMsg('');
+    setNotice('');
     setInviteUrl('');
     setSharePhone('');
     setMailState('');
+    setMailError('');
     setCopied(false);
     setIsSubmitting(true);
     try {
       const result = await secureApi.inviteEmployee({ name, email, phone, role: inviteRole });
+      if (result.data.existingUser) {
+        setNotice(t('inviteMerged'));
+        setName('');
+        setEmail('');
+        setPhone('');
+        setInviteRole('employee');
+        await onChanged?.();
+        return;
+      }
       const link = result.data.inviteUrl || result.data.resetLink || '';
       setInviteUrl(link);
       setSharePhone(phone);
@@ -36,8 +52,11 @@ export default function TeamTab({ users, onChanged }: { users: User[]; onChanged
       try {
         await sendEmailSignInLink(email, link, false);
         sent = true;
-      } catch {
+      } catch (mailErr: unknown) {
         sent = false;
+        const info = mailErrorInfo(mailErr);
+        setMailError(mailErrorText(info));
+        void secureApi.logClientError({ context: 'invite_mail', code: info.code, message: info.raw, email }).catch(() => undefined);
       }
       setMailState(sent ? 'sent' : 'failed');
       setName('');
@@ -70,10 +89,30 @@ export default function TeamTab({ users, onChanged }: { users: User[]; onChanged
     }
   };
 
-  const toggleRole = async (user: User) => {
+  /** Admin-only: send a fresh Firebase sign-in link to an existing account (same actionCodeSettings as invites). */
+  const resendLoginLink = async (user: User) => {
+    if (!user.email) return;
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    setLinkState(current => ({ ...current, [user.id]: { status: 'sending', text: 'Login-link wordt verstuurd…' } }));
     try {
-      const newRole = user.role === 'admin' ? 'employee' : 'admin';
-      await secureApi.setEmployeeAccess({ uid: user.id, role: newRole, active: user.active !== false });
+      await sendEmailSignInLink(user.email, `${origin.replace(/\/$/, '')}/`, false);
+      setLinkState(current => ({ ...current, [user.id]: { status: 'sent', text: `Login-link verstuurd naar ${user.email}. Komt die niet aan? Kijk ook in de spam.` } }));
+    } catch (linkErr: unknown) {
+      const info = mailErrorInfo(linkErr);
+      setLinkState(current => ({ ...current, [user.id]: { status: 'failed', text: mailErrorText(info) } }));
+      void secureApi.logClientError({ context: 'login_link', code: info.code, message: info.raw, email: user.email }).catch(() => undefined);
+    }
+  };
+
+  const setAccess = async (user: User, isAdmin: boolean, isEmployee: boolean) => {
+    try {
+      setErrorMsg('');
+      await secureApi.setEmployeeAccess({
+        uid: user.id,
+        isAdmin,
+        isEmployee,
+        active: user.active !== false,
+      });
       await onChanged?.();
     } catch (error: unknown) {
       setErrorMsg(message(error));
@@ -84,7 +123,12 @@ export default function TeamTab({ users, onChanged }: { users: User[]; onChanged
     const turningOff = user.active !== false;
     if (turningOff && !window.confirm(`${user.name} deactiveren? Die persoon kan dan niet meer inloggen.`)) return;
     try {
-      await secureApi.setEmployeeAccess({ uid: user.id, role: user.role, active: user.active === false });
+      await secureApi.setEmployeeAccess({
+        uid: user.id,
+        isAdmin: isAdminUser(user),
+        isEmployee: isEmployeeUser(user),
+        active: user.active === false,
+      });
       await onChanged?.();
     } catch (error: unknown) {
       setErrorMsg(message(error));
@@ -100,20 +144,23 @@ export default function TeamTab({ users, onChanged }: { users: User[]; onChanged
         <input value={phone} onChange={event => setPhone(event.target.value)} type="tel" placeholder={t('phoneOptional')} className="ops-input p-3" />
         <select
           value={inviteRole}
-          onChange={event => setInviteRole(event.target.value === 'admin' ? 'admin' : 'employee')}
+          onChange={event => setInviteRole(event.target.value as InviteRole)}
           className="ops-input p-3 font-medium"
           aria-label="Rol"
         >
           <option value="employee">{t('roleEmployee')}</option>
           <option value="admin">{t('roleAdmin')}</option>
+          <option value="both">{t('roleBoth')}</option>
         </select>
         <button disabled={isSubmitting} className="ops-btn-primary p-3 disabled:opacity-50">
           {isSubmitting ? '…' : t('inviteBtn')}
         </button>
       </form>
+      {notice && <div className="ops-panel p-4 text-sm font-medium">{notice}</div>}
       {inviteUrl && (
         <div className="ops-panel p-4 text-sm space-y-3">
-          <p>{mailState === 'sent' ? t('inviteMailOk') : t('inviteMailFail')}</p>
+          <p className={mailState === 'failed' ? 'font-semibold text-red-400' : ''}>{mailState === 'sent' ? t('inviteMailOk') : (mailError || t('inviteMailFail'))}</p>
+          {mailState === 'failed' && <p className="text-xs opacity-80">{t('inviteMailFail')}</p>}
           <code className="block break-all text-xs opacity-80">{inviteUrl}</code>
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={copy} className="ops-btn-secondary px-4">{copied ? t('copied') : t('copyLink')}</button>
@@ -124,33 +171,69 @@ export default function TeamTab({ users, onChanged }: { users: User[]; onChanged
       {errorMsg && <div className="ops-chip-danger w-full justify-start px-4 py-3 text-sm">{errorMsg}</div>}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {users.length === 0 && <div className="ops-panel p-5 text-sm col-span-full">{t('emptyTeam')}</div>}
-        {users.map(u => (
-          <div key={u.id} className={`ops-card p-5 space-y-4 ${u.active === false ? 'opacity-70' : ''}`}>
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 ops-panel rounded-full flex items-center justify-center font-bold">
-                {u.name.charAt(0).toUpperCase()}
+        {users.map(u => {
+          const admin = isAdminUser(u);
+          const employee = isEmployeeUser(u);
+          return (
+            <div key={u.id} className={`ops-card p-5 space-y-4 ${u.active === false ? 'opacity-70' : ''}`}>
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 ops-panel rounded-full flex items-center justify-center font-bold">
+                  {u.name.charAt(0).toUpperCase()}
+                </div>
+                <div className="flex-1 truncate">
+                  <h3 className="font-bold truncate">{u.name}</h3>
+                  <p className="text-sm text-zinc-500 truncate">{u.email}</p>
+                </div>
               </div>
-              <div className="flex-1 truncate">
-                <h3 className="font-bold truncate">{u.name}</h3>
-                <p className="text-sm text-zinc-500 truncate">{u.email}</p>
+              <div className="pt-4 border-t border-white/10 space-y-3">
+                <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${admin ? 'ops-chip-info' : 'ops-chip-success'}`}>
+                  {roleLabelNl({ role: admin ? 'admin' : 'employee', isEmployee: employee })}
+                </span>
+                <div className="flex flex-wrap gap-2 text-sm">
+                  <button
+                    type="button"
+                    onClick={() => setAccess(u, !admin, employee || !admin)}
+                    className="font-medium"
+                  >
+                    {admin ? t('removeAdmin') : t('makeAdmin')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAccess(u, admin, !employee)}
+                    className="font-medium"
+                    disabled={!admin && employee}
+                    title={!admin && employee ? t('employeeRequired') : undefined}
+                  >
+                    {employee ? t('removeEmployee') : t('makeEmployee')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleActive(u)}
+                    className={`font-medium ${u.active === false ? 'text-green-400' : 'text-red-400'}`}
+                  >
+                    {u.active === false ? t('activate') : t('deactivate')}
+                  </button>
+                </div>
+                {u.email && u.active !== false && (
+                  <div className="space-y-2">
+                    <button
+                      type="button"
+                      onClick={() => void resendLoginLink(u)}
+                      disabled={linkState[u.id]?.status === 'sending'}
+                      className="ops-btn-secondary w-full px-3 py-2 text-sm disabled:opacity-50"
+                      data-action="resend-login-link"
+                    >
+                      {linkState[u.id]?.status === 'sending' ? 'Bezig…' : 'Stuur login-link opnieuw'}
+                    </button>
+                    {linkState[u.id] && linkState[u.id].status !== 'sending' && (
+                      <p className={`text-xs font-medium ${linkState[u.id].status === 'failed' ? 'text-red-400' : 'text-green-400'}`}>{linkState[u.id].text}</p>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
-            <div className="pt-4 border-t border-white/10 flex flex-wrap items-center justify-between gap-2">
-              <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${u.role === 'admin' ? 'ops-chip-info' : 'ops-chip-success'}`}>
-                {u.role === 'admin' ? t('roleAdmin') : t('roleEmployee')}
-              </span>
-              <button onClick={() => toggleRole(u)} className="text-sm font-medium">
-                {u.role === 'admin' ? t('makeEmployee') : t('makeAdmin')}
-              </button>
-              <button
-                onClick={() => toggleActive(u)}
-                className={`text-sm font-medium ${u.active === false ? 'text-green-400' : 'text-red-400'}`}
-              >
-                {u.active === false ? t('activate') : t('deactivate')}
-              </button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
