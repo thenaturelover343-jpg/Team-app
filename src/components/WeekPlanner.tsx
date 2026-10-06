@@ -173,7 +173,7 @@ function ShiftForm({ employees, customers, initialDate, onCancel, onSaved }: { e
       <div className="flex flex-wrap justify-end gap-3">
         <button type="button" onClick={onCancel} className="ops-btn-secondary px-5">Annuleren</button>
         <button type="button" disabled={busy || !memberIds.length} onClick={() => void save(false)} className="ops-btn-secondary px-5 gap-2">{busy && <Loader2 className="w-4 h-4 animate-spin" />}Alleen concept</button>
-        <button type="submit" disabled={busy || !memberIds.length} className="ops-btn-primary px-6 gap-2">{busy && <Loader2 className="w-4 h-4 animate-spin" /><Send className="w-4 h-4" />}Opslaan en publiceren</button>
+        <button type="submit" disabled={busy || !memberIds.length} className="ops-btn-primary px-6 gap-2">{busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}<span>Opslaan en publiceren</span></button>
       </div>
     </form>
   );
