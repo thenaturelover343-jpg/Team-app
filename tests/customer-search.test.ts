@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { rankCustomers, normalizeSearch } from '../src/lib/customerSearch.ts';
+import { rankCustomers, normalizeSearch, suggestCustomers, isCustomerMatch } from '../src/lib/customerSearch.ts';
 
 const customers = [
   { id: '1', name: 'Anders JD BV', address: 'Kerkstraat 1, Lier' },
@@ -34,4 +34,15 @@ test('case and accent insensitive', () => {
 
 test('address match moves up below name matches', () => {
   assert.deepEqual(rankCustomers(customers, 'dorp').map(c => c.id), ['2', '1', '3', '4', '5']);
+});
+
+test('suggestCustomers with empty query returns top suggestions only', () => {
+  assert.deepEqual(suggestCustomers(customers, '', 3).map(c => c.id), ['1', '2', '3']);
+  assert.equal(suggestCustomers(customers, '   ', 2).length, 2);
+});
+
+test('suggestCustomers with query hides non-matches and ranks the rest', () => {
+  assert.deepEqual(suggestCustomers(customers, 'li').map(c => c.id), ['5', '3', '1', '4']);
+  assert.ok(suggestCustomers(customers, 'li').every(c => isCustomerMatch(c, 'li')));
+  assert.deepEqual(suggestCustomers(customers, 'zzz').map(c => c.id), []);
 });

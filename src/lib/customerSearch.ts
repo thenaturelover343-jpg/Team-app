@@ -39,3 +39,13 @@ export function isCustomerMatch(customer: Searchable, query: string): boolean {
   if (!q) return false;
   return normalizeSearch(customer.name).includes(q) || normalizeSearch(customer.address).includes(q);
 }
+
+/**
+ * Customers for the combobox dropdown: empty query → top suggestions (original order);
+ * with query → only matches, ranked. Never includes non-matches when typing.
+ */
+export function suggestCustomers<T extends Searchable>(customers: T[], query: string, limit = 12): T[] {
+  const q = normalizeSearch(query);
+  if (!q) return customers.slice(0, Math.max(0, limit));
+  return rankCustomers(customers, query).filter(customer => isCustomerMatch(customer, query));
+}
