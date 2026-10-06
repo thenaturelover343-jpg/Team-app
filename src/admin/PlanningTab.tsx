@@ -4,6 +4,7 @@ import { Loader2, Plus, ListTodo } from 'lucide-react';
 import { handleFirestoreError, OperationType } from '../lib/firebase';
 import { secureApi } from '../lib/secureApi';
 import { AdminAssignmentCard } from './AdminAssignmentCard';
+import { CustomerSelect } from '../components/CustomerSelect';
 
 export function PlanningTab({ users, assignments, customers, plannedShifts = [], onChanged }: { users: User[]; assignments: Assignment[]; customers: Customer[]; plannedShifts?: PlannedShift[]; onChanged: () => Promise<void> }) {
   const [isAdding, setIsAdding] = useState(false);
@@ -122,13 +123,7 @@ export function PlanningTab({ users, assignments, customers, plannedShifts = [],
                 </div>
                 <div className="md:col-span-3">
                   <label className="block text-sm font-bold text-zinc-700 mb-1.5">Klant</label>
-                  <select
-                    value={customerId} onChange={e => selectCustomer(e.target.value)} required
-                    className="ops-input w-full p-3.5 font-medium"
-                  >
-                    <option value="">Selecteer klant...</option>
-                    {customers.map(c => <option key={c.id} value={c.id}>{c.name} - {c.address}</option>)}
-                  </select>
+                  <CustomerSelect customers={customers} value={customerId} onChange={selectCustomer} required placeholderOption="Selecteer klant..." selectClassName="ops-input w-full p-3.5 font-medium" />
                 </div>
                 <div className="md:col-span-3">
                   <label className="block text-sm font-bold text-zinc-700 mb-1.5">Opdrachtadres</label>
