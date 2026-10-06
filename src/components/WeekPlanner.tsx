@@ -116,7 +116,6 @@ function ShiftCard({ shift, users, onChanged }: { shift: PlannedShift; users: Us
         </div>
       </div>
       <div className="flex items-center gap-1.5 font-bold text-zinc-700"><Clock3 className="w-3.5 h-3.5" />{shift.startTime}–{shift.endTime}</div>
-      {shift.breakMinutes > 0 && <div className="text-zinc-500">Pauze: {shift.breakMinutes} min.</div>}
       {shift.customerName && <div className="flex items-start gap-1.5 text-zinc-600"><MapPin className="w-3.5 h-3.5 shrink-0" /><span>{shift.customerName}{shift.siteAddress ? ` · ${shift.siteAddress}` : shift.customerAddress ? ` · ${shift.customerAddress}` : ''}</span></div>}
       <div className="flex items-start gap-1.5 text-zinc-600"><Users className="w-3.5 h-3.5 shrink-0" /><span>{memberNames.join(', ')}</span></div>
       <div className="pt-1 border-t border-black/5 font-semibold text-zinc-600">
