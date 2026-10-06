@@ -68,13 +68,32 @@ async function main() {
   ok(`unauth API rejected (${unauth.status})`);
 
   const html = await httpGet(`${LIVE}/`);
-  const chunks = [...html.matchAll(/\/_next\/static\/chunks\/[A-Za-z0-9._-]+\.js/g)].map(m => m[0]);
+  const seen = new Set();
+  const queue = [...html.matchAll(/\/_next\/static\/chunks\/[A-Za-z0-9._-]+\.js/g)].map(m => m[0]);
   let body = html;
-  for (const p of chunks.slice(0, 35)) body += await httpGet(`${LIVE}${p}`);
-  for (const needle of ["Opslaan en publiceren", "Alleen concept", "Klantopdrachten", "Medewerkers"]) {
-    if (!body.includes(needle)) fail(`live bundle missing ${JSON.stringify(needle)}`);
+  // Follow lazy admin/employee/planning chunks (WeekPlanner is not on the first HTML hop).
+  while (queue.length && seen.size < 60) {
+    const path = queue.shift();
+    if (!path || seen.has(path)) continue;
+    seen.add(path);
+    const text = await httpGet(`${LIVE}${path}`);
+    body += text;
+    for (const extra of text.matchAll(/\/_next\/static\/chunks\/[A-Za-z0-9._-]+\.js/g)) {
+      if (!seen.has(extra[0])) queue.push(extra[0]);
+    }
+    // Also pick bare chunk filenames referenced as dynamic imports
+    for (const extra of text.matchAll(/([A-Za-z0-9_-]+-[A-Za-z0-9_-]+\.js)/g)) {
+      const name = extra[1];
+      if (/WeekPlanner|AdminView|EmployeeView|Planning|TeamTab|ControlCenter/.test(name)) {
+        const full = `/_next/static/chunks/${name}`;
+        if (!seen.has(full)) queue.push(full);
+      }
+    }
   }
-  ok("live UI markers for multi-employee planning present");
+  for (const needle of ["Opslaan en publiceren", "Alleen concept", "Klantopdrachten", "Medewerkers"]) {
+    if (!body.includes(needle)) fail(`live bundle missing ${JSON.stringify(needle)} after ${seen.size} chunks`);
+  }
+  ok(`live UI markers for multi-employee planning present (${seen.size} chunks)`);
 
   // --- D1: drafts report (never auto-publish) ---
   const drafts = d1("SELECT id, title, date, status FROM planned_shifts WHERE status='draft' ORDER BY created_at DESC LIMIT 50");
