@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { User, Assignment, Customer, localDateKey } from '../types';
+import { User, Assignment, Customer, PlannedShift, localDateKey, weekStartKey } from '../types';
 import { Loader2, Plus, ListTodo } from 'lucide-react';
 import { handleFirestoreError, OperationType } from '../lib/firebase';
 import { secureApi } from '../lib/secureApi';
 import { AdminAssignmentCard } from './AdminAssignmentCard';
 
-export function PlanningTab({ users, assignments, customers, onChanged }: { users: User[]; assignments: Assignment[]; customers: Customer[]; onChanged: () => Promise<void> }) {
+export function PlanningTab({ users, assignments, customers, plannedShifts = [], onChanged }: { users: User[]; assignments: Assignment[]; customers: Customer[]; plannedShifts?: PlannedShift[]; onChanged: () => Promise<void> }) {
   const [isAdding, setIsAdding] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -48,6 +48,10 @@ export function PlanningTab({ users, assignments, customers, onChanged }: { user
   };
 
   const sortedAssignments = [...assignments].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const weekStart = weekStartKey();
+  const weekDiensten = plannedShifts
+    .filter(s => s.status === 'published' && s.date >= weekStart)
+    .sort((a, b) => `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`));
 
   return (
     <div className="space-y-6">
@@ -147,9 +151,21 @@ export function PlanningTab({ users, assignments, customers, onChanged }: { user
 
       <div className="ops-card divide-y divide-white/10 overflow-hidden">
         {sortedAssignments.length === 0 ? (
-          <div className="p-12 text-center text-zinc-500 flex flex-col items-center">
-            <ListTodo className="w-12 h-12 text-zinc-500 mb-4" />
-            <p className="font-medium">Geen opdrachten gevonden.</p>
+          <div className="p-12 text-center text-zinc-500 flex flex-col items-center gap-3">
+            <ListTodo className="w-12 h-12 text-zinc-500 mb-1" />
+            <p className="font-medium">Geen klantopdrachten gevonden.</p>
+            <p className="text-sm max-w-md">Weekdiensten (planning met medewerkers) staan onder <span className="font-bold text-zinc-700">Weekplanner</span>, niet hier. Hier beheert u losse klantopdrachten.</p>
+            {weekDiensten.length > 0 && (
+              <div className="mt-2 w-full max-w-lg text-left ops-panel p-4 space-y-2">
+                <div className="text-xs font-bold uppercase tracking-wide text-zinc-400">Gepubliceerd deze week ({weekDiensten.length})</div>
+                {weekDiensten.slice(0, 8).map(s => (
+                  <div key={s.id} className="text-sm font-semibold text-zinc-800 flex justify-between gap-2">
+                    <span>{s.date} · {s.title}</span>
+                    <span className="text-zinc-500 font-medium">{s.startTime}–{s.endTime}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ) : (
           sortedAssignments.map(a => (

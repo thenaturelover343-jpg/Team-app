@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Attachment, PlannedShift, formatDate, localDateKey } from '../types';
+import { Attachment, PlannedShift, formatDate, localDateKey, weekStartKey } from '../types';
 import { MapPin, CheckCircle, Loader2, XCircle, ClipboardList, Upload, Download } from 'lucide-react';
 import { secureApi } from '../lib/secureApi';
 import { useLanguage } from '../i18n';
@@ -8,19 +8,15 @@ export function EmployeePlanningTab({ userId, shifts, attachments, onChanged }: 
   const { t } = useLanguage();
   const [busyId, setBusyId] = useState('');
   const [error, setError] = useState('');
-  const [mode, setMode] = useState<'today' | 'week'>('today');
   const today = localDateKey();
-  // Week view includes earlier days in the current week so a Monday plan still shows on Tuesday.
-  const weekStart = (() => {
-    const d = new Date(`${today}T12:00:00`);
-    const day = d.getDay() || 7;
-    d.setDate(d.getDate() - day + 1);
-    return localDateKey(d);
-  })();
-  const upcoming = [...shifts]
+  const weekStart = weekStartKey(today);
+  const weekShifts = [...shifts]
     .filter(shift => shift.date >= weekStart)
     .sort((a, b) => `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`));
-  const visible = mode === 'today' ? upcoming.filter(shift => shift.date === today) : upcoming;
+  const todayShifts = weekShifts.filter(shift => shift.date === today);
+  // Default to week: a dienst on Monday must still show on Tuesday without hunting tabs.
+  const [mode, setMode] = useState<'today' | 'week'>(() => (todayShifts.length ? 'today' : 'week'));
+  const visible = mode === 'today' ? todayShifts : weekShifts;
   const respond = async (shiftId: string, status: 'confirmed' | 'declined') => {
     setBusyId(shiftId); setError('');
     try { await secureApi.confirmPlannedShift(shiftId, status); await onChanged(); }
@@ -55,7 +51,18 @@ export function EmployeePlanningTab({ userId, shifts, attachments, onChanged }: 
       <button type="button" onClick={() => setMode('week')} className={`py-3 rounded-lg font-bold text-sm ${mode === 'week' ? 'ops-nav-btn-active' : ''}`}>{'Week'}</button>
     </div>
     {error && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</div>}
-    {!visible.length && <div className="bg-white border border-zinc-200 rounded-2xl p-8 text-center text-zinc-500">{mode === 'today' ? 'Geen diensten gepland voor vandaag.' : 'Er staan nog geen gepubliceerde diensten klaar.'}</div>}
+    {!visible.length && (
+      <div className="bg-white border border-zinc-200 rounded-2xl p-8 text-center text-zinc-500 space-y-3">
+        <p>{mode === 'today'
+          ? (weekShifts.length
+            ? `Geen diensten vandaag. Wel ${weekShifts.length} deze week — open Week.`
+            : 'Geen diensten gepland voor vandaag.')
+          : 'Er staan deze week nog geen gepubliceerde diensten klaar.'}</p>
+        {mode === 'today' && weekShifts.length > 0 && (
+          <button type="button" onClick={() => setMode('week')} className="ops-btn-primary px-5 text-sm">Bekijk weekplanning</button>
+        )}
+      </div>
+    )}
     {visible.map(shift => {
       const confirmation = shift.confirmations[userId] || 'pending';
       return <article key={shift.id} className="bg-white border border-zinc-200 rounded-[24px] p-5 shadow-sm space-y-4">

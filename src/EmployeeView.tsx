@@ -21,9 +21,12 @@ export default function EmployeeView() {
   const shifts = snapshot?.shifts ?? [];
   const assignments = (snapshot?.assignments ?? []).filter(item => item.date === localDateKey());
   // Employee side: only published shifts assigned to this person (also when a dual-role admin previews medewerker).
-  const plannedShifts = (snapshot?.plannedShifts ?? []).filter(
-    shift => shift.status === 'published' && shift.memberIds.includes(user.id),
-  );
+  const plannedShifts = (snapshot?.plannedShifts ?? []).filter(shift => {
+    if (shift.status !== 'published' || !user?.id) return false;
+    if (shift.memberIds?.includes(user.id)) return true;
+    // Fallback if memberIds omitted but confirmations keyed by uid
+    return Boolean(shift.confirmations && user.id in shift.confirmations);
+  });
   const breaks = snapshot?.breaks ?? [];
   const attachments = snapshot?.attachments ?? [];
   const incidents = snapshot?.incidents ?? [];

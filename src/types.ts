@@ -226,11 +226,24 @@ export const normalizeAssignment = (id: string, data: Record<string, unknown>): 
   createdAt: timestampToMillis(data.createdAt),
 } as Assignment);
 
+/** Calendar date in Europe/Brussels (YYYY-MM-DD), independent of device TZ. */
 export const localDateKey = (date = new Date()): string => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Brussels',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+};
+
+/** Monday (YYYY-MM-DD) of the Brussels week that contains dateKey. */
+export const weekStartKey = (dateKey = localDateKey()): string => {
+  const [y, m, d] = dateKey.split('-').map(Number);
+  const noonUtc = Date.UTC(y, m - 1, d, 12, 0, 0);
+  const wd = new Date(noonUtc).getUTCDay() || 7; // Mon=1 … Sun=7
+  const monday = new Date(noonUtc);
+  monday.setUTCDate(monday.getUTCDate() - wd + 1);
+  return monday.toISOString().slice(0, 10);
 };
 
 export interface AppState {
