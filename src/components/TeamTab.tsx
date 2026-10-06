@@ -3,6 +3,7 @@ import type { InviteRole, User } from '../types';
 import { isAdminUser, isEmployeeUser, roleLabelNl } from '../lib/roles';
 import { secureApi } from '../lib/secureApi';
 import { sendEmailSignInLink } from '../lib/firebase';
+import { mailErrorInfo, mailErrorText } from '../lib/inviteMailError';
 import { useLanguage } from '../i18n';
 
 export default function TeamTab({ users, onChanged }: { users: User[]; onChanged?: () => Promise<void> }) {
@@ -16,6 +17,8 @@ export default function TeamTab({ users, onChanged }: { users: User[]; onChanged
   const [inviteUrl, setInviteUrl] = useState('');
   const [sharePhone, setSharePhone] = useState('');
   const [mailState, setMailState] = useState<'sent' | 'failed' | ''>('');
+  const [mailError, setMailError] = useState('');
+  const [linkState, setLinkState] = useState<Record<string, { status: 'sending' | 'sent' | 'failed'; text: string }>>({});
   const [copied, setCopied] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -28,6 +31,7 @@ export default function TeamTab({ users, onChanged }: { users: User[]; onChanged
     setInviteUrl('');
     setSharePhone('');
     setMailState('');
+    setMailError('');
     setCopied(false);
     setIsSubmitting(true);
     try {
@@ -48,8 +52,11 @@ export default function TeamTab({ users, onChanged }: { users: User[]; onChanged
       try {
         await sendEmailSignInLink(email, link, false);
         sent = true;
-      } catch {
+      } catch (mailErr: unknown) {
         sent = false;
+        const info = mailErrorInfo(mailErr);
+        setMailError(mailErrorText(info));
+        void secureApi.logClientError({ context: 'invite_mail', code: info.code, message: info.raw, email }).catch(() => undefined);
       }
       setMailState(sent ? 'sent' : 'failed');
       setName('');
@@ -79,6 +86,21 @@ export default function TeamTab({ users, onChanged }: { users: User[]; onChanged
       setCopied(true);
     } catch {
       setCopied(false);
+    }
+  };
+
+  /** Admin-only: send a fresh Firebase sign-in link to an existing account (same actionCodeSettings as invites). */
+  const resendLoginLink = async (user: User) => {
+    if (!user.email) return;
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    setLinkState(current => ({ ...current, [user.id]: { status: 'sending', text: 'Login-link wordt verstuurd…' } }));
+    try {
+      await sendEmailSignInLink(user.email, `${origin.replace(/\/$/, '')}/`, false);
+      setLinkState(current => ({ ...current, [user.id]: { status: 'sent', text: `Login-link verstuurd naar ${user.email}. Komt die niet aan? Kijk ook in de spam.` } }));
+    } catch (linkErr: unknown) {
+      const info = mailErrorInfo(linkErr);
+      setLinkState(current => ({ ...current, [user.id]: { status: 'failed', text: mailErrorText(info) } }));
+      void secureApi.logClientError({ context: 'login_link', code: info.code, message: info.raw, email: user.email }).catch(() => undefined);
     }
   };
 
@@ -137,7 +159,8 @@ export default function TeamTab({ users, onChanged }: { users: User[]; onChanged
       {notice && <div className="ops-panel p-4 text-sm font-medium">{notice}</div>}
       {inviteUrl && (
         <div className="ops-panel p-4 text-sm space-y-3">
-          <p>{mailState === 'sent' ? t('inviteMailOk') : t('inviteMailFail')}</p>
+          <p className={mailState === 'failed' ? 'font-semibold text-red-400' : ''}>{mailState === 'sent' ? t('inviteMailOk') : (mailError || t('inviteMailFail'))}</p>
+          {mailState === 'failed' && <p className="text-xs opacity-80">{t('inviteMailFail')}</p>}
           <code className="block break-all text-xs opacity-80">{inviteUrl}</code>
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={copy} className="ops-btn-secondary px-4">{copied ? t('copied') : t('copyLink')}</button>
@@ -191,6 +214,22 @@ export default function TeamTab({ users, onChanged }: { users: User[]; onChanged
                     {u.active === false ? t('activate') : t('deactivate')}
                   </button>
                 </div>
+                {u.email && u.active !== false && (
+                  <div className="space-y-2">
+                    <button
+                      type="button"
+                      onClick={() => void resendLoginLink(u)}
+                      disabled={linkState[u.id]?.status === 'sending'}
+                      className="ops-btn-secondary w-full px-3 py-2 text-sm disabled:opacity-50"
+                      data-action="resend-login-link"
+                    >
+                      {linkState[u.id]?.status === 'sending' ? 'Bezig…' : 'Stuur login-link opnieuw'}
+                    </button>
+                    {linkState[u.id] && linkState[u.id].status !== 'sending' && (
+                      <p className={`text-xs font-medium ${linkState[u.id].status === 'failed' ? 'text-red-400' : 'text-green-400'}`}>{linkState[u.id].text}</p>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           );
