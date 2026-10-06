@@ -294,6 +294,7 @@ async function lookupInvite(input: Json) {
 }
 
 function requireAdmin(user: AppUser) {
+  // Privilege is role === "admin" only. isEmployee does not grant admin APIs.
   if (user.role !== "admin") throw new Error("Alleen een beheerder mag dit uitvoeren.");
 }
 
@@ -548,6 +549,7 @@ async function snapshot(user: AppUser) {
   const db = database();
   const settings = await privacySettings(db);
   void runPrivacyCleanup(db, user.uid).catch(() => undefined);
+  // Employee-only sessions never receive admin collections below.
   if (user.role === "admin") {
     void db.prepare("SELECT created_at FROM backup_runs WHERE status='completed' ORDER BY created_at DESC LIMIT 1").first<Json>()
       .then(latest => {

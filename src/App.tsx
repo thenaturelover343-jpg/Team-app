@@ -19,6 +19,7 @@ import { LanguageProvider, useLanguage } from './i18n';
 import { secureApi } from './lib/secureApi';
 import { readInviteTokenFromLocation } from './lib/inviteLink';
 import { readSessionHint, type SessionHint } from './lib/sessionHint';
+import { isAdminUser } from './lib/roles';
 
 const EmployeeView = lazy(() => import('./EmployeeView'));
 const AdminView = lazy(() => import('./AdminView'));
@@ -113,7 +114,15 @@ function AppContent() {
     return () => { active = false; window.clearTimeout(timer); };
   }, [invite]);
 
+  // Eye/switch is admin-only. Plain medewerkers never see or keep an admin-view toggle.
+  useEffect(() => {
+    if (!user || isAdminUser(user)) return;
+    setViewAsEmployee(false);
+    try { sessionStorage.removeItem('adminViewAsEmployee'); } catch { /* ignore */ }
+  }, [user]);
+
   const toggleEmployeePreview = () => {
+    if (!user || !isAdminUser(user)) return;
     setViewAsEmployee(prev => {
       const next = !prev;
       try { sessionStorage.setItem('adminViewAsEmployee', next ? '1' : '0'); } catch { /* ignore */ }
@@ -210,8 +219,8 @@ function AppContent() {
             </div>
             <div className="header-actions flex flex-wrap items-center justify-end gap-2 sm:gap-3 max-w-full">
               <PWAInstallButton />
-              {user.role === 'admin' && (
-                <button type="button" onClick={toggleEmployeePreview} className="ops-btn-primary inline-flex items-center justify-center p-2 shrink-0" title={viewAsEmployee ? t('backAdmin') : t('viewEmployee')} aria-label={viewAsEmployee ? t('backAdmin') : t('viewEmployee')}>
+              {isAdminUser(user) && (
+                <button type="button" data-admin-view-switch="1" onClick={toggleEmployeePreview} className="ops-btn-primary inline-flex items-center justify-center p-2 shrink-0" title={viewAsEmployee ? t('backAdmin') : t('viewEmployee')} aria-label={viewAsEmployee ? t('backAdmin') : t('viewEmployee')}>
                   {viewAsEmployee ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               )}
@@ -219,7 +228,7 @@ function AppContent() {
                 <div className="ops-panel w-8 h-8 rounded-full flex items-center justify-center"><UserCircle className="w-5 h-5 text-zinc-500" /></div>
                 <div className="user-pill-copy flex flex-col pr-2 sm:pr-3 border-r border-zinc-200">
                   <span className="text-sm font-bold text-zinc-900 leading-tight truncate max-w-[100px]">{user.name}</span>
-                  <span className="text-xs text-zinc-400 leading-tight">{user.role === 'admin' ? (viewAsEmployee ? 'beheerder · medewerker' : (user.isEmployee !== false ? 'beheerder + medewerker' : 'beheerder')) : 'medewerker'}</span>
+                  <span className="text-xs text-zinc-400 leading-tight">{isAdminUser(user) ? (viewAsEmployee ? 'beheerder · medewerker' : (user.isEmployee !== false ? 'beheerder + medewerker' : 'beheerder')) : 'medewerker'}</span>
                 </div>
                 <button onClick={logout} aria-label={t('logout')} className="text-zinc-400 hover:text-zinc-900 transition-colors" title={t('logout')}><LogOut className="w-4 h-4" /></button>
               </div>
@@ -230,7 +239,7 @@ function AppContent() {
       <AppUpdateBanner />
       <main id="main-content" tabIndex={-1} className="content-shell max-w-6xl mx-auto px-4 sm:px-6 md:px-8 py-6 md:py-8">
         <Suspense fallback={<div className="flex justify-center p-10"><Loader2 className="w-6 h-6 animate-spin text-zinc-400" /></div>}>
-          {user.role === 'admin' && !viewAsEmployee ? <AdminView /> : <EmployeeView />}
+          {isAdminUser(user) && !viewAsEmployee ? <AdminView /> : <EmployeeView />}
         </Suspense>
       </main>
     </div>
