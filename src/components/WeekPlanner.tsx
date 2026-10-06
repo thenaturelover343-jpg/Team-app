@@ -3,6 +3,7 @@
 import React, { useMemo, useState } from 'react';
 import { CalendarPlus, ChevronLeft, ChevronRight, Clock3, Loader2, MapPin, Send, Trash2, Users } from 'lucide-react';
 import type { Customer, PlannedShift, User } from '../types';
+import { CustomerSelect } from './CustomerSelect';
 import { localDateKey } from '../types';
 import { secureApi } from '../lib/secureApi';
 
@@ -132,7 +133,6 @@ function ShiftForm({ employees, customers, initialDate, onCancel, onSaved }: { e
   const [date, setDate] = useState(initialDate);
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('17:00');
-  const [breakMinutes, setBreakMinutes] = useState(30);
   const [memberIds, setMemberIds] = useState<string[]>([]);
   const [repeatWeeks, setRepeatWeeks] = useState(1);
   const [notes, setNotes] = useState('');
@@ -143,7 +143,7 @@ function ShiftForm({ employees, customers, initialDate, onCancel, onSaved }: { e
   const save = async (publish: boolean) => {
     setBusy(true); setError('');
     try {
-      const payload = { title, customerId, siteAddress: siteAddress.trim() || undefined, date, startTime, endTime, breakMinutes, memberIds, repeatWeeks, notes, checklist: checklistText.split('\n').map(item => item.trim()).filter(Boolean), publish };
+      const payload = { title, customerId, siteAddress: siteAddress.trim() || undefined, date, startTime, endTime, breakMinutes: 0, memberIds, repeatWeeks, notes, checklist: checklistText.split('\n').map(item => item.trim()).filter(Boolean), publish };
       await secureApi.savePlannedShift(payload);
       await onSaved();
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'De dienst kon niet worden opgeslagen.'); }
@@ -159,14 +159,13 @@ function ShiftForm({ employees, customers, initialDate, onCancel, onSaved }: { e
       {error && <div className="ops-chip-danger w-full justify-start p-3 text-sm">{error}</div>}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <label className="md:col-span-2 text-sm font-bold text-zinc-700">Titel<input value={title} onChange={event => setTitle(event.target.value)} required className="ops-input mt-1.5 w-full p-3 font-medium" /></label>
-        <label className="md:col-span-2 text-sm font-bold text-zinc-700">Klant<select value={customerId} onChange={event => { const id = event.target.value; setCustomerId(id); const selected = customers.find(c => c.id === id); setSiteAddress(selected?.address || ''); }} className="ops-input mt-1.5 w-full p-3 font-medium"><option value="">Geen klant</option>{customers.map(customer => <option key={customer.id} value={customer.id}>{customer.name} — {customer.address}</option>)}</select></label>
+        <div className="md:col-span-2 text-sm font-bold text-zinc-700"><span className="block mb-1.5">Klant</span><CustomerSelect customers={customers} value={customerId} onChange={id => { setCustomerId(id); const selected = customers.find(c => c.id === id); setSiteAddress(selected?.address || ''); }} placeholderOption="Geen klant" separator=" — " /></div>
         <label className="md:col-span-4 text-sm font-bold text-zinc-700">Opdrachtadres<input value={siteAddress} onChange={event => setSiteAddress(event.target.value)} placeholder="Adres van de job (mag afwijken van klantadres)" className="ops-input mt-1.5 w-full p-3 font-medium" /></label>
         <label className="text-sm font-bold text-zinc-700">Datum<input type="date" value={date} onChange={event => setDate(event.target.value)} required className="ops-input mt-1.5 w-full p-3 font-medium" /></label>
         <label className="text-sm font-bold text-zinc-700">Start<input type="time" value={startTime} onChange={event => setStartTime(event.target.value)} required className="ops-input mt-1.5 w-full p-3 font-medium" /></label>
         <label className="text-sm font-bold text-zinc-700">Einde<input type="time" value={endTime} onChange={event => setEndTime(event.target.value)} required className="ops-input mt-1.5 w-full p-3 font-medium" /></label>
-        <label className="text-sm font-bold text-zinc-700">Pauze (min.)<input type="number" min="0" max="240" value={breakMinutes} onChange={event => setBreakMinutes(Number(event.target.value))} className="ops-input mt-1.5 w-full p-3 font-medium" /></label>
         <label className="text-sm font-bold text-zinc-700">Herhalen<select value={repeatWeeks} onChange={event => setRepeatWeeks(Number(event.target.value))} className="ops-input mt-1.5 w-full p-3 font-medium">{[1,2,3,4,6,8,12].map(count => <option key={count} value={count}>{count === 1 ? 'Eenmalig' : `${count} weken`}</option>)}</select></label>
-        <label className="md:col-span-3 text-sm font-bold text-zinc-700">Notities<textarea value={notes} onChange={event => setNotes(event.target.value)} className="ops-input mt-1.5 w-full p-3 font-medium h-20 resize-none" /></label>
+        <label className="md:col-span-4 text-sm font-bold text-zinc-700">Notities<textarea value={notes} onChange={event => setNotes(event.target.value)} className="ops-input mt-1.5 w-full p-3 font-medium h-20 resize-none" /></label>
         <label className="md:col-span-4 text-sm font-bold text-zinc-700">Checklist — één taak per regel<textarea value={checklistText} onChange={event => setChecklistText(event.target.value)} placeholder={'Materiaal controleren\nLocatie netjes achterlaten'} className="ops-input mt-1.5 w-full p-3 font-medium h-24 resize-none" /></label>
       </div>
       <fieldset><legend className="text-sm font-bold text-zinc-700 mb-2">Medewerkers</legend><div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">{employees.map(employee => <label key={employee.id} className={`ops-panel flex items-center gap-3 p-3 cursor-pointer ${memberIds.includes(employee.id) ? 'border-cyan-400/60 bg-cyan-400/10' : ''}`}><input type="checkbox" checked={memberIds.includes(employee.id)} onChange={() => toggle(employee.id)} className="w-4 h-4 accent-cyan-500" /><span className="font-semibold text-sm">{employee.name}</span></label>)}</div></fieldset>
